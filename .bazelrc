@@ -1,0 +1,7 @@
+# Lombok does not support Turbine (Bazel's header compiler), so header
+# compilation must be disabled. See https://github.com/projectlombok/lombok/issues/2829
+common --nojava_header_compilation
+
+common --java_runtime_version=remotejdk_21
+common --java_language_version=21
+common --tool_java_runtime_version=remotejdk_21

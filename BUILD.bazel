@@ -1,0 +1,77 @@
+load("@rules_java//java:defs.bzl", "java_library", "java_plugin", "java_test")
+
+# USSI Java library skeleton.
+# - NamespaceConfig             : config + validation
+# - NearestNeighborSearchIndex  : top-level `new(config)` facade
+# - TermsAndValues              : platform-agnostic record representation
+# - SearchResults               : ordered rowNums plus parallel similarity scores
+# - GenericCache                : writable sequential-scan cache
+
+java_plugin(
+    name = "lombok_processor",
+    generates_api = True,
+    processor_class = "lombok.launch.AnnotationProcessorHider$AnnotationProcessor",
+    deps = ["@maven//:org_projectlombok_lombok"],
+)
+
+# Lombok is compile-time only (annotations are stripped by the processor),
+# so it must not leak into the runtime classpath.
+java_library(
+    name = "lombok_compile_only",
+    neverlink = True,
+    exports = ["@maven//:org_projectlombok_lombok"],
+)
+
+java_library(
+    name = "src_main",
+    srcs = glob(["src/main/java/**/*.java"]),
+    plugins = [":lombok_processor"],
+    visibility = ["//visibility:public"],
+    runtime_deps = [
+        # Native openblas binaries, loaded by javacpp at runtime.
+        "@maven//:org_bytedeco_openblas_linux_arm64",
+        "@maven//:org_bytedeco_openblas_linux_x86_64",
+        "@maven//:org_bytedeco_openblas_macosx_x86_64",
+    ],
+    deps = [
+        ":lombok_compile_only",
+        "@maven//:com_carrotsearch_hppc",
+        "@maven//:com_google_code_findbugs_jsr305",
+        "@maven//:com_google_guava_guava",
+        "@maven//:jakarta_validation_jakarta_validation_api",
+        "@maven//:org_apache_commons_commons_math3",
+        "@maven//:org_bytedeco_javacpp",
+        "@maven//:org_bytedeco_openblas",
+    ],
+)
+
+java_library(
+    name = "test_lib",
+    testonly = True,
+    srcs = glob(["src/test/java/**/*.java"]),
+    deps = [
+        ":src_main",
+        "@maven//:com_carrotsearch_hppc",
+        "@maven//:org_bytedeco_javacpp",
+        "@maven//:org_bytedeco_openblas",
+        "@maven//:org_junit_jupiter_junit_jupiter_api",
+    ],
+)
+
+java_test(
+    name = "test_main",
+    args = [
+        "execute",
+        # JUnit only scans directories by default; point it at the test jar.
+        "--scan-classpath=$(rootpath :test_lib)",
+        "--fail-if-no-tests",
+    ],
+    data = [":test_lib"],
+    main_class = "org.junit.platform.console.ConsoleLauncher",
+    use_testrunner = False,
+    runtime_deps = [
+        ":test_lib",
+        "@maven//:org_junit_jupiter_junit_jupiter_engine",
+        "@maven//:org_junit_platform_junit_platform_console",
+    ],
+)

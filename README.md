@@ -178,7 +178,7 @@ try (NearestNeighborSearchIndex index = NearestNeighborSearchIndex.create(config
   TermsAndValues query = new TermsAndValues(new String[0], sfValues);
   MetaFilter filter = new MetaFilter(Map.of("country", List.of("us")));
 
-  SearchResults neighbors = index.getNearestNeighbors(10, query, filter);
+  SearchResults neighbors = index.getNearestNeighborRowNums(10, query, filter);
   long nearestRowNum = neighbors.getRowNum(0);
   float nearestSimilarity = neighbors.getSimilarity(0);
 
@@ -190,7 +190,7 @@ try (NearestNeighborSearchIndex index = NearestNeighborSearchIndex.create(config
 }
 ```
 
-`getNearestNeighbors` and `getSimilarRowNums` return `SearchResults`, an ordered
+`getNearestNeighborRowNums` and `getSimilarRowNums` return `SearchResults`, an ordered
 result container with parallel `rowNums` and `similarities` arrays. Results are
 ordered by descending similarity, with lower `rowNum` values breaking ties.
 
@@ -202,7 +202,7 @@ NamespaceConfig getNamespaceConfig()
 long insert(TermsAndValues record, Map<String, String> metadata)
 boolean delete(long rowNum)
 boolean update(long rowNum, TermsAndValues record, Map<String, String> metadata)
-SearchResults getNearestNeighbors(int k, TermsAndValues record, MetaFilter metadataFilter)
+SearchResults getNearestNeighborRowNums(int k, TermsAndValues record, MetaFilter metadataFilter)
 SearchResults getSimilarRowNums(float minSimilarity, TermsAndValues record, MetaFilter metadataFilter)
 int size()
 void close()
@@ -353,10 +353,21 @@ continue in a fresh active cache.
 
 Delete-only indexes are enough for graduated data because they only need to
 serve searches over the snapshot they were built from and hide rows that are no
-longer current. A delete marks the row as deleted in whichever searchable
-structure contains it. An update is handled as a delete of the old row version
-followed by inserting the new version into the active cache with the same
-logical `rowNum`.
+longer current. A delete removes the row from the active cache if present.
+Otherwise, the system scans searchable structures from newest to oldest and
+tombstones the record in the first structure that contains it. Only the first
+match needs a tombstone because each `rowNum` lives in exactly one structure at
+a time. Candidate scoring skips tombstoned records at query time without
+waiting for physical removal from inverted lists. An update is handled as a
+delete of the old row version followed by inserting the new version into the
+active cache with the same logical `rowNum`, so the active cache always holds
+the latest version.
+
+If a record is deleted while a cache graduation or index consolidation is
+building in the background, that delete is recorded in a per-build tombstone
+set and replayed onto the newly built index when the build completes. This
+ensures that rows deleted during the build do not reappear in search results
+after the swap.
 
 This keeps immutable index implementations simple: they do not need to support
 in-place inserts or updates, only search and tombstone-style deletes. Background
@@ -485,8 +496,9 @@ bazel test //:test_main
 - TTL should be enforced by the hosting platform by calling `delete(rowNum)`
   when a row expires.
 - Background cache graduation and index consolidation are internal maintenance
-  tasks. Search results include active, graduating, and indexed rows while those
-  tasks are in flight.
+  tasks. Search results include active, graduating, and indexed rows while those 
+  tasks are in flight. Deletes that occur during a background build are recorded
+  and replayed onto the new index at swap time, so deleted rows never reappear.
 - Signature indexes use approximate candidate generation. Final scores are
   exact for the candidates that are found, but qualifying rows can be missed.
 - High-popularity sparse-term filtering changes both candidate generation and

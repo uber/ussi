@@ -18,7 +18,15 @@ import com.uber.ussi.searchablestructure.metadata.PreFilteringResult;
 import java.util.List;
 import java.util.Objects;
 
-/** Delete-only searchable structure built from rows graduated out of a cache. */
+/**
+ * Delete-only searchable structure built from rows graduated out of a cache.
+ *
+ * <p>Deletions are soft: the row is added to an internal tombstone set ({@code deletedRowNums})
+ * without physical removal from the inverted lists or the forward map. Query-time scoring checks
+ * {@link #isDeleted} and skips tombstoned rows, so they are excluded from search results without
+ * waiting for physical removal. The tombstoned rows are dropped permanently when the index is
+ * consolidated (rebuilt from scratch via {@link #getAll}, which filters out deleted rows).
+ */
 public abstract class Index implements SearchableStructure, AutoCloseable {
   public static final String MAX_PRE_FILTERING_ROWS_RATIO = "max_pre_filtering_rows_ratio";
   public static final String METADATA_FILTERING_STRATEGY = "metadata_filtering_strategy";
@@ -94,7 +102,7 @@ public abstract class Index implements SearchableStructure, AutoCloseable {
   public void close() {}
 
   @Override
-  public abstract List<RowNumAndSimilarity> getNearestNeighbors(
+  public abstract List<RowNumAndSimilarity> getNearestNeighborRowNums(
       int k, LongTermsAndValues record, MetaFilter metadataFilter);
 
   @Override

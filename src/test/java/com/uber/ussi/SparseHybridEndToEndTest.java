@@ -31,12 +31,12 @@ class SparseHybridEndToEndTest {
           List.of(exactRow),
           rowNums(
               index
-                  .getNearestNeighbors(
+                  .getNearestNeighborRowNums(
                       2, signatureRecord, new MetaFilter(Map.of("city", List.of("sf"))))
                   .getRowNums()));
 
       assertTrue(index.delete(signatureRow));
-      assertEquals(List.of(exactRow), rowNums(index.getNearestNeighbors(2, signatureRecord, null)));
+      assertEquals(List.of(exactRow), rowNums(index.getNearestNeighborRowNums(2, signatureRecord, null)));
     }
   }
 
@@ -55,7 +55,7 @@ class SparseHybridEndToEndTest {
       assertTrue(index.getNumSearchableStructures() <= 3);
       assertEquals(
           List.of(signatureRow1, signatureRow2, exactRow1, exactRow2),
-          rowNums(index.getNearestNeighbors(4, signatureRecord, null)));
+          rowNums(index.getNearestNeighborRowNums(4, signatureRecord, null)));
       assertEquals(
           List.of(exactRow1, signatureRow1, exactRow2, signatureRow2),
           rowNums(index.getAllRowNums()));
@@ -64,7 +64,7 @@ class SparseHybridEndToEndTest {
 
   private static void assertHybridResults(
       NearestNeighborSearchIndex index, TermsAndValues query, long signatureRow, long exactRow) {
-    SearchResults nearest = index.getNearestNeighbors(2, query, null);
+    SearchResults nearest = index.getNearestNeighborRowNums(2, query, null);
 
     assertEquals(List.of(signatureRow, exactRow), rowNums(nearest));
     assertEquals(1.0f, nearest.getSimilarity(0), DELTA);

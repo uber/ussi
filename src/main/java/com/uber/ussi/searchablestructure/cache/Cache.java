@@ -102,9 +102,9 @@ public abstract class Cache implements SearchableStructure {
   }
 
   @Override
-  public final List<RowNumAndSimilarity> getNearestNeighbors(
+  public final List<RowNumAndSimilarity> getNearestNeighborRowNums(
       int k, LongTermsAndValues record, MetaFilter metadataFilter) {
-    return getNearestNeighborsLocked(k, record, metadataFilter);
+    return getNearestNeighborRowNumsLocked(k, record, metadataFilter);
   }
 
   @Override
@@ -113,7 +113,7 @@ public abstract class Cache implements SearchableStructure {
     return getSimilarRowNumsLocked(minSimilarity, record, metadataFilter);
   }
 
-  protected abstract List<RowNumAndSimilarity> getNearestNeighborsLocked(
+  protected abstract List<RowNumAndSimilarity> getNearestNeighborRowNumsLocked(
       int k, LongTermsAndValues record, MetaFilter metadataFilter);
 
   protected abstract List<RowNumAndSimilarity> getSimilarRowNumsLocked(

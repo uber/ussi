@@ -47,7 +47,7 @@ class SignatureIndexTest {
         new SignatureIndex(
             config("jaccard", "minhash"), longObjectMap(1, matching, 2, disjoint), longObjectMap());
 
-    List<RowNumAndSimilarity> results = index.getNearestNeighbors(2, matching, MetaFilter.empty());
+    List<RowNumAndSimilarity> results = index.getNearestNeighborRowNums(2, matching, MetaFilter.empty());
 
     assertEquals(List.of(1L), rowNumsNearestFirst(results));
     assertEquals(1.0f, results.get(0).getSimilarity(), DELTA);
@@ -65,10 +65,10 @@ class SignatureIndexTest {
         new SignatureIndex(config("jaccard", "minhash"), longObjectMap(1, record), metadata);
     MetaFilter sf = new MetaFilter(Map.of("city", List.of("sf")));
 
-    assertEquals(List.of(1L), rowNumsNearestFirst(index.getNearestNeighbors(1, record, sf)));
+    assertEquals(List.of(1L), rowNumsNearestFirst(index.getNearestNeighborRowNums(1, record, sf)));
     assertTrue(index.delete(1));
     assertFalse(index.delete(1));
-    assertTrue(index.getNearestNeighbors(1, record, sf).isEmpty());
+    assertTrue(index.getNearestNeighborRowNums(1, record, sf).isEmpty());
   }
 
   @Test
@@ -77,7 +77,7 @@ class SignatureIndexTest {
     SignatureIndex index =
         new SignatureIndex(config("ruzicka", "icws"), longObjectMap(1, record), longObjectMap());
 
-    List<RowNumAndSimilarity> results = index.getNearestNeighbors(1, record, MetaFilter.empty());
+    List<RowNumAndSimilarity> results = index.getNearestNeighborRowNums(1, record, MetaFilter.empty());
 
     assertEquals(List.of(1L), rowNumsNearestFirst(results));
     assertEquals(1.0f, results.get(0).getSimilarity(), DELTA);
@@ -95,7 +95,7 @@ class SignatureIndexTest {
     assertArrayEquals(new long[] {11}, index.getFilteredOutTermsForTests());
     assertEquals(0, index.getNumIndexedSparseKeysForTests());
     assertEquals(2, index.size());
-    assertTrue(index.getNearestNeighbors(2, record, MetaFilter.empty()).isEmpty());
+    assertTrue(index.getNearestNeighborRowNums(2, record, MetaFilter.empty()).isEmpty());
   }
 
   @Test

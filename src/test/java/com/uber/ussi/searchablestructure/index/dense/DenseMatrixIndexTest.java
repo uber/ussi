@@ -46,15 +46,15 @@ class DenseMatrixIndexTest {
   void emptyIndexSearchReturnsEmptyResult() {
     DenseMatrixIndex index = new DenseMatrixIndex(config(), longObjectMap(), longObjectMap());
 
-    assertTrue(index.getNearestNeighbors(1, denseVector(1f, 0f), MetaFilter.empty()).isEmpty());
+    assertTrue(index.getNearestNeighborRowNums(1, denseVector(1f, 0f), MetaFilter.empty()).isEmpty());
   }
 
   @Test
-  void getNearestNeighborsKeepsMostSimilarRows() {
+  void getNearestNeighborRowNumsKeepsMostSimilarRows() {
     DenseMatrixIndex index = new DenseMatrixIndex(config(), rows(), metadata());
 
     List<RowNumAndSimilarity> result =
-        index.getNearestNeighbors(2, denseVector(1f, 0f), MetaFilter.empty());
+        index.getNearestNeighborRowNums(2, denseVector(1f, 0f), MetaFilter.empty());
 
     LongFloatHashMap rowNumToSimilarity = rowNumToSimilarityMap(result);
     assertEquals(2, result.size());
@@ -65,7 +65,7 @@ class DenseMatrixIndexTest {
   }
 
   @Test
-  void getNearestNeighborsBreaksSimilarityTiesByRowNumAscending() {
+  void getNearestNeighborRowNumsBreaksSimilarityTiesByRowNumAscending() {
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
     rows.put(31, denseInternal(1f, 0f));
     rows.put(30, denseInternal(1f, 0f));
@@ -73,7 +73,7 @@ class DenseMatrixIndexTest {
     DenseMatrixIndex index = new DenseMatrixIndex(config(), rows, longObjectMap());
 
     List<RowNumAndSimilarity> result =
-        index.getNearestNeighbors(1, denseVector(1f, 0f), MetaFilter.empty());
+        index.getNearestNeighborRowNums(1, denseVector(1f, 0f), MetaFilter.empty());
 
     assertEquals(List.of(30L), result.stream().map(row -> row.getRowNum()).toList());
   }
@@ -97,7 +97,7 @@ class DenseMatrixIndexTest {
             metadata());
 
     List<RowNumAndSimilarity> result =
-        index.getNearestNeighbors(
+        index.getNearestNeighborRowNums(
             10, denseVector(1f, 0f), new MetaFilter(Map.of("city", List.of("sf"))));
 
     assertEquals(List.of(10L), result.stream().map(row -> row.getRowNum()).toList());
@@ -115,7 +115,7 @@ class DenseMatrixIndexTest {
             metadata());
 
     List<RowNumAndSimilarity> result =
-        index.getNearestNeighbors(
+        index.getNearestNeighborRowNums(
             10, denseVector(1f, 0f), new MetaFilter(Map.of("city", List.of("sf", "la"))));
 
     assertEquals(List.of(10L, 11L), sortedRowNums(result));
@@ -134,7 +134,7 @@ class DenseMatrixIndexTest {
 
     assertTrue(index.delete(10));
     List<RowNumAndSimilarity> result =
-        index.getNearestNeighbors(
+        index.getNearestNeighborRowNums(
             10, denseVector(1f, 0f), new MetaFilter(Map.of("city", List.of("sf"))));
 
     assertTrue(result.isEmpty());
@@ -152,7 +152,7 @@ class DenseMatrixIndexTest {
             allSfMetadata());
 
     List<RowNumAndSimilarity> result =
-        index.getNearestNeighbors(
+        index.getNearestNeighborRowNums(
             1, denseVector(1f, 0f), new MetaFilter(Map.of("city", List.of("sf"))));
 
     assertEquals(List.of(10L), result.stream().map(row -> row.getRowNum()).toList());
@@ -175,7 +175,7 @@ class DenseMatrixIndexTest {
             allSfMetadata());
 
     List<RowNumAndSimilarity> result =
-        index.getNearestNeighbors(
+        index.getNearestNeighborRowNums(
             1, denseVector(1f, 0f), new MetaFilter(Map.of("city", List.of("sf"))));
 
     assertEquals(List.of(10L), result.stream().map(row -> row.getRowNum()).toList());
@@ -198,7 +198,7 @@ class DenseMatrixIndexTest {
             metadata());
 
     List<RowNumAndSimilarity> result =
-        index.getNearestNeighbors(
+        index.getNearestNeighborRowNums(
             10, denseVector(1f, 0f), new MetaFilter(Map.of("city", List.of("sf", "la"))));
 
     assertEquals(List.of(10L, 11L), sortedRowNums(result));
@@ -224,7 +224,7 @@ class DenseMatrixIndexTest {
             metadata);
 
     List<RowNumAndSimilarity> result =
-        index.getNearestNeighbors(
+        index.getNearestNeighborRowNums(
             1, denseVector(1f, 0f), new MetaFilter(Map.of("city", List.of("la"))));
 
     assertEquals(List.of(22L), result.stream().map(row -> row.getRowNum()).toList());
@@ -242,7 +242,7 @@ class DenseMatrixIndexTest {
             metadata());
 
     List<RowNumAndSimilarity> result =
-        index.getNearestNeighbors(
+        index.getNearestNeighborRowNums(
             1, denseVector(1f, 0f), new MetaFilter(Map.of("city", List.of("missing"))));
 
     assertTrue(result.isEmpty());
@@ -260,7 +260,7 @@ class DenseMatrixIndexTest {
     assertFalse(index.getAll().containsKey(10));
 
     List<RowNumAndSimilarity> result =
-        index.getNearestNeighbors(10, denseVector(1f, 0f), MetaFilter.empty());
+        index.getNearestNeighborRowNums(10, denseVector(1f, 0f), MetaFilter.empty());
     assertEquals(List.of(11L, 12L), sortedRowNums(result));
   }
 
@@ -301,7 +301,7 @@ class DenseMatrixIndexTest {
 
     assertThrows(
         IllegalArgumentException.class,
-        () -> index.getNearestNeighbors(1, denseVector(1f, 0f, 0f), MetaFilter.empty()));
+        () -> index.getNearestNeighborRowNums(1, denseVector(1f, 0f, 0f), MetaFilter.empty()));
   }
 
   @Test
@@ -309,11 +309,11 @@ class DenseMatrixIndexTest {
     DenseMatrixIndex index = new DenseMatrixIndex(config(), rows(), metadata());
 
     assertThrows(
-        NullPointerException.class, () -> index.getNearestNeighbors(1, null, MetaFilter.empty()));
+        NullPointerException.class, () -> index.getNearestNeighborRowNums(1, null, MetaFilter.empty()));
     assertThrows(
         IllegalArgumentException.class,
         () ->
-            index.getNearestNeighbors(
+            index.getNearestNeighborRowNums(
                 1,
                 LongTermsAndValuesTestFactory.create(new long[] {7L}, new float[] {1f}, 1.0d),
                 MetaFilter.empty()));
@@ -325,7 +325,7 @@ class DenseMatrixIndexTest {
 
     assertThrows(
         IllegalArgumentException.class,
-        () -> index.getNearestNeighbors(0, denseVector(1f, 0f), MetaFilter.empty()));
+        () -> index.getNearestNeighborRowNums(0, denseVector(1f, 0f), MetaFilter.empty()));
     assertThrows(
         IllegalArgumentException.class,
         () -> index.getSimilarRowNums(-0.1f, denseVector(1f, 0f), MetaFilter.empty()));

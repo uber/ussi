@@ -56,7 +56,7 @@ class SparseEndToEndTest {
             for (int k = 1; k <= ROWS.size(); ++k) {
               assertResults(
                   filteredHits.subList(0, Math.min(k, filteredHits.size())),
-                  index.getNearestNeighbors(k, QUERY, filterCase.filter()));
+                  index.getNearestNeighborRowNums(k, QUERY, filterCase.filter()));
             }
           }
         }
@@ -91,12 +91,12 @@ class SparseEndToEndTest {
     NamespaceConfig config = config(ROWS.size(), 1.0, "auto");
     try (NearestNeighborSearchIndex index = NearestNeighborSearchIndex.create(config)) {
       insertRows(index, ROWS.subList(0, ROWS.size() - 1));
-      assertResults(expectedHits.subList(0, 4), index.getNearestNeighbors(5, QUERY, null));
+      assertResults(expectedHits.subList(0, 4), index.getNearestNeighborRowNums(5, QUERY, null));
 
       insertRows(index, ROWS.subList(ROWS.size() - 1, ROWS.size()));
-      assertResults(expectedHits, index.getNearestNeighbors(5, QUERY, null));
+      assertResults(expectedHits, index.getNearestNeighborRowNums(5, QUERY, null));
       index.awaitBackgroundTasks();
-      assertResults(expectedHits, index.getNearestNeighbors(5, QUERY, null));
+      assertResults(expectedHits, index.getNearestNeighborRowNums(5, QUERY, null));
     }
 
     try (NearestNeighborSearchIndex index =
@@ -105,7 +105,7 @@ class SparseEndToEndTest {
       index.awaitBackgroundTasks();
       insertRows(index, ROWS.subList(3, ROWS.size()));
 
-      assertResults(expectedHits, index.getNearestNeighbors(5, QUERY, null));
+      assertResults(expectedHits, index.getNearestNeighborRowNums(5, QUERY, null));
       assertResults(
           expectedHits.stream().filter(hit -> hit.similarity() >= 0.5f).toList(),
           index.getSimilarRowNums(0.5f, QUERY, null));

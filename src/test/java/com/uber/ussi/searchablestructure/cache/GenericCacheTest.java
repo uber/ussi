@@ -168,21 +168,21 @@ class GenericCacheTest {
     assertTrue(cache.update(rowNum, denseVector(0f, 1f), Map.of()));
 
     List<RowNumAndSimilarity> result =
-        cache.getNearestNeighbors(1, denseVector(0f, 1f), MetaFilter.empty());
+        cache.getNearestNeighborRowNums(1, denseVector(0f, 1f), MetaFilter.empty());
     assertEquals(rowNum, result.get(0).getRowNum());
     assertEquals(1.0f, result.get(0).getSimilarity(), DELTA);
     assertEquals(1, cache.insert(denseVector(1f, 1f), Map.of()));
   }
 
   @Test
-  void getNearestNeighborsKeepsMostSimilarRows() {
+  void getNearestNeighborRowNumsKeepsMostSimilarRows() {
     GenericCache cache = new GenericCache(denseL2Config());
     long exact = cache.insert(denseVector(1f, 0f), Map.of());
     long far = cache.insert(denseVector(0f, 1f), Map.of());
     long mid = cache.insert(denseVector(1f, 1f), Map.of());
 
     List<RowNumAndSimilarity> result =
-        cache.getNearestNeighbors(2, denseVector(1f, 0f), MetaFilter.empty());
+        cache.getNearestNeighborRowNums(2, denseVector(1f, 0f), MetaFilter.empty());
 
     assertEquals(2, result.size());
     LongFloatHashMap rowNumToSimilarity = rowNumToSimilarityMap(result);
@@ -195,13 +195,13 @@ class GenericCacheTest {
   }
 
   @Test
-  void getNearestNeighborsBreaksSimilarityTiesByRowNumAscending() {
+  void getNearestNeighborRowNumsBreaksSimilarityTiesByRowNumAscending() {
     GenericCache cache = new GenericCache(denseL2Config());
     long first = cache.insert(denseVector(1f, 0f), Map.of());
     cache.insert(denseVector(1f, 0f), Map.of());
 
     List<RowNumAndSimilarity> result =
-        cache.getNearestNeighbors(1, denseVector(1f, 0f), MetaFilter.empty());
+        cache.getNearestNeighborRowNums(1, denseVector(1f, 0f), MetaFilter.empty());
 
     assertEquals(List.of(first), result.stream().map(row -> row.getRowNum()).toList());
   }
@@ -233,7 +233,7 @@ class GenericCacheTest {
     cache.insert(denseVector(1f, 0f), Map.of("city", "la"));
 
     MetaFilter filter = new MetaFilter(Map.of("city", List.of("sf")));
-    List<RowNumAndSimilarity> result = cache.getNearestNeighbors(10, denseVector(1f, 0f), filter);
+    List<RowNumAndSimilarity> result = cache.getNearestNeighborRowNums(10, denseVector(1f, 0f), filter);
 
     assertEquals(1, result.size());
     assertEquals(sanFrancisco, result.get(0).getRowNum());
@@ -246,17 +246,17 @@ class GenericCacheTest {
     cache.insert(denseVector(1f, 0f), Map.of("city", "la"));
 
     List<RowNumAndSimilarity> result =
-        cache.getNearestNeighbors(10, denseVector(1f, 0f), MetaFilter.empty());
+        cache.getNearestNeighborRowNums(10, denseVector(1f, 0f), MetaFilter.empty());
 
     assertEquals(2, result.size());
   }
 
   @Test
-  void getNearestNeighborsRejectsNonPositiveK() {
+  void getNearestNeighborRowNumsRejectsNonPositiveK() {
     GenericCache cache = new GenericCache(denseL2Config());
     assertThrows(
         IllegalArgumentException.class,
-        () -> cache.getNearestNeighbors(0, denseVector(1f, 0f), MetaFilter.empty()));
+        () -> cache.getNearestNeighborRowNums(0, denseVector(1f, 0f), MetaFilter.empty()));
   }
 
   @Test

@@ -75,10 +75,10 @@ class InvertedIndexTest {
     assertArrayEquals(new long[] {1, 2}, index.getAll().get(1).getTerms());
 
     List<RowNumAndSimilarity> result =
-        index.getNearestNeighbors(1, jaccard(new long[] {1, 2}, 1, 1), MetaFilter.empty());
+        index.getNearestNeighborRowNums(1, jaccard(new long[] {1, 2}, 1, 1), MetaFilter.empty());
     assertEquals(List.of(1L), rowNumsNearestFirst(result));
     assertTrue(
-        index.getNearestNeighbors(1, jaccard(new long[] {1}, 1), MetaFilter.empty()).isEmpty());
+        index.getNearestNeighborRowNums(1, jaccard(new long[] {1}, 1), MetaFilter.empty()).isEmpty());
   }
 
   @Test
@@ -112,7 +112,7 @@ class InvertedIndexTest {
     InvertedIndex index = new InvertedIndex(config("jaccard"), rows, longObjectMap());
 
     List<RowNumAndSimilarity> result =
-        index.getNearestNeighbors(4, jaccard(new long[] {1, 2}, 1, 1), MetaFilter.empty());
+        index.getNearestNeighborRowNums(4, jaccard(new long[] {1, 2}, 1, 1), MetaFilter.empty());
 
     /*
      * Row 3 shares no term with the query, so it is omitted even though k exceeds the number of rows
@@ -135,7 +135,7 @@ class InvertedIndexTest {
     InvertedIndex index = new InvertedIndex(config("jaccard"), rows, longObjectMap());
 
     List<RowNumAndSimilarity> result =
-        index.getNearestNeighbors(1, jaccard(new long[] {1, 2}, 1, 1), MetaFilter.empty());
+        index.getNearestNeighborRowNums(1, jaccard(new long[] {1, 2}, 1, 1), MetaFilter.empty());
 
     assertEquals(List.of(19L), rowNumsNearestFirst(result));
   }
@@ -193,14 +193,14 @@ class InvertedIndexTest {
     InvertedIndex index = new InvertedIndex(config("jaccard"), rows, longObjectMap());
 
     List<RowNumAndSimilarity> result =
-        index.getNearestNeighbors(3, jaccard(new long[] {2}, 0), MetaFilter.empty());
+        index.getNearestNeighborRowNums(3, jaccard(new long[] {2}, 0), MetaFilter.empty());
 
     assertEquals(List.of(2L, 3L), rowNumsNearestFirst(result));
     LongFloatHashMap similarities = rowNumToSimilarity(result);
     assertEquals(1.0f, similarities.get(2), DELTA);
     assertEquals(0.0f, similarities.get(3), DELTA);
     assertTrue(
-        index.getNearestNeighbors(3, jaccard(new long[] {3}, 0), MetaFilter.empty()).isEmpty());
+        index.getNearestNeighborRowNums(3, jaccard(new long[] {3}, 0), MetaFilter.empty()).isEmpty());
   }
 
   @Test
@@ -211,7 +211,7 @@ class InvertedIndexTest {
     InvertedIndex index = new InvertedIndex(config("l2"), rows, longObjectMap());
 
     List<RowNumAndSimilarity> result =
-        index.getNearestNeighbors(2, l2(new long[] {1}, 1), MetaFilter.empty());
+        index.getNearestNeighborRowNums(2, l2(new long[] {1}, 1), MetaFilter.empty());
 
     /*
      * Row 2 shares no term with the query and is omitted, per the documented sparse-index
@@ -219,7 +219,7 @@ class InvertedIndexTest {
      */
     assertEquals(List.of(1L), rowNumsNearestFirst(result));
     assertEquals(1.0f, result.get(0).getSimilarity(), DELTA);
-    assertTrue(index.getNearestNeighbors(1, l2(new long[] {3}, 1), MetaFilter.empty()).isEmpty());
+    assertTrue(index.getNearestNeighborRowNums(1, l2(new long[] {3}, 1), MetaFilter.empty()).isEmpty());
   }
 
   @Test
@@ -238,7 +238,7 @@ class InvertedIndexTest {
 
     MetaFilter sf = new MetaFilter(Map.of("city", List.of("sf")));
     List<RowNumAndSimilarity> result =
-        index.getNearestNeighbors(1, jaccard(new long[] {1, 2}, 1, 1), sf);
+        index.getNearestNeighborRowNums(1, jaccard(new long[] {1, 2}, 1, 1), sf);
 
     assertEquals(List.of(1L), rowNumsNearestFirst(result));
     assertEquals(
@@ -246,7 +246,7 @@ class InvertedIndexTest {
         index.getResolvedMetadataFilteringStrategyForLastSearchForTests());
     assertTrue(index.delete(1));
     assertFalse(index.delete(1));
-    assertTrue(index.getNearestNeighbors(3, jaccard(new long[] {1, 2}, 1, 1), sf).isEmpty());
+    assertTrue(index.getNearestNeighborRowNums(3, jaccard(new long[] {1, 2}, 1, 1), sf).isEmpty());
     assertFalse(index.getAll().containsKey(1));
   }
 
@@ -274,7 +274,7 @@ class InvertedIndexTest {
             metadata);
 
     List<RowNumAndSimilarity> preFilteringResult =
-        preFilteringIndex.getNearestNeighbors(3, jaccard(new long[] {1, 2}, 1, 1), sf);
+        preFilteringIndex.getNearestNeighborRowNums(3, jaccard(new long[] {1, 2}, 1, 1), sf);
 
     assertEquals(List.of(1L, 2L), rowNumsNearestFirst(preFilteringResult));
     assertEquals(
@@ -287,7 +287,7 @@ class InvertedIndexTest {
             rows,
             metadata);
     List<RowNumAndSimilarity> postFilteringResult =
-        postFilteringIndex.getNearestNeighbors(
+        postFilteringIndex.getNearestNeighborRowNums(
             1, jaccard(new long[] {1, 2}, 1, 1), new MetaFilter(Map.of("city", List.of("la"))));
 
     assertEquals(List.of(3L), rowNumsNearestFirst(postFilteringResult));
@@ -321,7 +321,7 @@ class InvertedIndexTest {
             config("jaccard"), longObjectMap(1, jaccard(new long[] {1}, 1)), longObjectMap());
     assertThrows(
         IllegalArgumentException.class,
-        () -> index.getNearestNeighbors(0, jaccard(new long[] {1}, 1), MetaFilter.empty()));
+        () -> index.getNearestNeighborRowNums(0, jaccard(new long[] {1}, 1), MetaFilter.empty()));
     assertThrows(
         IllegalArgumentException.class,
         () -> index.getSimilarRowNums(1.1f, jaccard(new long[] {1}, 1), MetaFilter.empty()));
@@ -376,7 +376,7 @@ class InvertedIndexTest {
     InvertedIndex index = new InvertedIndex(config("jaccard"), longObjectMap(), longObjectMap());
 
     assertTrue(
-        index.getNearestNeighbors(1, jaccard(new long[] {1}, 1), MetaFilter.empty()).isEmpty());
+        index.getNearestNeighborRowNums(1, jaccard(new long[] {1}, 1), MetaFilter.empty()).isEmpty());
   }
 
   @Test
@@ -388,7 +388,7 @@ class InvertedIndexTest {
         .put(1, LongTermsAndValuesTestFactory.create(new long[0], new float[0], 0.0));
 
     assertTrue(
-        index.getNearestNeighbors(1, jaccard(new long[] {1}, 1), MetaFilter.empty()).isEmpty());
+        index.getNearestNeighborRowNums(1, jaccard(new long[] {1}, 1), MetaFilter.empty()).isEmpty());
   }
 
   @Test
@@ -399,7 +399,7 @@ class InvertedIndexTest {
 
     assertThrows(
         IllegalArgumentException.class,
-        () -> index.getNearestNeighbors(1, jaccard(new long[] {1}, 1), MetaFilter.empty()));
+        () -> index.getNearestNeighborRowNums(1, jaccard(new long[] {1}, 1), MetaFilter.empty()));
   }
 
   @Test
@@ -509,7 +509,7 @@ class InvertedIndexTest {
     assertEquals(
         List.of(1L),
         rowNumsNearestFirst(
-            index.getNearestNeighbors(1, jaccard(new long[] {7}, 1), MetaFilter.empty())));
+            index.getNearestNeighborRowNums(1, jaccard(new long[] {7}, 1), MetaFilter.empty())));
     assertEquals(5.0, index.getLastSparseKeysUniValue(), DELTA);
   }
 
@@ -534,11 +534,11 @@ class InvertedIndexTest {
         assertEquivalent(
             comparatorType + " nearest queryIndex=" + queryIndex + " k=" + k + " query=" + query,
             restrictToRowsSharingATerm(
-                genericIndex.getNearestNeighbors(rows.size(), query, MetaFilter.empty()),
+                genericIndex.getNearestNeighborRowNums(rows.size(), query, MetaFilter.empty()),
                 rows,
                 query,
                 k),
-            invertedIndex.getNearestNeighbors(k, query, MetaFilter.empty()));
+            invertedIndex.getNearestNeighborRowNums(k, query, MetaFilter.empty()));
         assertEquivalent(
             comparatorType
                 + " threshold queryIndex="

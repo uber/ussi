@@ -38,7 +38,7 @@ class SparseCacheTest {
     long shared123 = cache.insert(jaccard(new long[] {1, 2, 3}, 1, 1, 1), Map.of());
 
     List<RowNumAndSimilarity> result =
-        cache.getNearestNeighbors(4, jaccard(new long[] {1, 2}, 1, 1), MetaFilter.empty());
+        cache.getNearestNeighborRowNums(4, jaccard(new long[] {1, 2}, 1, 1), MetaFilter.empty());
 
     assertEquals(List.of(shared12, shared123, shared13), rowNumsNearestFirst(result));
     LongFloatHashMap similarities = rowNumToSimilarity(result);
@@ -71,9 +71,9 @@ class SparseCacheTest {
     assertArrayEquals(new long[0], cache.getInvertedListForTests(2));
     assertArrayEquals(new long[] {updated}, cache.getInvertedListForTests(3));
     assertTrue(
-        cache.getNearestNeighbors(1, jaccard(new long[] {2}, 1), MetaFilter.empty()).isEmpty());
+        cache.getNearestNeighborRowNums(1, jaccard(new long[] {2}, 1), MetaFilter.empty()).isEmpty());
     List<RowNumAndSimilarity> result =
-        cache.getNearestNeighbors(2, jaccard(new long[] {3, 4}, 1, 1), MetaFilter.empty());
+        cache.getNearestNeighborRowNums(2, jaccard(new long[] {3, 4}, 1, 1), MetaFilter.empty());
     assertEquals(List.of(updated), rowNumsNearestFirst(result));
     assertEquals(1.0f, result.get(0).getSimilarity(), DELTA);
   }
@@ -99,9 +99,9 @@ class SparseCacheTest {
 
     assertArrayEquals(new long[] {1}, cache.getFilteredOutTermsForTests());
     assertTrue(
-        cache.getNearestNeighbors(2, jaccard(new long[] {1}, 1), MetaFilter.empty()).isEmpty());
+        cache.getNearestNeighborRowNums(2, jaccard(new long[] {1}, 1), MetaFilter.empty()).isEmpty());
     List<RowNumAndSimilarity> filteredQueryResult =
-        cache.getNearestNeighbors(2, jaccard(new long[] {1, 101}, 1, 1), MetaFilter.empty());
+        cache.getNearestNeighborRowNums(2, jaccard(new long[] {1, 101}, 1, 1), MetaFilter.empty());
     assertEquals(List.of(first), rowNumsNearestFirst(filteredQueryResult));
     assertEquals(1.0f, filteredQueryResult.get(0).getSimilarity(), DELTA);
 
@@ -110,7 +110,7 @@ class SparseCacheTest {
 
     assertArrayEquals(new long[0], cache.getFilteredOutTermsForTests());
     List<RowNumAndSimilarity> readmittedResult =
-        cache.getNearestNeighbors(4, jaccard(new long[] {1}, 1), MetaFilter.empty());
+        cache.getNearestNeighborRowNums(4, jaccard(new long[] {1}, 1), MetaFilter.empty());
     assertEquals(List.of(first, second), rowNumsNearestFirst(readmittedResult));
     assertEquals(0.5f, readmittedResult.get(0).getSimilarity(), DELTA);
 
@@ -121,7 +121,7 @@ class SparseCacheTest {
 
     assertArrayEquals(new long[] {1}, cache.getFilteredOutTermsForTests());
     assertTrue(
-        cache.getNearestNeighbors(2, jaccard(new long[] {1}, 1), MetaFilter.empty()).isEmpty());
+        cache.getNearestNeighborRowNums(2, jaccard(new long[] {1}, 1), MetaFilter.empty()).isEmpty());
   }
 
   @Test
@@ -274,7 +274,7 @@ class SparseCacheTest {
 
     MetaFilter la = new MetaFilter(Map.of("city", List.of("la")));
     List<RowNumAndSimilarity> result =
-        cache.getNearestNeighbors(5, jaccard(new long[] {1, 2}, 1, 1), la);
+        cache.getNearestNeighborRowNums(5, jaccard(new long[] {1, 2}, 1, 1), la);
 
     /*
      * The two rows matching the filter are under the 1% brute-force limit of the 200-row cache. The
@@ -285,7 +285,7 @@ class SparseCacheTest {
     assertEquals(1.0f, result.get(0).getSimilarity(), DELTA);
 
     List<RowNumAndSimilarity> unfilteredResult =
-        cache.getNearestNeighbors(5, jaccard(new long[] {1, 2}, 1, 1), MetaFilter.empty());
+        cache.getNearestNeighborRowNums(5, jaccard(new long[] {1, 2}, 1, 1), MetaFilter.empty());
     assertFalse(cache.getLastSearchUsedPreFilteringBruteForceForTests());
     assertEquals(List.of(sharing), rowNumsNearestFirst(unfilteredResult));
   }
@@ -295,12 +295,12 @@ class SparseCacheTest {
     SparseCache cache = new SparseCache(config("jaccard"));
     assertThrows(
         IllegalArgumentException.class,
-        () -> cache.getNearestNeighbors(0, jaccard(new long[] {1}, 1), MetaFilter.empty()));
+        () -> cache.getNearestNeighborRowNums(0, jaccard(new long[] {1}, 1), MetaFilter.empty()));
     assertThrows(
         IllegalArgumentException.class,
         () -> cache.getSimilarRowNums(1.1f, jaccard(new long[] {1}, 1), MetaFilter.empty()));
     assertTrue(
-        cache.getNearestNeighbors(1, jaccard(new long[] {1}, 1), MetaFilter.empty()).isEmpty());
+        cache.getNearestNeighborRowNums(1, jaccard(new long[] {1}, 1), MetaFilter.empty()).isEmpty());
   }
 
   @Test
@@ -378,7 +378,7 @@ class SparseCacheTest {
     cache.insert(jaccard(new long[] {1}, 1), Map.of("city", "la"));
 
     List<RowNumAndSimilarity> results =
-        cache.getNearestNeighbors(
+        cache.getNearestNeighborRowNums(
             2, jaccard(new long[] {1}, 1), new MetaFilter(Map.of("city", List.of("sf"))));
 
     assertEquals(List.of(matching), rowNumsNearestFirst(results));
@@ -392,7 +392,7 @@ class SparseCacheTest {
     cache.rowNumToTermsAndValuesMap.remove(staleRow);
 
     assertTrue(
-        cache.getNearestNeighbors(1, jaccard(new long[] {1}, 1), MetaFilter.empty()).isEmpty());
+        cache.getNearestNeighborRowNums(1, jaccard(new long[] {1}, 1), MetaFilter.empty()).isEmpty());
   }
 
   @Test
@@ -416,7 +416,7 @@ class SparseCacheTest {
     setComparator(cache, new AggressivePrefixComparator());
 
     List<RowNumAndSimilarity> results =
-        cache.getNearestNeighbors(1, jaccard(new long[] {1}, 1), MetaFilter.empty());
+        cache.getNearestNeighborRowNums(1, jaccard(new long[] {1}, 1), MetaFilter.empty());
 
     assertEquals(List.of(rowNum), rowNumsNearestFirst(results));
   }
@@ -460,11 +460,11 @@ class SparseCacheTest {
         assertEquivalent(
             comparatorType + " nearest queryIndex=" + queryIndex + " k=" + k + " query=" + query,
             restrictToRowsSharingATerm(
-                genericCache.getNearestNeighbors(rows.size(), query, MetaFilter.empty()),
+                genericCache.getNearestNeighborRowNums(rows.size(), query, MetaFilter.empty()),
                 rows,
                 query,
                 k),
-            sparseCache.getNearestNeighbors(k, query, MetaFilter.empty()));
+            sparseCache.getNearestNeighborRowNums(k, query, MetaFilter.empty()));
         assertEquivalent(
             comparatorType
                 + " threshold queryIndex="

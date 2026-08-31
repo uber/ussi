@@ -40,7 +40,7 @@ public final class GenericIndex extends Index {
   }
 
   @Override
-  public List<RowNumAndSimilarity> getNearestNeighbors(
+  public List<RowNumAndSimilarity> getNearestNeighborRowNums(
       int k, LongTermsAndValues record, MetaFilter metadataFilter) {
     if (k <= 0) {
       throw new IllegalArgumentException("k must be greater than 0.");

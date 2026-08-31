@@ -109,7 +109,7 @@ class IndexEdgeCasesTest {
     }
 
     @Override
-    public List<RowNumAndSimilarity> getNearestNeighbors(
+    public List<RowNumAndSimilarity> getNearestNeighborRowNums(
         int k, LongTermsAndValues record, MetaFilter metadataFilter) {
       return Collections.emptyList();
     }

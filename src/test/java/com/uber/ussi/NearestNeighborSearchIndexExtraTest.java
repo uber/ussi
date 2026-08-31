@@ -77,12 +77,12 @@ class NearestNeighborSearchIndexExtraTest {
   }
 
   @Test
-  void getNearestNeighborsRejectsNonPositiveK() {
+  void getNearestNeighborRowNumsRejectsNonPositiveK() {
     NearestNeighborSearchIndex index = NearestNeighborSearchIndex.create(config());
 
     assertThrows(
         IllegalArgumentException.class,
-        () -> index.getNearestNeighbors(0, denseVector(1f, 0f), MetaFilter.empty()));
+        () -> index.getNearestNeighborRowNums(0, denseVector(1f, 0f), MetaFilter.empty()));
   }
 
   @Test
@@ -197,6 +197,98 @@ class NearestNeighborSearchIndexExtraTest {
   }
 
   @Test
+  void deleteDuringGraduationDoesNotReappearAfterBuildCompletes() {
+    /*
+     * Tombstone replay: a row deleted from a graduating cache while the background index build is
+     * in flight must not reappear in search results after the build completes and the graduating
+     * cache is swapped for the new index.
+     */
+    CountDownLatch releaseGraduation = new CountDownLatch(1);
+    try (NearestNeighborSearchIndex index =
+        new NearestNeighborSearchIndex(
+            configWithMaxCacheSize(1), blockedSingleThreadExecutor(releaseGraduation))) {
+      long rowNum = index.insert(denseVector(1f, 0f), Map.of("city", "sf"));
+
+      // Delete while graduation build is blocked.
+      assertTrue(index.delete(rowNum));
+
+      // Let graduation complete — tombstone replay should apply the delete to the new index.
+      releaseGraduation.countDown();
+      index.awaitBackgroundTasks();
+
+      SearchResults result =
+          index.getNearestNeighborRowNums(
+              10, denseVector(1f, 0f), new MetaFilter(Map.of("city", List.of("sf"))));
+      assertTrue(result.isEmpty(), "Deleted row must not reappear after graduation completes.");
+      assertEquals(0, index.size());
+    }
+  }
+
+  @Test
+  void deleteDuringConsolidationDoesNotReappearAfterMergeCompletes()
+      throws ReflectiveOperationException {
+    /*
+     * Tombstone replay: a row deleted from an immutable index while a background consolidation is
+     * building must not reappear in search results after the merged index replaces the originals.
+     */
+    try (NearestNeighborSearchIndex index =
+        NearestNeighborSearchIndex.create(configWithMaxCacheSize(1))) {
+      long first = index.insert(denseVector(1f, 0f), Map.of("city", "sf"));
+      long second = index.insert(denseVector(0f, 1f), Map.of("city", "la"));
+      long third = index.insert(denseVector(0.5f, 0.5f), Map.of("city", "sf"));
+      index.awaitBackgroundTasks();
+
+      // At this point we should have multiple indexes. Delete a row before consolidation.
+      assertTrue(index.delete(first));
+
+      // Force consolidation (it runs if structure count >= maxNumSearchableStructures).
+      invokeConsolidate(index);
+
+      SearchResults result =
+          index.getNearestNeighborRowNums(
+              10, denseVector(1f, 0f), new MetaFilter(Map.of("city", List.of("sf"))));
+      assertFalse(
+          rowNums(result).contains(first),
+          "Deleted row must not reappear after consolidation completes.");
+      assertTrue(rowNums(result).contains(third));
+    }
+  }
+
+  @Test
+  void updateDuringGraduationMovesLatestVersionToActiveCache() {
+    /*
+     * An update of a row in a graduating cache deletes the old version from the graduating cache,
+     * inserts the new version into the active cache, and after graduation completes only the new
+     * version is visible in search results.
+     */
+    CountDownLatch releaseGraduation = new CountDownLatch(1);
+    try (NearestNeighborSearchIndex index =
+        new NearestNeighborSearchIndex(
+            configWithMaxCacheSize(1), blockedSingleThreadExecutor(releaseGraduation))) {
+      long rowNum = index.insert(denseVector(1f, 0f), Map.of("city", "sf"));
+
+      // Update while graduation build is blocked.
+      assertTrue(index.update(rowNum, denseVector(0f, 1f), Map.of("city", "la")));
+
+      // Let graduation complete.
+      releaseGraduation.countDown();
+      index.awaitBackgroundTasks();
+
+      // Old version should not be findable.
+      SearchResults oldResult =
+          index.getNearestNeighborRowNums(
+              10, denseVector(1f, 0f), new MetaFilter(Map.of("city", List.of("sf"))));
+      assertTrue(oldResult.isEmpty(), "Old version must not appear after graduation.");
+
+      // New version should be findable.
+      SearchResults newResult =
+          index.getNearestNeighborRowNums(
+              10, denseVector(0f, 1f), new MetaFilter(Map.of("city", List.of("la"))));
+      assertEquals(List.of(rowNum), rowNums(newResult), "Updated row must be in the active cache.");
+    }
+  }
+
+  @Test
   void searchCanReadGraduatingCacheWhileIndexBuildReadsCache() throws Exception {
     CountDownLatch buildStarted = new CountDownLatch(1);
     CountDownLatch releaseBuild = new CountDownLatch(1);
@@ -216,7 +308,7 @@ class NearestNeighborSearchIndexExtraTest {
 
       buildStarted.await();
       SearchResults result =
-          index.getNearestNeighbors(
+          index.getNearestNeighborRowNums(
               10, denseVector(1f, 0f), new MetaFilter(Map.of("city", List.of("sf"))));
 
       assertEquals(List.of(rowNum), rowNums(result));
@@ -283,7 +375,7 @@ class NearestNeighborSearchIndexExtraTest {
       long active = index.insert(denseVector(1f, 0f), Map.of("city", "sf"));
 
       SearchResults result =
-          index.getNearestNeighbors(
+          index.getNearestNeighborRowNums(
               1, denseVector(1f, 0f), new MetaFilter(Map.of("city", List.of("sf"))));
 
       assertEquals(List.of(first), rowNums(result));

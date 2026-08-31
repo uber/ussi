@@ -150,7 +150,7 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
     return true;
   }
 
-  public SearchResults getNearestNeighbors(
+  public SearchResults getNearestNeighborRowNums(
       int k, TermsAndValues record, MetaFilter metadataFilter) {
     if (k <= 0) {
       throw new IllegalArgumentException("k must be greater than 0.");
@@ -514,7 +514,17 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
       builtIndex.delete(rowNum.value);
     }
   }
-
+  
+  /**
+   * Removes the record from the active cache if present (physical delete). Otherwise, scans
+   * searchable structures from newest to oldest and tombstones the record in the first structure
+   * that contains it. Only the first match is tombstoned because each rowNum lives in exactly one
+   * structure at a time. If the deleted row belongs to a graduating cache or an index that is
+   * currently being rebuilt in the background, the deletion is recorded in a per-build tombstone
+   * set ({@link #graduationDeletes} or {@link #consolidationDeletes}) and replayed onto the new
+   * index at swap time, so deleted rows do not reappear after the build completes. Must be called
+   * while holding the write lock.
+   */
   private boolean deleteInternalLocked(long rowNum) {
     if (cache.delete(rowNum)) {
       return true;
@@ -674,9 +684,9 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
     BoundedSizeMaxHeap<RowNumAndSimilarity> rows =
         new BoundedSizeMaxHeap<>(maxResults, RowNumAndSimilarity.TOP_RESULTS_HEAP_ORDER);
     if (topK) {
-      rows.addAll(cache.getNearestNeighbors(maxResults, encodedRecord, metadataFilter));
+      rows.addAll(cache.getNearestNeighborRowNums(maxResults, encodedRecord, metadataFilter));
       for (OrderedSearchableStructure structure : orderedSearchableStructuresLocked(true)) {
-        rows.addAll(structure.getNearestNeighbors(maxResults, encodedRecord, metadataFilter));
+        rows.addAll(structure.getNearestNeighborRowNums(maxResults, encodedRecord, metadataFilter));
       }
     } else {
       rows.addAll(cache.getSimilarRowNums(minSimilarity, encodedRecord, metadataFilter));
@@ -726,12 +736,12 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
       return Objects.requireNonNull(index).getAll();
     }
 
-    private List<RowNumAndSimilarity> getNearestNeighbors(
+    private List<RowNumAndSimilarity> getNearestNeighborRowNums(
         int k, LongTermsAndValues record, MetaFilter metadataFilter) {
       if (cache != null) {
-        return cache.getNearestNeighbors(k, record, metadataFilter);
+        return cache.getNearestNeighborRowNums(k, record, metadataFilter);
       }
-      return Objects.requireNonNull(index).getNearestNeighbors(k, record, metadataFilter);
+      return Objects.requireNonNull(index).getNearestNeighborRowNums(k, record, metadataFilter);
     }
 
     private List<RowNumAndSimilarity> getSimilarRowNums(

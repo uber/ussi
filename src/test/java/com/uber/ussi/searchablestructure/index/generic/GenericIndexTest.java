@@ -39,15 +39,15 @@ class GenericIndexTest {
   void emptyIndexSearchReturnsEmptyResult() {
     GenericIndex index = new GenericIndex(config(), longObjectMap(), longObjectMap());
 
-    assertTrue(index.getNearestNeighbors(1, denseVector(1f, 0f), MetaFilter.empty()).isEmpty());
+    assertTrue(index.getNearestNeighborRowNums(1, denseVector(1f, 0f), MetaFilter.empty()).isEmpty());
   }
 
   @Test
-  void getNearestNeighborsKeepsMostSimilarRows() {
+  void getNearestNeighborRowNumsKeepsMostSimilarRows() {
     GenericIndex index = new GenericIndex(config(), rows(), metadata());
 
     List<RowNumAndSimilarity> result =
-        index.getNearestNeighbors(2, denseVector(1f, 0f), MetaFilter.empty());
+        index.getNearestNeighborRowNums(2, denseVector(1f, 0f), MetaFilter.empty());
 
     LongFloatHashMap rowNumToSimilarity = rowNumToSimilarityMap(result);
     assertEquals(2, result.size());
@@ -58,7 +58,7 @@ class GenericIndexTest {
   }
 
   @Test
-  void getNearestNeighborsBreaksSimilarityTiesByRowNumAscending() {
+  void getNearestNeighborRowNumsBreaksSimilarityTiesByRowNumAscending() {
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
     rows.put(31, denseInternal(1f, 0f));
     rows.put(30, denseInternal(1f, 0f));
@@ -66,7 +66,7 @@ class GenericIndexTest {
     GenericIndex index = new GenericIndex(config(), rows, longObjectMap());
 
     List<RowNumAndSimilarity> result =
-        index.getNearestNeighbors(1, denseVector(1f, 0f), MetaFilter.empty());
+        index.getNearestNeighborRowNums(1, denseVector(1f, 0f), MetaFilter.empty());
 
     assertEquals(List.of(30L), result.stream().map(row -> row.getRowNum()).toList());
   }
@@ -86,7 +86,7 @@ class GenericIndexTest {
     GenericIndex index = new GenericIndex(config(), rows(), metadata());
 
     List<RowNumAndSimilarity> result =
-        index.getNearestNeighbors(
+        index.getNearestNeighborRowNums(
             10, denseVector(1f, 0f), new MetaFilter(Map.of("city", List.of("sf"))));
 
     assertEquals(List.of(10L), result.stream().map(row -> row.getRowNum()).toList());
@@ -101,7 +101,7 @@ class GenericIndexTest {
             metadata());
 
     List<RowNumAndSimilarity> result =
-        index.getNearestNeighbors(
+        index.getNearestNeighborRowNums(
             10, denseVector(1f, 0f), new MetaFilter(Map.of("city", List.of("sf"))));
 
     assertEquals(List.of(10L), result.stream().map(row -> row.getRowNum()).toList());
@@ -124,7 +124,7 @@ class GenericIndexTest {
             metadata());
 
     List<RowNumAndSimilarity> result =
-        index.getNearestNeighbors(
+        index.getNearestNeighborRowNums(
             10, denseVector(1f, 0f), new MetaFilter(Map.of("city", List.of("sf"))));
 
     assertEquals(List.of(10L), result.stream().map(row -> row.getRowNum()).toList());
@@ -147,7 +147,7 @@ class GenericIndexTest {
             metadata());
 
     List<RowNumAndSimilarity> result =
-        index.getNearestNeighbors(
+        index.getNearestNeighborRowNums(
             10, denseVector(1f, 0f), new MetaFilter(Map.of("city", List.of("sf", "la"))));
 
     assertEquals(List.of(10L, 11L), sortedRowNums(result));
@@ -165,7 +165,7 @@ class GenericIndexTest {
             metadata());
 
     List<RowNumAndSimilarity> result =
-        index.getNearestNeighbors(
+        index.getNearestNeighborRowNums(
             10, denseVector(1f, 0f), new MetaFilter(Map.of("city", List.of("sf"))));
 
     assertEquals(List.of(10L), result.stream().map(row -> row.getRowNum()).toList());
@@ -195,7 +195,7 @@ class GenericIndexTest {
      * return nothing. The expansion (size/numMatching = 3) must widen the pool to surface it.
      */
     List<RowNumAndSimilarity> result =
-        index.getNearestNeighbors(
+        index.getNearestNeighborRowNums(
             1, denseVector(1f, 0f), new MetaFilter(Map.of("city", List.of("la"))));
 
     assertEquals(List.of(22L), result.stream().map(row -> row.getRowNum()).toList());
@@ -213,7 +213,7 @@ class GenericIndexTest {
             metadata());
 
     List<RowNumAndSimilarity> result =
-        index.getNearestNeighbors(
+        index.getNearestNeighborRowNums(
             1, denseVector(1f, 0f), new MetaFilter(Map.of("city", List.of("missing"))));
 
     assertTrue(result.isEmpty());
@@ -231,7 +231,7 @@ class GenericIndexTest {
     assertFalse(index.getAll().containsKey(10));
 
     List<RowNumAndSimilarity> result =
-        index.getNearestNeighbors(10, denseVector(1f, 0f), MetaFilter.empty());
+        index.getNearestNeighborRowNums(10, denseVector(1f, 0f), MetaFilter.empty());
     assertEquals(List.of(11L, 12L), sortedRowNums(result));
   }
 
@@ -241,7 +241,7 @@ class GenericIndexTest {
 
     assertThrows(
         IllegalArgumentException.class,
-        () -> index.getNearestNeighbors(0, denseVector(1f, 0f), MetaFilter.empty()));
+        () -> index.getNearestNeighborRowNums(0, denseVector(1f, 0f), MetaFilter.empty()));
     assertThrows(
         IllegalArgumentException.class,
         () -> index.getSimilarRowNums(-0.1f, denseVector(1f, 0f), MetaFilter.empty()));

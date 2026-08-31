@@ -101,7 +101,7 @@ abstract class BaseSparseIndex extends Index {
   }
 
   @Override
-  public final List<RowNumAndSimilarity> getNearestNeighbors(
+  public final List<RowNumAndSimilarity> getNearestNeighborRowNums(
       int k, LongTermsAndValues record, MetaFilter metadataFilter) {
     if (k <= 0) {
       throw new IllegalArgumentException("k must be greater than 0.");
@@ -400,6 +400,11 @@ abstract class BaseSparseIndex extends Index {
     return Math.max(minSimilarity, getConservativeMinSimilarity(rows));
   }
 
+  /**
+   * Returns true if the row should be scored during search. A row is skipped if it has been
+   * tombstoned (soft-deleted) or does not match the metadata filter. This check allows tombstoned
+   * rows to remain in the physical inverted lists without affecting search results.
+   */
   private boolean canScoreRow(long rowNum, @Nullable MetaFilter metadataFilter) {
     return !isDeleted(rowNum)
         && (metadataFilter == null || matchesMetaFilter(rowNum, metadataFilter));

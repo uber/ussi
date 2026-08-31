@@ -18,7 +18,7 @@ public final class GenericCache extends Cache {
   }
 
   @Override
-  protected List<RowNumAndSimilarity> getNearestNeighborsLocked(
+  protected List<RowNumAndSimilarity> getNearestNeighborRowNumsLocked(
       int k, LongTermsAndValues record, MetaFilter metadataFilter) {
     if (k <= 0) {
       throw new IllegalArgumentException("k must be greater than 0.");

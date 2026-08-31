@@ -46,7 +46,7 @@ public final class SparseIndex extends Index {
   }
 
   @Override
-  public List<RowNumAndSimilarity> getNearestNeighbors(
+  public List<RowNumAndSimilarity> getNearestNeighborRowNums(
       int k, LongTermsAndValues record, MetaFilter metadataFilter) {
     if (k <= 0) {
       throw new IllegalArgumentException("k must be greater than 0.");
@@ -60,11 +60,11 @@ public final class SparseIndex extends Index {
     List<RowNumAndSimilarity> firstResults =
         firstIndex.size() == 0
             ? List.of()
-            : firstIndex.getNearestNeighbors(maxResults, record, metadataFilter);
+            : firstIndex.getNearestNeighborRowNums(maxResults, record, metadataFilter);
     List<RowNumAndSimilarity> secondResults = List.of();
     if (secondIndex.size() > 0) {
       if (firstResults.size() < maxResults) {
-        secondResults = secondIndex.getNearestNeighbors(maxResults, record, metadataFilter);
+        secondResults = secondIndex.getNearestNeighborRowNums(maxResults, record, metadataFilter);
       } else {
         float minSimilarity = getConservativeMinSimilarity(firstResults);
         if (maySearchIndex(secondIndexIsExact, record, minSimilarity)) {

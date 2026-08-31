@@ -36,20 +36,20 @@ class NearestNeighborSearchIndexTest {
     long la = index.insert(denseVector(0f, 1f), Map.of("city", "la"));
 
     SearchResults sfResult =
-        index.getNearestNeighbors(
+        index.getNearestNeighborRowNums(
             10, denseVector(1f, 0f), new MetaFilter(Map.of("city", List.of("sf"))));
     assertEquals(List.of(sf), rowNums(sfResult));
 
     assertTrue(index.update(la, denseVector(1f, 0f), Map.of("city", "sf")));
     SearchResults updatedResult =
-        index.getNearestNeighbors(
+        index.getNearestNeighborRowNums(
             10, denseVector(1f, 0f), new MetaFilter(Map.of("city", List.of("sf"))));
     assertEquals(List.of(sf, la), rowNums(updatedResult));
 
     assertTrue(index.delete(sf));
     assertFalse(index.delete(sf));
     SearchResults afterDelete =
-        index.getNearestNeighbors(
+        index.getNearestNeighborRowNums(
             10, denseVector(1f, 0f), new MetaFilter(Map.of("city", List.of("sf"))));
     assertEquals(List.of(la), rowNums(afterDelete));
   }
@@ -92,7 +92,7 @@ class NearestNeighborSearchIndexTest {
       index.awaitBackgroundTasks();
 
       SearchResults results =
-          index.getNearestNeighbors(
+          index.getNearestNeighborRowNums(
               2, new TermsAndValues(new String[] {"first", "second"}, new float[] {1f, 1f}), null);
 
       assertEquals(List.of(exact, partial), rowNums(results));
@@ -109,7 +109,7 @@ class NearestNeighborSearchIndexTest {
     long far = index.insert(denseVector(0f, 1f), Map.of("city", "sf"));
 
     SearchResults result =
-        index.getNearestNeighbors(
+        index.getNearestNeighborRowNums(
             10, denseVector(1f, 0f), new MetaFilter(Map.of("city", List.of("sf"))));
 
     assertEquals(List.of(exact, mid, far), rowNums(result));
@@ -121,7 +121,7 @@ class NearestNeighborSearchIndexTest {
     long sf = index.insert(denseVector(1f, 0f), Map.of("country", "us"));
 
     SearchResults result =
-        index.getNearestNeighbors(
+        index.getNearestNeighborRowNums(
             10, denseVector(1f, 0f), new MetaFilter(Map.of("country", List.of("us"))));
 
     assertEquals(List.of(sf), rowNums(result));
@@ -136,7 +136,7 @@ class NearestNeighborSearchIndexTest {
       long rowNum = index.insert(denseVector(1f, 0f), Map.of("city", "sf"));
 
       SearchResults result =
-          index.getNearestNeighbors(
+          index.getNearestNeighborRowNums(
               10, denseVector(1f, 0f), new MetaFilter(Map.of("city", List.of("sf"))));
 
       assertEquals(List.of(rowNum), rowNums(result));
@@ -163,7 +163,7 @@ class NearestNeighborSearchIndexTest {
       assertEquals(List.of(first, second, third, fourth), rowNums(index.getAllRowNums()));
 
       SearchResults result =
-          index.getNearestNeighbors(
+          index.getNearestNeighborRowNums(
               10, denseVector(1f, 0f), new MetaFilter(Map.of("city", List.of("sf"))));
       assertEquals(List.of(first, second, third, fourth), rowNums(result));
     }
@@ -177,7 +177,7 @@ class NearestNeighborSearchIndexTest {
     assertTrue(index.delete(rowNum));
 
     SearchResults result =
-        index.getNearestNeighbors(
+        index.getNearestNeighborRowNums(
             10, denseVector(1f, 0f), new MetaFilter(Map.of("city", List.of("sf"))));
     assertTrue(result.isEmpty());
     assertEquals(0, index.getAllRowNums().length);
@@ -192,10 +192,10 @@ class NearestNeighborSearchIndexTest {
     assertTrue(index.update(rowNum, denseVector(0f, 1f), Map.of("city", "la")));
 
     SearchResults oldVersionResult =
-        index.getNearestNeighbors(
+        index.getNearestNeighborRowNums(
             10, denseVector(1f, 0f), new MetaFilter(Map.of("city", List.of("sf"))));
     SearchResults newVersionResult =
-        index.getNearestNeighbors(
+        index.getNearestNeighborRowNums(
             10, denseVector(0f, 1f), new MetaFilter(Map.of("city", List.of("la"))));
 
     assertTrue(oldVersionResult.isEmpty());

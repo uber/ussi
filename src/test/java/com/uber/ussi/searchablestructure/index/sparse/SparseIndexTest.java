@@ -58,7 +58,7 @@ class SparseIndexTest {
         new SparseIndex(config(), longObjectMap(1, exact, 2, approximate), longObjectMap());
 
     List<RowNumAndSimilarity> nearest =
-        index.getNearestNeighbors(2, approximate, MetaFilter.empty());
+        index.getNearestNeighborRowNums(2, approximate, MetaFilter.empty());
     List<RowNumAndSimilarity> threshold =
         index.getSimilarRowNums(1.0f, approximate, MetaFilter.empty());
 
@@ -71,7 +71,7 @@ class SparseIndexTest {
         rowNumsNearestFirst(index.getSimilarRowNums(0.5f, approximate, MetaFilter.empty())));
     assertEquals(
         List.of(2L),
-        rowNumsNearestFirst(index.getNearestNeighbors(1, approximate, MetaFilter.empty())));
+        rowNumsNearestFirst(index.getNearestNeighborRowNums(1, approximate, MetaFilter.empty())));
   }
 
   @Test
@@ -118,12 +118,12 @@ class SparseIndexTest {
     rows.put(3, jaccard(new long[] {1}));
     SparseIndex index = new SparseIndex(config(), rows, longObjectMap());
 
-    List<RowNumAndSimilarity> results = index.getNearestNeighbors(1, query, MetaFilter.empty());
+    List<RowNumAndSimilarity> results = index.getNearestNeighborRowNums(1, query, MetaFilter.empty());
 
     assertEquals(List.of(2L), rowNumsNearestFirst(results));
     assertEquals(
         List.of(2L, 1L),
-        rowNumsNearestFirst(index.getNearestNeighbors(2, query, MetaFilter.empty())));
+        rowNumsNearestFirst(index.getNearestNeighborRowNums(2, query, MetaFilter.empty())));
   }
 
   @Test
@@ -178,12 +178,12 @@ class SparseIndexTest {
     assertEquals(
         List.of(1L),
         rowNumsNearestFirst(
-            index.getNearestNeighbors(
+            index.getNearestNeighborRowNums(
                 2, approximate, new MetaFilter(Map.of("city", List.of("sf"))))));
     assertTrue(index.delete(1));
     assertTrue(index.delete(2));
     assertFalse(index.delete(2));
-    assertTrue(index.getNearestNeighbors(2, approximate, MetaFilter.empty()).isEmpty());
+    assertTrue(index.getNearestNeighborRowNums(2, approximate, MetaFilter.empty()).isEmpty());
     assertEquals(0, index.size());
     assertTrue(index.getAll().isEmpty());
   }
@@ -195,7 +195,7 @@ class SparseIndexTest {
 
     assertThrows(
         IllegalArgumentException.class,
-        () -> index.getNearestNeighbors(0, query, MetaFilter.empty()));
+        () -> index.getNearestNeighborRowNums(0, query, MetaFilter.empty()));
     assertThrows(
         IllegalArgumentException.class,
         () -> index.getSimilarRowNums(-0.1f, query, MetaFilter.empty()));

@@ -13,7 +13,7 @@ public interface SearchableStructure {
 
   LongObjectHashMap<LongTermsAndValues> getAll();
 
-  List<RowNumAndSimilarity> getNearestNeighbors(
+  List<RowNumAndSimilarity> getNearestNeighborRowNums(
       int k, LongTermsAndValues record, MetaFilter metadataFilter);
 
   List<RowNumAndSimilarity> getSimilarRowNums(

@@ -161,7 +161,7 @@ class L2ComparatorTest {
   @Test
   void exactPrefixSumUsesSquaredMaximumDistance() {
     Assertions.assertEquals(
-        4.0 + MathUtils.EPSILON,
+        4.0 + MathUtils.EPSILON_12,
         comparator.getMinPrefixSumForTermsAndValues(
             25.0, comparatorNormalizer.comparatorValueToNormalizedSimilarityValue(2.0)),
         0.0);
@@ -175,13 +175,13 @@ class L2ComparatorTest {
             termsAndValues1,
             termsAndValues2,
             comparatorNormalizer.comparatorValueToNormalizedSimilarityValue(
-                distance - MathUtils.EPSILON));
+                distance - MathUtils.EPSILON_12));
     double distance2 =
         comparator.compare(
             termsAndValues2,
             termsAndValues1,
             comparatorNormalizer.comparatorValueToNormalizedSimilarityValue(
-                distance - MathUtils.EPSILON));
+                distance - MathUtils.EPSILON_12));
     Assertions.assertEquals(
         comparatorNormalizer.normalizedSimilarityValueToComparatorValue(0.0),
         distance1,
@@ -203,7 +203,7 @@ class L2ComparatorTest {
 
     double belowThresholdSimilarity =
         comparatorNormalizer.comparatorValueToNormalizedSimilarityValue(
-            distance - MathUtils.EPSILON);
+            distance - MathUtils.EPSILON_12);
     distance1 =
         comparator.compareInternal(termsAndValues1, termsAndValues2, belowThresholdSimilarity);
     distance2 =
@@ -213,13 +213,13 @@ class L2ComparatorTest {
     Assertions.assertTrue(maxAllowedDistance < distance1 && distance1 <= distance);
     Assertions.assertEquals(distance1, distance2, /* delta */ 0.0);
 
-    double forceExitSimilarity = 1.0 - MathUtils.EPSILON;
+    double forceExitSimilarity = 1.0 - MathUtils.EPSILON_12;
     double forceExitDistance =
         comparatorNormalizer.comparatorValueToNormalizedSimilarityValue(forceExitSimilarity);
     if (distance > forceExitDistance) {
       distance1 = comparator.compareInternal(termsAndValues1, termsAndValues2, forceExitSimilarity);
       distance2 = comparator.compareInternal(termsAndValues2, termsAndValues1, forceExitSimilarity);
-      Assertions.assertTrue(MathUtils.EPSILON < distance1 && distance1 <= distance);
+      Assertions.assertTrue(MathUtils.EPSILON_12 < distance1 && distance1 <= distance);
       Assertions.assertEquals(distance1, distance2, /* delta */ 0.0);
     }
   }
@@ -280,12 +280,12 @@ class L2ComparatorTest {
             /* uniValue1 */ 25.0,
             /* uniValue2 */ 9.0,
             comparatorNormalizer.comparatorValueToNormalizedSimilarityValue(
-                2.0 - MathUtils.EPSILON)));
+                2.0 - MathUtils.EPSILON_12)));
     Assertions.assertFalse(
         comparator.mayPassLengthFiltering(
             /* uniValue1 */ 9.0,
             /* uniValue2 */ 25.0,
             comparatorNormalizer.comparatorValueToNormalizedSimilarityValue(
-                2.0 - MathUtils.EPSILON)));
+                2.0 - MathUtils.EPSILON_12)));
   }
 }

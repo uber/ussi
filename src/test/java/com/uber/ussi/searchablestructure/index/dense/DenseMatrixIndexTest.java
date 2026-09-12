@@ -16,7 +16,6 @@ import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.index.Index;
 import com.uber.ussi.searchablestructure.metadata.MetadataFilteringStrategy;
-import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -344,17 +343,12 @@ class DenseMatrixIndexTest {
   }
 
   @Test
-  void validateL2ComparatorTypeRejectsNonL2() throws ReflectiveOperationException {
-    Method method =
-        DenseMatrixIndex.class.getDeclaredMethod("validateL2ComparatorType", NamespaceConfig.class);
-    method.setAccessible(true);
+  void constructorRejectsNonL2Comparator() {
+    NamespaceConfig config = configWithComparatorType("cosine");
 
-    ReflectiveOperationException error =
-        assertThrows(
-            ReflectiveOperationException.class,
-            () -> method.invoke(null, configWithComparatorType("cosine")));
-
-    assertTrue(error.getCause() instanceof IllegalArgumentException);
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> new DenseMatrixIndex(config, longObjectMap(), longObjectMap()));
   }
 
   private static NamespaceConfig config() {

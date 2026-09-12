@@ -36,11 +36,11 @@ abstract class BaseRuzickaComparator extends SignatureComparator {
         || uni2 < 0.0
         || scannedIntersection < 0.0
         || scannedUnion < 0.0
-        || partialUni1 > uni1 + MathUtils.EPSILON
-        || partialUni2 > uni2 + MathUtils.EPSILON
-        || scannedIntersection > Math.min(partialUni1, partialUni2) + MathUtils.EPSILON
-        || scannedUnion < scannedIntersection - MathUtils.EPSILON
-        || scannedUnion > partialUni1 + partialUni2 + MathUtils.EPSILON) {
+        || partialUni1 > uni1 + MathUtils.EPSILON_12
+        || partialUni2 > uni2 + MathUtils.EPSILON_12
+        || scannedIntersection > Math.min(partialUni1, partialUni2) + MathUtils.EPSILON_12
+        || scannedUnion < scannedIntersection - MathUtils.EPSILON_12
+        || scannedUnion > partialUni1 + partialUni2 + MathUtils.EPSILON_12) {
       throw new IllegalArgumentException(
           String.format(
               "Invalid partialUni1 (%s), uni1 (%s), partialUni2 (%s), uni2 (%s), "
@@ -155,5 +155,48 @@ abstract class BaseRuzickaComparator extends SignatureComparator {
         comparatorNormalizer.normalizedSimilarityValueToComparatorValue(minSimilarity);
     return computeMaxPossibleComparatorValue(0.0, uniValue1, 0.0, uniValue2, 0.0, 0.0)
         >= minComparatorValue;
+  }
+
+  @Override
+  public double conjunctionContribution(float value1, float value2) {
+    if (Math.signum(value1) != Math.signum(value2)) {
+      return 0.0;
+    }
+    return Math.min(getUniTransformedValue(value1), getUniTransformedValue(value2));
+  }
+
+  @Override
+  public double similarityFromConjunction(
+      double conjunction,
+      double partialUniValue1,
+      double uniValue1,
+      double partialUniValue2,
+      double uniValue2) {
+    double unionValue = uniValue1 + uniValue2 - conjunction;
+    if (unionValue <= 0.0) {
+      return comparatorNormalizer.comparatorValueToNormalizedSimilarityValue(1.0);
+    }
+    return comparatorNormalizer.comparatorValueToNormalizedSimilarityValue(
+        conjunction / unionValue);
+  }
+
+  @Override
+  public double maxSimilarityFromPartialConjunction(
+      double conjunction,
+      double unscannedKeysUniValue,
+      double partialUniValue1,
+      double uniValue1,
+      double partialUniValue2,
+      double uniValue2) {
+    // The intersection can never exceed either row's Uni value, whatever the unscanned keys hold.
+    double maxConjunction =
+        Math.min(conjunction + unscannedKeysUniValue, Math.min(uniValue1, uniValue2));
+    return similarityFromConjunction(
+        maxConjunction, partialUniValue1, uniValue1, partialUniValue2, uniValue2);
+  }
+
+  @Override
+  public boolean doesSuffixBoundConjunction() {
+    return true;
   }
 }

@@ -13,9 +13,14 @@ import com.uber.ussi.searchablestructure.index.sparse.SignatureIndex;
 import com.uber.ussi.searchablestructure.index.sparse.SparseIndex;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 
 /** Factory for the ERD index new(config, rows) API. */
 public final class IndexFactory {
+  private static final Set<String> SPARSE_CANDIDATE_GENERATOR_INDEX_TYPES =
+      Set.of("inverted", "sparse", "signature");
+  private static final Set<String> MERGE_CANDIDATE_VERIFICATION_INDEX_TYPES =
+      Set.of("sparse", "signature");
 
   public enum IndexType {
     GENERIC,
@@ -26,6 +31,20 @@ public final class IndexFactory {
   }
 
   private IndexFactory() {}
+
+  /** Returns whether the index type keeps the uni-sorted inverted lists the generators need. */
+  public static boolean supportsSparseCandidateGenerator(String indexType) {
+    return SPARSE_CANDIDATE_GENERATOR_INDEX_TYPES.contains(indexType.toLowerCase(Locale.ROOT));
+  }
+
+  /**
+   * Returns whether merge search has to verify its candidates through the comparator. The
+   * approximate index types key their inverted lists by signature rather than by term, so a
+   * candidate's similarity cannot be derived from the inverted-list values alone.
+   */
+  public static boolean mergeRequiresCandidateVerification(String indexType) {
+    return MERGE_CANDIDATE_VERIFICATION_INDEX_TYPES.contains(indexType.toLowerCase(Locale.ROOT));
+  }
 
   public static Index createIndex(
       NamespaceConfig namespaceConfig,

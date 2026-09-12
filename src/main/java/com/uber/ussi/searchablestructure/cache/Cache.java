@@ -3,6 +3,7 @@ package com.uber.ussi.searchablestructure.cache;
 
 import com.carrotsearch.hppc.LongObjectHashMap;
 import com.uber.ussi.comparator.Comparator;
+import com.uber.ussi.comparator.ComparatorConfigValidator;
 import com.uber.ussi.comparator.ComparatorFactory;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.LongMeta;
@@ -36,7 +37,8 @@ public abstract class Cache implements SearchableStructure {
 
   protected Cache(NamespaceConfig namespaceConfig) {
     this.namespaceConfig = Objects.requireNonNull(namespaceConfig, "namespaceConfig");
-    this.namespaceConfig.validate();
+    this.namespaceConfig.validate(
+        CacheConfigValidator.getInstance(), ComparatorConfigValidator.getInstance());
     this.comparator = ComparatorFactory.createComparator(namespaceConfig);
     this.rowNumToTermsAndValuesMap = new LongObjectHashMap<>();
     this.metadataFilteringModule = new MetadataFilteringModule();

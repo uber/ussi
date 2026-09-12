@@ -5,6 +5,7 @@ import com.carrotsearch.hppc.LongHashSet;
 import com.carrotsearch.hppc.LongObjectHashMap;
 import com.carrotsearch.hppc.cursors.LongObjectCursor;
 import com.uber.ussi.comparator.Comparator;
+import com.uber.ussi.comparator.ComparatorConfigValidator;
 import com.uber.ussi.comparator.ComparatorFactory;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.LongMeta;
@@ -45,7 +46,8 @@ public abstract class Index implements SearchableStructure, AutoCloseable {
       LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
       LongObjectHashMap<LongMeta> rowNumToMetaMap) {
     this.namespaceConfig = Objects.requireNonNull(namespaceConfig, "namespaceConfig");
-    this.namespaceConfig.validate();
+    this.namespaceConfig.validate(
+        IndexConfigValidator.getInstance(), ComparatorConfigValidator.getInstance());
     this.comparator = ComparatorFactory.createComparator(namespaceConfig);
     this.maxPreFilteringRowsRatio = parseMaxPreFilteringRowsRatio(namespaceConfig);
     this.metadataFilteringStrategy = parseMetadataFilteringStrategy(namespaceConfig);
@@ -155,35 +157,16 @@ public abstract class Index implements SearchableStructure, AutoCloseable {
   }
 
   private static double parseMaxPreFilteringRowsRatio(NamespaceConfig namespaceConfig) {
-    String rawValue = namespaceConfig.getIndexParams().get(MAX_PRE_FILTERING_ROWS_RATIO);
-    if (rawValue == null || rawValue.trim().isEmpty()) {
-      return DEFAULT_MAX_PRE_FILTERING_ROWS_RATIO;
-    }
-    double ratio;
-    try {
-      ratio = Double.parseDouble(rawValue);
-    } catch (NumberFormatException e) {
-      throw new IllegalArgumentException(
-          String.format("%s must be a double in [0.0, 1.0].", MAX_PRE_FILTERING_ROWS_RATIO), e);
-    }
-    if (ratio < 0.0d || ratio > 1.0d) {
-      throw new IllegalArgumentException(
-          String.format("%s must be in [0.0, 1.0], got %s.", MAX_PRE_FILTERING_ROWS_RATIO, ratio));
-    }
-    return ratio;
+    return namespaceConfig.readDoubleIndexParam(
+        MAX_PRE_FILTERING_ROWS_RATIO, DEFAULT_MAX_PRE_FILTERING_ROWS_RATIO);
   }
 
   private static MetadataFilteringStrategy parseMetadataFilteringStrategy(
       NamespaceConfig namespaceConfig) {
-    String rawValue = namespaceConfig.getIndexParams().get(METADATA_FILTERING_STRATEGY);
+    String rawValue = namespaceConfig.getIndexParam(METADATA_FILTERING_STRATEGY);
     if (rawValue == null || rawValue.trim().isEmpty()) {
       return MetadataFilteringStrategy.AUTO;
     }
-    try {
-      return MetadataFilteringStrategy.fromIndexParam(rawValue);
-    } catch (IllegalArgumentException e) {
-      throw new IllegalArgumentException(
-          String.format("Unsupported %s (%s).", METADATA_FILTERING_STRATEGY, rawValue), e);
-    }
+    return MetadataFilteringStrategy.fromIndexParam(rawValue);
   }
 }

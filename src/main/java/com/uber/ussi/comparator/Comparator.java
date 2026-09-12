@@ -110,7 +110,7 @@ public abstract class Comparator implements Serializable {
     return getMinPrefixSumForTermsAndValuesInternal(
             uniValue,
             comparatorNormalizer.normalizedSimilarityValueToComparatorValue(minSimilarity))
-        + MathUtils.EPSILON;
+        + MathUtils.EPSILON_12;
   }
 
   protected abstract double getMinPrefixSumForTermsAndValuesInternal(
@@ -141,5 +141,55 @@ public abstract class Comparator implements Serializable {
   protected boolean mayPassNumTermsFilteringInternal(
       LongTermsAndValues query, int minNumTerms, int maxNumTerms, double minSimilarity) {
     return true;
+  }
+
+  /*
+   * Merge candidate generation accumulates a conjunction: the part of the similarity that the query
+   * and an indexed row derive from the sparse keys they share. What that means is up to each
+   * comparator. For Jaccard and Ruzicka the conjunction is the intersection of the two rows, and
+   * for L2 it is the squared distance over the shared keys. Comparators that leave these
+   * unimplemented cannot be paired with the merge generator.
+   */
+
+  /** Returns what one sparse key the query and an indexed row share adds to the conjunction. */
+  public double conjunctionContribution(float value1, float value2) {
+    throw new UnsupportedOperationException(
+        "conjunctionContribution is not supported by " + getClass().getSimpleName() + ".");
+  }
+
+  /** Returns the normalized similarity implied by a complete conjunction. */
+  public double similarityFromConjunction(
+      double conjunction,
+      double partialUniValue1,
+      double uniValue1,
+      double partialUniValue2,
+      double uniValue2) {
+    throw new UnsupportedOperationException(
+        "similarityFromConjunction is not supported by " + getClass().getSimpleName() + ".");
+  }
+
+  /**
+   * Returns the highest normalized similarity still reachable from a partial conjunction, where
+   * {@code unscannedKeysUniValue} bounds what the query's not-yet-merged sparse keys can add.
+   */
+  public double maxSimilarityFromPartialConjunction(
+      double conjunction,
+      double unscannedKeysUniValue,
+      double partialUniValue1,
+      double uniValue1,
+      double partialUniValue2,
+      double uniValue2) {
+    throw new UnsupportedOperationException(
+        "maxSimilarityFromPartialConjunction is not supported by "
+            + getClass().getSimpleName()
+            + ".");
+  }
+
+  /**
+   * Returns whether a suffix of per-key bounds is a valid bound on what the query's unscanned keys
+   * can still contribute to the conjunction.
+   */
+  public boolean doesSuffixBoundConjunction() {
+    return false;
   }
 }

@@ -18,6 +18,7 @@ import com.uber.ussi.utils.Constants;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import org.junit.jupiter.api.Test;
 
 class SparseIndexTest {
@@ -214,6 +215,57 @@ class SparseIndexTest {
     index.close();
 
     assertEquals(0, index.size());
+  }
+
+  /**
+   * The hybrid index fans every search out to an exact child and a signature child, so the merge
+   * generator runs both of its scoring paths here and must still agree with the filtered scan.
+   */
+  @Test
+  void mergeResultsMatchFilteredScanAcrossBothHybridChildren() {
+    Random random = new Random(77_213L);
+    LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
+    for (long rowNum = 1; rowNum <= 12; ++rowNum) {
+      // Rows longer than NUM_SIGNATURES_PER_ID go to the signature child, the rest to the exact.
+      int numTerms = rowNum % 2 == 0 ? 271 + random.nextInt(10) : 8 + random.nextInt(20);
+      rows.put(rowNum, jaccard(sequentialTerms(numTerms, 1 + random.nextInt(40))));
+    }
+    SparseIndex filteredScanIndex = new SparseIndex(config(), rows, longObjectMap());
+    SparseIndex mergeIndex =
+        new SparseIndex(
+            config(
+                "jaccard",
+                "minhash",
+                0,
+                1000,
+                Map.of(
+                    Constants.SPARSE_CANDIDATE_GENERATOR,
+                    NamespaceConfig.SparseCandidateGenerator.SPARS_MERGE.getIndexParamValue())),
+            rows,
+            longObjectMap());
+
+    for (int queryIndex = 0; queryIndex < 12; ++queryIndex) {
+      boolean longQuery = queryIndex % 2 == 0;
+      LongTermsAndValues query =
+          jaccard(sequentialTerms(longQuery ? 280 : 12, 1 + random.nextInt(40)));
+      int k = 1 + random.nextInt(6);
+
+      assertEquals(
+          rowNums(filteredScanIndex.getNearestNeighborRowNums(k, query, MetaFilter.empty())),
+          rowNums(mergeIndex.getNearestNeighborRowNums(k, query, MetaFilter.empty())),
+          "nearest queryIndex=" + queryIndex + " k=" + k);
+      assertEquals(
+          rowNums(filteredScanIndex.getSimilarRowNums(0.2f, query, MetaFilter.empty())),
+          rowNums(mergeIndex.getSimilarRowNums(0.2f, query, MetaFilter.empty())),
+          "threshold queryIndex=" + queryIndex);
+    }
+  }
+
+  private static List<Long> rowNums(List<RowNumAndSimilarity> results) {
+    return results.stream()
+        .sorted(RowNumAndSimilarity.NEAREST_FIRST)
+        .map(RowNumAndSimilarity::getRowNum)
+        .toList();
   }
 
   private static NamespaceConfig config() {

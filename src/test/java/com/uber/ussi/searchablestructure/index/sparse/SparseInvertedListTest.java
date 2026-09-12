@@ -1,0 +1,35 @@
+package com.uber.ussi.searchablestructure.index.sparse;
+
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+
+import org.junit.jupiter.api.Test;
+
+class SparseInvertedListTest {
+
+  @Test
+  void exposesRowNumsValuesAndSize() {
+    SparseInvertedList invertedList =
+        new SparseInvertedList(new long[] {3, 1}, new float[] {0.5f, 1.0f});
+
+    assertArrayEquals(new long[] {3, 1}, invertedList.getRowNums());
+    assertArrayEquals(new float[] {0.5f, 1.0f}, invertedList.getValues());
+    assertEquals(2, invertedList.size());
+  }
+
+  @Test
+  void equalsAndHashCodeConsiderBothRowNumsAndValues() {
+    SparseInvertedList left = new SparseInvertedList(new long[] {1, 2}, new float[] {1.0f, 2.0f});
+    SparseInvertedList same = new SparseInvertedList(new long[] {1, 2}, new float[] {1.0f, 2.0f});
+    SparseInvertedList differentRows =
+        new SparseInvertedList(new long[] {1, 3}, new float[] {1.0f, 2.0f});
+    SparseInvertedList differentValues =
+        new SparseInvertedList(new long[] {1, 2}, new float[] {1.0f, 3.0f});
+
+    assertEquals(left, same);
+    assertEquals(left.hashCode(), same.hashCode());
+    assertNotEquals(left, differentRows);
+    assertNotEquals(left, differentValues);
+  }
+}

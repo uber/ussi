@@ -1,6 +1,7 @@
 /* AUTHOR: Shijie Lu (shijie@uber.com), Shalini Kedlaya (skedlaya@uber.com), Ahmed Metwally (ametwally@uber.com) */
 package com.uber.ussi.searchablestructure.index.sparse;
 
+import com.carrotsearch.hppc.LongDoubleHashMap;
 import com.carrotsearch.hppc.LongHashSet;
 import com.carrotsearch.hppc.LongIntHashMap;
 import com.carrotsearch.hppc.LongObjectHashMap;
@@ -9,6 +10,7 @@ import com.carrotsearch.hppc.cursors.LongIntCursor;
 import com.carrotsearch.hppc.cursors.LongObjectCursor;
 import com.uber.ussi.comparator.SignatureComparator;
 import com.uber.ussi.config.NamespaceConfig;
+import com.uber.ussi.config.NamespaceConfig.SparseCandidateGenerator;
 import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
@@ -24,59 +26,50 @@ import com.uber.ussi.utils.MathUtils;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.Objects;
 import javax.annotation.Nullable;
 
 /** Shared sparse-key index implementation with length and unordered-prefix filtering. */
 abstract class BaseSparseIndex extends Index {
-  /**
-   * Below this range size, getFirstMatchingUniValue/getLastMatchingUniValue use a linear scan
-   * instead of binary search. The scan starts from the end closest to the expected boundary, so it
-   * often beats binary search's fixed O(log n) cost at this range size.
-   */
-  private static final int MIN_NUM_CANDIDATES_FOR_BINARY_SEARCH = 32;
-
   private static final long[] EMPTY_ROW_NUMS = new long[0];
+  private static final float[] EMPTY_VALUES = new float[0];
 
   @Nullable private final SignatureComparator signatureComparator;
+  private final SparseCandidateGenerator sparseCandidateGenerator;
+  private final boolean scoresFromConjunction;
   private final double maxFractionIdsPerSparseKey;
   private final LongHashSet filteredOutTerms;
   private final LongObjectHashMap<LongTermsAndValues> comparisonRowNumToTermsAndValuesMap;
-  private final LongObjectHashMap<long[]> sparseKeyAndRowNumsIndex;
+  private final LongDoubleHashMap rowNumToUniValue;
+  private final LongObjectHashMap<SparseInvertedList> sparseKeyToInvertedList;
   private final MetadataFilteredSearchExecutor metadataFilteredSearchExecutor;
-
-  BaseSparseIndex(
-      NamespaceConfig namespaceConfig,
-      LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
-      LongObjectHashMap<LongMeta> rowNumToMetaMap) {
-    this(
-        namespaceConfig,
-        rowNumToTermsAndValuesMap,
-        rowNumToMetaMap,
-        /* requireSignatureSupport */ false);
-  }
+  private final SearchContext searchContext = new SearchContext();
 
   BaseSparseIndex(
       NamespaceConfig namespaceConfig,
       LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
       LongObjectHashMap<LongMeta> rowNumToMetaMap,
-      boolean requireSignatureSupport) {
+      SparseKeyType sparseKeyType) {
     super(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);
     this.signatureComparator =
         comparator instanceof SignatureComparator ? (SignatureComparator) comparator : null;
-    if (requireSignatureSupport
+    if (sparseKeyType.requiresSignatureSupport()
         && (signatureComparator == null || !signatureComparator.supportsSignatures())) {
       throw new IndexCreationError(
           "A signature-based index requires a comparator with a configured signature generator.");
     }
+    this.sparseCandidateGenerator = namespaceConfig.getSparseCandidateGenerator();
+    this.scoresFromConjunction =
+        sparseCandidateGenerator == SparseCandidateGenerator.SPARS_MERGE
+            && sparseKeyType.supportsConjunctionScoring();
     this.maxFractionIdsPerSparseKey = parseMaxFractionIdsPerSparseKey(namespaceConfig);
     validateRows();
     this.filteredOutTerms = buildFilteredOutTerms();
     this.comparisonRowNumToTermsAndValuesMap = buildComparisonRows();
-    this.sparseKeyAndRowNumsIndex = buildSparseKeyAndRowNumsIndex();
+    this.rowNumToUniValue = buildRowNumToUniValue(comparisonRowNumToTermsAndValuesMap);
+    this.sparseKeyToInvertedList =
+        buildSparseInvertedIndex(comparisonRowNumToTermsAndValuesMap);
     this.metadataFilteredSearchExecutor =
         new MetadataFilteredSearchExecutor(
             metadataFilteringStrategy,
@@ -94,6 +87,8 @@ abstract class BaseSparseIndex extends Index {
       LongTermsAndValues termsAndValues);
 
   protected abstract long[] getSparseKeys(LongTermsAndValues termsAndValues);
+
+  protected abstract float getValueAtSparseKey(LongTermsAndValues termsAndValues, long sparseKey);
 
   protected final SignatureComparator getSignatureComparator() {
     return Objects.requireNonNull(
@@ -129,7 +124,7 @@ abstract class BaseSparseIndex extends Index {
   }
 
   final int getNumIndexedSparseKeysForTests() {
-    return sparseKeyAndRowNumsIndex.size();
+    return sparseKeyToInvertedList.size();
   }
 
   final long[] getFilteredOutTermsForTests() {
@@ -146,149 +141,47 @@ abstract class BaseSparseIndex extends Index {
     return getRawRowNums(sparseKey).clone();
   }
 
-  final LongTermsAndValues getComparisonTermsAndValuesForTests(long rowNum) {
+  /** Returns the row as the comparator sees it, with the high-popularity terms already dropped. */
+  final LongTermsAndValues getComparisonTermsAndValues(long rowNum) {
     return comparisonRowNumToTermsAndValuesMap.get(rowNum);
   }
 
-  /**
-   * Returns the inclusive lower bound of a sparse key's matching row range within [searchFromIndex,
-   * searchToIndex) of rowNums for the current comparatorUniValue/minSimilarity. Called with (0,
-   * rowNums.length) for a sparse key's first window, and with the key's previous [first, last)
-   * range on later calls as minSimilarity rises in CandidateIterator. This is sound because a
-   * sparse key's matching range only shrinks as minSimilarity rises, never grows. Tries these
-   * tiers, cheapest first.
-   *
-   * <p>Tier 1, O(1). One of the range's endpoints already resolves the search.
-   *
-   * <p>Tier 2, O(1). The endpoints share the same uniValue. Since rowNums is uniValue-sorted, every
-   * row between them shares it too, so tier 1's checks cover the whole range.
-   *
-   * <p>Tier 3. Range smaller than MIN_NUM_CANDIDATES_FOR_BINARY_SEARCH. Linear scan from
-   * searchFromIndex.
-   *
-   * <p>Tier 4. Otherwise, binary search.
-   */
-  final int getFirstMatchingUniValue(
+  /** See {@link SparseFilteredSearch#getFirstMatchingUniValue}. */
+  final int getFirstMatchingUniValueForTests(
       long[] rowNums,
       double comparatorUniValue,
       double minSimilarity,
       int searchFromIndex,
       int searchToIndex) {
-    validateUniValueSearch(rowNums, comparatorUniValue, searchFromIndex, searchToIndex);
-    if (searchFromIndex >= searchToIndex) {
-      return searchFromIndex;
-    }
-    /**
-     * The smallest-uniValue row in range already fails "comparator is smaller", so every row in
-     * range does too. None can be a valid first index.
-     */
-    if (isSmallerThanAndNotSimilar(comparatorUniValue, rowNums[searchFromIndex], minSimilarity)) {
-      return searchFromIndex;
-    }
-    /**
-     * The largest-uniValue row in range still fails "comparator is greater", so the boundary has
-     * not been reached yet. It lies at or beyond searchToIndex.
-     */
-    if (isGreaterThanAndNotSimilar(comparatorUniValue, rowNums[searchToIndex - 1], minSimilarity)) {
-      return searchToIndex;
-    }
-    /**
-     * Both endpoint checks above failed. If the endpoints share the same uniValue, every row
-     * between them shares it too (rowNums is uniValue-sorted), so the check above holds for the
-     * whole range, not just the endpoint.
-     */
-    if (getUniValue(rowNums[searchFromIndex]) == getUniValue(rowNums[searchToIndex - 1])) {
-      return searchFromIndex;
-    }
-
-    // A genuine boundary lies strictly inside (searchFromIndex, searchToIndex).
-    if (searchToIndex - searchFromIndex <= MIN_NUM_CANDIDATES_FOR_BINARY_SEARCH) {
-      /**
-       * On a re-narrowing call, the boundary tends to sit close to searchFromIndex because it only
-       * moves toward searchToIndex as minSimilarity rises. Scanning forward often finishes early.
-       */
-      int index = searchFromIndex;
-      while (index < searchToIndex
-          && isGreaterThanAndNotSimilar(comparatorUniValue, rowNums[index], minSimilarity)) {
-        ++index;
-      }
-      return index;
-    }
-    int low = searchFromIndex;
-    int high = searchToIndex;
-    while (low < high) {
-      int middle = low + (high - low) / 2;
-      if (isGreaterThanAndNotSimilar(comparatorUniValue, rowNums[middle], minSimilarity)) {
-        low = middle + 1;
-      } else {
-        high = middle;
-      }
-    }
-    return low;
+    return SparseFilteredSearch.getFirstMatchingUniValue(
+        comparator,
+        searchContext,
+        rowNums,
+        comparatorUniValue,
+        minSimilarity,
+        searchFromIndex,
+        searchToIndex);
   }
 
-  /**
-   * Symmetric to getFirstMatchingUniValue, for the exclusive upper bound. See there for the tier
-   * breakdown. The linear scan tier runs backward from searchToIndex - 1, the end expected to be
-   * closest to the boundary here.
-   */
-  final int getLastMatchingUniValue(
+  /** See {@link SparseFilteredSearch#getLastMatchingUniValue}. */
+  final int getLastMatchingUniValueForTests(
       long[] rowNums,
       double comparatorUniValue,
       double minSimilarity,
       int searchFromIndex,
       int searchToIndex) {
-    validateUniValueSearch(rowNums, comparatorUniValue, searchFromIndex, searchToIndex);
-    if (searchFromIndex >= searchToIndex) {
-      return searchFromIndex;
-    }
-    /**
-     * Symmetric to getFirstMatchingUniValue's checks. The largest row in range already fails
-     * "comparator is greater", so nothing in range is "too big". The upper bound is unconstrained
-     * within this range.
-     */
-    if (isGreaterThanAndNotSimilar(comparatorUniValue, rowNums[searchToIndex - 1], minSimilarity)) {
-      return searchToIndex;
-    }
-    /**
-     * The smallest row in range already fails "comparator is smaller". The boundary was already
-     * passed at or before searchFromIndex.
-     */
-    if (isSmallerThanAndNotSimilar(comparatorUniValue, rowNums[searchFromIndex], minSimilarity)) {
-      return searchFromIndex;
-    }
-    /**
-     * Symmetric to getFirstMatchingUniValue's analogous check. A shared uniValue at both endpoints
-     * extends "isSmallerThanAndNotSimilar is false", just established at searchFromIndex, to the
-     * entire range.
-     */
-    if (getUniValue(rowNums[searchFromIndex]) == getUniValue(rowNums[searchToIndex - 1])) {
-      return searchToIndex;
-    }
+    return SparseFilteredSearch.getLastMatchingUniValue(
+        comparator,
+        searchContext,
+        rowNums,
+        comparatorUniValue,
+        minSimilarity,
+        searchFromIndex,
+        searchToIndex);
+  }
 
-    if (searchToIndex - searchFromIndex <= MIN_NUM_CANDIDATES_FOR_BINARY_SEARCH) {
-      /**
-       * Symmetric to getFirstMatchingUniValue. The boundary tends to sit close to searchToIndex on
-       * a re-narrowing call, so scan backward from there.
-       */
-      int index = searchToIndex - 1;
-      while (index >= searchFromIndex
-          && isSmallerThanAndNotSimilar(comparatorUniValue, rowNums[index], minSimilarity)) {
-        --index;
-      }
-      return index + 1;
-    }
-    int low = searchFromIndex;
-    int high = searchToIndex;
-    while (low < high) {
-      int middle = low + (high - low) / 2;
-      if (isSmallerThanAndNotSimilar(comparatorUniValue, rowNums[middle], minSimilarity)) {
-        high = middle;
-      } else {
-        low = middle + 1;
-      }
-    }
-    return low;
+  final SearchContext getSearchContext() {
+    return searchContext;
   }
 
   private List<RowNumAndSimilarity> search(
@@ -320,34 +213,51 @@ abstract class BaseSparseIndex extends Index {
       @Nullable MetaFilter metadataFilter,
       float minSimilarity,
       int maxResults) {
-    SparseKeyAndPrefixFilteringData[] sparseKeyData = getSparseKeyData(query);
-    CandidateIterator candidates =
-        new CandidateIterator(sparseKeyData, query.getUniValue(), minSimilarity);
-    BoundedSizeMaxHeap<RowNumAndSimilarity> rows = createTopResultsHeap(maxResults);
-    double currentMinSimilarity = minSimilarity;
-    while (candidates.hasNext()) {
-      long rowNum = candidates.next();
-      if (!canScoreRow(rowNum, metadataFilter)) {
-        continue;
-      }
-      LongTermsAndValues termsAndValues = comparisonRowNumToTermsAndValuesMap.get(rowNum);
-      if (termsAndValues == null || termsAndValues.termsLength() == 0) {
-        continue;
-      }
-      double similarity = comparator.getSimilarity(query, termsAndValues, currentMinSimilarity);
-      if (similarity < currentMinSimilarity) {
-        continue;
-      }
-      rows.add(new RowNumAndSimilarity(rowNum, (float) similarity));
-      if (rows.isFull()) {
-        double tightenedMinSimilarity = getConservativeMinSimilarity(rows);
-        if (tightenedMinSimilarity > currentMinSimilarity) {
-          currentMinSimilarity = tightenedMinSimilarity;
-          candidates.setMinSimilarity(currentMinSimilarity);
-        }
-      }
+    if (sparseCandidateGenerator == SparseCandidateGenerator.SPARS_MERGE) {
+      return SparseMergeSearch.search(
+          comparator,
+          query,
+          metadataFilter,
+          minSimilarity,
+          maxResults,
+          collectSparseMergeSearchQueryKeys(query),
+          searchContext,
+          this::canScoreRow,
+          scoresFromConjunction,
+          this::getComparisonTermsAndValues);
     }
-    return rows.toList();
+    return SparseFilteredSearch.search(
+        comparator,
+        query,
+        metadataFilter,
+        minSimilarity,
+        maxResults,
+        collectSparseFilteredSearchQueryKeys(query),
+        searchContext,
+        this::canScoreRow,
+        this::getComparisonTermsAndValues);
+  }
+
+  /**
+   * Returns the query's indexed sparse keys, shortest inverted list first so that the merge reaches
+   * its pruning bound on the selective keys before paying for the popular ones.
+   */
+  private SparseMergeSearch.QueryKey[] collectSparseMergeSearchQueryKeys(LongTermsAndValues query) {
+    SparseKeyAndUniTransformedValue[] sparseKeys = getSparseKeysAndUniTransformedValues(query);
+    ArrayList<SparseMergeSearch.QueryKey> queryKeys = new ArrayList<>(sparseKeys.length);
+    for (SparseKeyAndUniTransformedValue sparseKey : sparseKeys) {
+      SparseInvertedList invertedList = sparseKeyToInvertedList.get(sparseKey.getSparseKey());
+      if (invertedList == null || invertedList.size() == 0) {
+        continue;
+      }
+      queryKeys.add(
+          new SparseMergeSearch.QueryKey(
+              invertedList,
+              getValueAtSparseKey(query, sparseKey.getSparseKey()),
+              sparseKey.getUniTransformedValue()));
+    }
+    queryKeys.sort(java.util.Comparator.comparingInt(SparseMergeSearch.QueryKey::getNumRows));
+    return queryKeys.toArray(new SparseMergeSearch.QueryKey[0]);
   }
 
   /**
@@ -361,14 +271,15 @@ abstract class BaseSparseIndex extends Index {
       @Nullable MetaFilter metadataFilter,
       float minSimilarity,
       int maxResults) {
-    BoundedSizeMaxHeap<RowNumAndSimilarity> rows = createTopResultsHeap(maxResults);
+    BoundedSizeMaxHeap<RowNumAndSimilarity> rows =
+        SparseSearchResults.newTopResultsHeap(maxResults);
     double currentMinSimilarity = minSimilarity;
     for (LongCursor rowNum : candidateRowNums) {
       currentMinSimilarity =
           scoreRowAndUpdateMinSimilarity(
               rows,
               rowNum.value,
-              comparisonRowNumToTermsAndValuesMap.get(rowNum.value),
+              getComparisonTermsAndValues(rowNum.value),
               query,
               metadataFilter,
               currentMinSimilarity);
@@ -397,7 +308,7 @@ abstract class BaseSparseIndex extends Index {
     if (!rows.isFull()) {
       return minSimilarity;
     }
-    return Math.max(minSimilarity, getConservativeMinSimilarity(rows));
+    return Math.max(minSimilarity, SparseSearchResults.getConservativeMinSimilarity(rows));
   }
 
   /**
@@ -410,7 +321,8 @@ abstract class BaseSparseIndex extends Index {
         && (metadataFilter == null || matchesMetaFilter(rowNum, metadataFilter));
   }
 
-  private SparseKeyAndPrefixFilteringData[] getSparseKeyData(LongTermsAndValues termsAndValues) {
+  private SparseKeyAndPrefixFilteringData[] collectSparseFilteredSearchQueryKeys(
+      LongTermsAndValues termsAndValues) {
     SparseKeyAndUniTransformedValue[] sparseKeys =
         getSparseKeysAndUniTransformedValues(termsAndValues);
     SparseKeyAndPrefixFilteringData[] sparseKeyData =
@@ -460,6 +372,7 @@ abstract class BaseSparseIndex extends Index {
     return termsToFilter;
   }
 
+  /** Returns the rows with the high-popularity terms dropped, as both search and build see them. */
   private LongObjectHashMap<LongTermsAndValues> buildComparisonRows() {
     if (filteredOutTerms.isEmpty()) {
       return rowNumToTermsAndValuesMap;
@@ -472,32 +385,63 @@ abstract class BaseSparseIndex extends Index {
     return comparisonRows;
   }
 
-  private LongObjectHashMap<long[]> buildSparseKeyAndRowNumsIndex() {
-    LongObjectHashMap<ArrayList<RowNumAndUniValue>> mutableIndex = new LongObjectHashMap<>();
-    for (LongObjectCursor<LongTermsAndValues> entry : comparisonRowNumToTermsAndValuesMap) {
-      LongTermsAndValues termsAndValues = entry.value;
-      LongHashSet distinctSparseKeys = LongHashSet.from(getSparseKeys(termsAndValues));
-      for (LongCursor sparseKeyCursor : distinctSparseKeys) {
+  private LongDoubleHashMap buildRowNumToUniValue(
+      LongObjectHashMap<LongTermsAndValues> comparisonRows) {
+    LongDoubleHashMap uniValues = new LongDoubleHashMap(comparisonRows.size());
+    for (LongObjectCursor<LongTermsAndValues> entry : comparisonRows) {
+      uniValues.put(entry.key, stableSortedUniValue(entry.value));
+    }
+    return uniValues;
+  }
+
+  private double stableSortedUniValue(LongTermsAndValues termsAndValues) {
+    double[] transformedValues = new double[termsAndValues.valuesLength()];
+    for (int index = 0; index < transformedValues.length; ++index) {
+      transformedValues[index] = comparator.getUniTransformedValue(termsAndValues.getValue(index));
+    }
+    Arrays.sort(transformedValues);
+    return MathUtils.stableSum(transformedValues);
+  }
+
+  /**
+   * Builds the uni-sorted inverted list of every sparse key. The merge generator scores from the
+   * inverted-list values when it can, so those are only materialized when they will be read.
+   */
+  private LongObjectHashMap<SparseInvertedList> buildSparseInvertedIndex(
+      LongObjectHashMap<LongTermsAndValues> comparisonRows) {
+    LongObjectHashMap<ArrayList<RowNumAndUniValue>> entriesBySparseKey = new LongObjectHashMap<>();
+    for (LongObjectCursor<LongTermsAndValues> row : comparisonRows) {
+      LongTermsAndValues termsAndValues = row.value;
+      double uniValue = rowNumToUniValue.get(row.key);
+      for (LongCursor sparseKeyCursor : LongHashSet.from(getSparseKeys(termsAndValues))) {
         long sparseKey = sparseKeyCursor.value;
-        ArrayList<RowNumAndUniValue> invertedList = mutableIndex.get(sparseKey);
-        if (invertedList == null) {
-          invertedList = new ArrayList<>();
-          mutableIndex.put(sparseKey, invertedList);
+        ArrayList<RowNumAndUniValue> entries = entriesBySparseKey.get(sparseKey);
+        if (entries == null) {
+          entries = new ArrayList<>();
+          entriesBySparseKey.put(sparseKey, entries);
         }
-        invertedList.add(new RowNumAndUniValue(entry.key, termsAndValues.getUniValue()));
+        float value =
+            scoresFromConjunction ? getValueAtSparseKey(termsAndValues, sparseKey) : 0.0f;
+        entries.add(new RowNumAndUniValue(row.key, uniValue, value));
       }
     }
 
-    LongObjectHashMap<long[]> immutableIndex = new LongObjectHashMap<>(mutableIndex.size());
-    for (LongObjectCursor<ArrayList<RowNumAndUniValue>> entry : mutableIndex) {
-      entry.value.sort(null);
-      long[] rowNums = new long[entry.value.size()];
-      for (int i = 0; i < rowNums.length; ++i) {
-        rowNums[i] = entry.value.get(i).getRowNum();
+    LongObjectHashMap<SparseInvertedList> invertedIndex =
+        new LongObjectHashMap<>(entriesBySparseKey.size());
+    for (LongObjectCursor<ArrayList<RowNumAndUniValue>> sparseKey : entriesBySparseKey) {
+      List<RowNumAndUniValue> entries = sparseKey.value;
+      Collections.sort(entries);
+      long[] rowNums = new long[entries.size()];
+      float[] values = scoresFromConjunction ? new float[entries.size()] : EMPTY_VALUES;
+      for (int index = 0; index < rowNums.length; ++index) {
+        rowNums[index] = entries.get(index).getRowNum();
+        if (scoresFromConjunction) {
+          values[index] = entries.get(index).getValue();
+        }
       }
-      immutableIndex.put(entry.key, rowNums);
+      invertedIndex.put(sparseKey.key, new SparseInvertedList(rowNums, values));
     }
-    return immutableIndex;
+    return invertedIndex;
   }
 
   private void validateRows() {
@@ -533,7 +477,7 @@ abstract class BaseSparseIndex extends Index {
     }
     double expectedUniValue = comparator.computeUniValue(termsAndValues);
     double actualUniValue = termsAndValues.getUniValue();
-    double tolerance = MathUtils.EPSILON * Math.max(1.0, Math.abs(expectedUniValue));
+    double tolerance = MathUtils.EPSILON_12 * Math.max(1.0, Math.abs(expectedUniValue));
     if (!Double.isFinite(actualUniValue)
         || actualUniValue < 0.0
         || Math.abs(expectedUniValue - actualUniValue) > tolerance) {
@@ -544,208 +488,41 @@ abstract class BaseSparseIndex extends Index {
     }
   }
 
-  private boolean isSmallerThanAndNotSimilar(
-      double comparatorUniValue, long rowNum, double minSimilarity) {
-    double rowUniValue = getUniValue(rowNum);
-    return comparatorUniValue < rowUniValue
-        && !comparator.mayPassLengthFiltering(comparatorUniValue, rowUniValue, minSimilarity);
-  }
-
-  private boolean isGreaterThanAndNotSimilar(
-      double comparatorUniValue, long rowNum, double minSimilarity) {
-    double rowUniValue = getUniValue(rowNum);
-    return comparatorUniValue > rowUniValue
-        && !comparator.mayPassLengthFiltering(comparatorUniValue, rowUniValue, minSimilarity);
-  }
-
-  private double getUniValue(long rowNum) {
-    LongTermsAndValues termsAndValues = comparisonRowNumToTermsAndValuesMap.get(rowNum);
-    if (termsAndValues == null) {
-      throw new IllegalStateException(
-          String.format("rowNum %s is absent from the sparse forward index.", rowNum));
-    }
-    return termsAndValues.getUniValue();
-  }
-
   private long[] getRawRowNums(long sparseKey) {
-    long[] rowNums = sparseKeyAndRowNumsIndex.get(sparseKey);
-    return rowNums == null ? EMPTY_ROW_NUMS : rowNums;
-  }
-
-  private static void validateUniValueSearch(
-      long[] rowNums, double comparatorUniValue, int searchFromIndex, int searchToIndex) {
-    Objects.requireNonNull(rowNums, "rowNums");
-    if (comparatorUniValue == Constants.UNSET_UNI_VALUE
-        || !Double.isFinite(comparatorUniValue)
-        || comparatorUniValue < 0.0) {
-      throw new IllegalArgumentException(
-          String.format("Invalid comparatorUniValue (%s).", comparatorUniValue));
-    }
-    if (searchFromIndex < 0 || searchFromIndex > searchToIndex || searchToIndex > rowNums.length) {
-      throw new IndexOutOfBoundsException(
-          String.format(
-              "Invalid search range [%s, %s) for %s rowNums.",
-              searchFromIndex, searchToIndex, rowNums.length));
-    }
+    SparseInvertedList invertedList = sparseKeyToInvertedList.get(sparseKey);
+    return invertedList == null ? EMPTY_ROW_NUMS : invertedList.getRowNums();
   }
 
   private static double parseMaxFractionIdsPerSparseKey(NamespaceConfig namespaceConfig) {
-    String value = namespaceConfig.getIndexParams().get(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY);
-    if (value == null || value.trim().isEmpty()) {
-      return Constants.DEFAULT_MAX_FRACTION_IDS_PER_SPARSE_KEY;
-    }
-    double maxFraction;
-    try {
-      maxFraction = Double.parseDouble(value);
-    } catch (NumberFormatException e) {
-      throw new IllegalArgumentException(
-          String.format(
-              "%s must be a double in (0.0, 1.0].", Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY),
-          e);
-    }
-    if (!(maxFraction > 0.0 && maxFraction <= 1.0)) {
-      throw new IllegalArgumentException(
-          String.format(
-              "%s must be in (0.0, 1.0], got %s.",
-              Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, maxFraction));
-    }
-    return maxFraction;
+    return namespaceConfig.readDoubleIndexParam(
+        Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY,
+        Constants.DEFAULT_MAX_FRACTION_IDS_PER_SPARSE_KEY);
   }
 
-  private static BoundedSizeMaxHeap<RowNumAndSimilarity> createTopResultsHeap(int maxResults) {
-    return new BoundedSizeMaxHeap<>(maxResults, RowNumAndSimilarity.TOP_RESULTS_HEAP_ORDER);
-  }
-
-  private static double getConservativeMinSimilarity(BoundedSizeMaxHeap<RowNumAndSimilarity> rows) {
-    return Math.nextDown(rows.peek().getSimilarity());
-  }
-
-  /** Iterates deduplicated candidates in nondecreasing unordered-prefix cost. */
-  private final class CandidateIterator implements Iterator<Long> {
-    private final SparseKeyAndPrefixFilteringData[] sparseKeyData;
-    private final double sparseKeysUniValue;
-    private final double comparatorUniValue;
-    private final LongHashSet generatedRowNums;
-    private double minSimilarity;
-    private double maxPrefixSum;
-    private final MathUtils.StableSumAccumulator prefixSumAccumulator;
-    private double currentSparseKeyPrefixSum;
-    private int sparseKeyIndex;
-    private long[] currentRowNums;
-    private int currentRowStartIndex;
-    private int currentRowEndIndex;
-    private boolean nextRowPrepared;
-    private long nextRowNum;
-
-    CandidateIterator(
-        SparseKeyAndPrefixFilteringData[] sparseKeyData,
-        double comparatorUniValue,
-        double minSimilarity) {
-      this.sparseKeyData = sparseKeyData;
-      Arrays.sort(this.sparseKeyData);
-      MathUtils.StableSumAccumulator sparseKeysUniValueAccumulator =
-          new MathUtils.StableSumAccumulator();
-      for (SparseKeyAndPrefixFilteringData sparseKey : this.sparseKeyData) {
-        sparseKeysUniValueAccumulator.add(sparseKey.getUniTransformedValue());
+  /** The index state both candidate generators traverse, shared so it is allocated once. */
+  final class SearchContext implements SparseFilteredSearch.Context, SparseMergeSearch.Context {
+    @Override
+    public double getUniValue(long rowNum) {
+      if (!rowNumToUniValue.containsKey(rowNum)) {
+        throw new IllegalStateException(
+            String.format("rowNum %s is absent from the sparse uni-value index.", rowNum));
       }
-      this.sparseKeysUniValue = sparseKeysUniValueAccumulator.getSum();
-      this.comparatorUniValue = comparatorUniValue;
-      this.generatedRowNums = new LongHashSet();
-      this.minSimilarity = minSimilarity;
-      this.maxPrefixSum = getMinPrefixSum(sparseKeysUniValue, minSimilarity);
-      this.prefixSumAccumulator = new MathUtils.StableSumAccumulator();
-      this.currentSparseKeyPrefixSum = 0.0;
-      this.sparseKeyIndex = -1;
-      this.currentRowNums = EMPTY_ROW_NUMS;
-      this.currentRowStartIndex = 0;
-      this.currentRowEndIndex = 0;
-      this.nextRowPrepared = false;
-    }
-
-    void setMinSimilarity(double minSimilarity) {
-      if (minSimilarity < this.minSimilarity) {
-        throw new IllegalArgumentException(
-            String.format(
-                "Cannot lower minSimilarity from %s to %s.", this.minSimilarity, minSimilarity));
-      }
-      if (minSimilarity == this.minSimilarity) {
-        return;
-      }
-      this.minSimilarity = minSimilarity;
-      this.maxPrefixSum = getMinPrefixSum(sparseKeysUniValue, minSimilarity);
-      if (sparseKeyIndex < 0 || currentRowStartIndex >= currentRowEndIndex) {
-        return;
-      }
-      if (currentSparseKeyPrefixSum > maxPrefixSum) {
-        currentRowStartIndex = currentRowEndIndex;
-        return;
-      }
-      currentRowStartIndex =
-          getFirstMatchingUniValue(
-              currentRowNums,
-              comparatorUniValue,
-              minSimilarity,
-              currentRowStartIndex,
-              currentRowEndIndex);
-      currentRowEndIndex =
-          getLastMatchingUniValue(
-              currentRowNums,
-              comparatorUniValue,
-              minSimilarity,
-              currentRowStartIndex,
-              currentRowEndIndex);
+      return rowNumToUniValue.get(rowNum);
     }
 
     @Override
-    public boolean hasNext() {
-      if (nextRowPrepared) {
-        return true;
-      }
-      while (true) {
-        while (currentRowStartIndex < currentRowEndIndex) {
-          long rowNum = currentRowNums[currentRowStartIndex++];
-          if (!generatedRowNums.contains(rowNum)) {
-            generatedRowNums.add(rowNum);
-            nextRowNum = rowNum;
-            nextRowPrepared = true;
-            return true;
-          }
-        }
-        if (sparseKeyIndex >= sparseKeyData.length - 1
-            || prefixSumAccumulator.getSum() > maxPrefixSum) {
-          return false;
-        }
-        ++sparseKeyIndex;
-        SparseKeyAndPrefixFilteringData currentSparseKey = sparseKeyData[sparseKeyIndex];
-        currentSparseKeyPrefixSum = prefixSumAccumulator.getSum();
-        currentRowNums = getRawRowNums(currentSparseKey.getSparseKey());
-        if (currentRowNums.length != currentSparseKey.getNumRows()) {
-          throw new IllegalStateException(
-              String.format(
-                  "Inconsistent inverted-list length for sparse key %s.",
-                  currentSparseKey.getSparseKey()));
-        }
-        currentRowStartIndex =
-            getFirstMatchingUniValue(
-                currentRowNums, comparatorUniValue, minSimilarity, 0, currentRowNums.length);
-        currentRowEndIndex =
-            getLastMatchingUniValue(
-                currentRowNums,
-                comparatorUniValue,
-                minSimilarity,
-                currentRowStartIndex,
-                currentRowNums.length);
-        prefixSumAccumulator.add(currentSparseKey.getUniTransformedValue());
-      }
+    public double getMinPrefixSum(double sparseKeysUniValue, double minSimilarity) {
+      return BaseSparseIndex.this.getMinPrefixSum(sparseKeysUniValue, minSimilarity);
     }
 
     @Override
-    public Long next() {
-      if (!hasNext()) {
-        throw new NoSuchElementException();
-      }
-      nextRowPrepared = false;
-      return nextRowNum;
+    public long[] getRowNums(long sparseKey) {
+      return getRawRowNums(sparseKey);
+    }
+
+    @Override
+    public double stableSortedUniValue(LongTermsAndValues termsAndValues) {
+      return BaseSparseIndex.this.stableSortedUniValue(termsAndValues);
     }
   }
 }

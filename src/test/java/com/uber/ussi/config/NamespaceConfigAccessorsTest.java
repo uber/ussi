@@ -2,13 +2,24 @@ package com.uber.ussi.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.uber.ussi.config.NamespaceConfig.SparseCandidateGenerator;
+import com.uber.ussi.utils.Constants;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class NamespaceConfigAccessorsTest {
+
+  private static final ParamLookupCase[] PARAM_LOOKUP_CASES = {
+    new ParamLookupCase("index param", NamespaceConfig::getIndexParam, "ik", "iv"),
+    new ParamLookupCase("index param, other case", NamespaceConfig::getIndexParam, "IK", "iv"),
+    new ParamLookupCase("index param, unset", NamespaceConfig::getIndexParam, "missing", null),
+    new ParamLookupCase("cache param", NamespaceConfig::getCacheParam, "ck", "cv"),
+    new ParamLookupCase("comparator param", NamespaceConfig::getComparatorParam, "pk", "pv"),
+  };
 
   private static NamespaceConfig.Builder fullBuilder() {
     return NamespaceConfig.builder()
@@ -25,6 +36,35 @@ class NamespaceConfigAccessorsTest {
         .comparatorNormalizerParams(Map.of("nk", "nv"))
         .maxNumSearchableStructures(3)
         .maxNumSimilarities(5);
+  }
+
+  @Test
+  void paramLookupCases() {
+    NamespaceConfig config = fullBuilder().build();
+    for (ParamLookupCase testCase : PARAM_LOOKUP_CASES) {
+      assertEquals(testCase.expected, testCase.lookup.apply(config, testCase.key), testCase.name);
+    }
+  }
+
+  @Test
+  void readDoubleIndexParamUsesTheDefaultWhenUnset() {
+    NamespaceConfig config = fullBuilder().build();
+    assertEquals(0.25, config.readDoubleIndexParam("unset_param", 0.25));
+  }
+
+  @Test
+  void getSparseCandidateGeneratorCases() {
+    NamespaceConfig defaults = fullBuilder().build();
+    NamespaceConfig merge =
+        fullBuilder()
+            .indexParams(
+                Map.of(
+                    Constants.SPARSE_CANDIDATE_GENERATOR,
+                    SparseCandidateGenerator.SPARS_MERGE.getIndexParamValue()))
+            .build();
+
+    assertEquals(SparseCandidateGenerator.SPARS, defaults.getSparseCandidateGenerator());
+    assertEquals(SparseCandidateGenerator.SPARS_MERGE, merge.getSparseCandidateGenerator());
   }
 
   @Test
@@ -104,10 +144,16 @@ class NamespaceConfigAccessorsTest {
         fullBuilder().minTermsAndValuesLength(-1).maxTermsAndValuesLength(-2).build();
 
     IllegalArgumentException error =
-        org.junit.jupiter.api.Assertions.assertThrows(
-            IllegalArgumentException.class, config::validate);
+        assertThrows(IllegalArgumentException.class, config::validate);
 
     assertTrue(error.getMessage().contains("NamespaceConfig has"));
     assertTrue(error.getMessage().contains("minTermsAndValuesLength must be >= 0"));
   }
+
+  @FunctionalInterface
+  private interface ParamLookup {
+    String apply(NamespaceConfig config, String key);
+  }
+
+  private record ParamLookupCase(String name, ParamLookup lookup, String key, String expected) {}
 }

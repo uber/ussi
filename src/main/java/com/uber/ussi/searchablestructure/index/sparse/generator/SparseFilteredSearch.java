@@ -1,5 +1,5 @@
 /* AUTHOR: Shijie Lu (shijie@uber.com), Shalini Kedlaya (skedlaya@uber.com), Ahmed Metwally (ametwally@uber.com) */
-package com.uber.ussi.searchablestructure.index.sparse;
+package com.uber.ussi.searchablestructure.index.sparse.generator;
 
 import com.carrotsearch.hppc.LongHashSet;
 import com.uber.ussi.comparator.Comparator;
@@ -24,8 +24,11 @@ import javax.annotation.Nullable;
  * <p>The query's sparse keys are visited cheapest first, and each one's inverted list is narrowed
  * to the rows that length filtering admits. Every candidate is then scored through the comparator,
  * so this generator works for every sparse index type.
+ *
+ * <p>Public only so that the sparse indexes in the parent package can reach it. Nothing outside
+ * this library's sparse implementation should depend on it.
  */
-final class SparseFilteredSearch {
+public final class SparseFilteredSearch {
   /**
    * Below this range size, {@link #getFirstMatchingUniValue} and {@link #getLastMatchingUniValue}
    * scan linearly instead of binary searching.
@@ -42,7 +45,7 @@ final class SparseFilteredSearch {
    *     context}'s uni values are in. Length filtering compares the two uni values, so it has to
    *     read the query's from the same form, not from {@code query}.
    */
-  static List<RowNumAndSimilarity> search(
+  public static List<RowNumAndSimilarity> search(
       Comparator comparator,
       LongTermsAndValues query,
       LongTermsAndValues indexedQuery,
@@ -102,7 +105,7 @@ final class SparseFilteredSearch {
    *
    * <p>Tier 4. Otherwise, binary search.
    */
-  static int getFirstMatchingUniValue(
+  public static int getFirstMatchingUniValue(
       Comparator comparator,
       Context context,
       long[] rowNums,
@@ -153,7 +156,7 @@ final class SparseFilteredSearch {
    * Returns the exclusive upper bound of a sparse key's matching row range, the mirror of {@link
    * #getFirstMatchingUniValue} and narrowed by the same tiers.
    */
-  static int getLastMatchingUniValue(
+  public static int getLastMatchingUniValue(
       Comparator comparator,
       Context context,
       long[] rowNums,
@@ -200,7 +203,7 @@ final class SparseFilteredSearch {
     return low;
   }
 
-  interface Context extends SparseSearchContext {
+  public interface Context extends SparseSearchContext {
     /** Returns the highest prefix cost a sparse key may carry and still admit candidates. */
     double getMinPrefixSum(double sparseKeysUniValue, double minSimilarity);
 

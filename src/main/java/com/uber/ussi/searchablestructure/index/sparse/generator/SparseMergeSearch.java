@@ -1,5 +1,5 @@
 /* AUTHOR: Shijie Lu (shijie@uber.com), Shalini Kedlaya (skedlaya@uber.com), Ahmed Metwally (ametwally@uber.com) */
-package com.uber.ussi.searchablestructure.index.sparse;
+package com.uber.ussi.searchablestructure.index.sparse.generator;
 
 import com.carrotsearch.hppc.IntArrayList;
 import com.uber.ussi.comparator.Comparator;
@@ -19,8 +19,11 @@ import javax.annotation.Nullable;
  * <p>One frontier spans the query's sparse keys and advances them in step, so every inverted-list
  * entry of a candidate row arrives together. That lets the merge accumulate a row's conjunction as
  * it goes and abandon the row as soon as no completion of it can reach minSimilarity.
+ *
+ * <p>Public only so that the sparse indexes in the parent package can reach it. Nothing outside
+ * this library's sparse implementation should depend on it.
  */
-final class SparseMergeSearch {
+public final class SparseMergeSearch {
   private SparseMergeSearch() {}
 
   /**
@@ -36,7 +39,7 @@ final class SparseMergeSearch {
    *     context}'s uni values are in. Length filtering compares the two uni values, so it has to
    *     read the query's from the same form, not from {@code query}.
    */
-  static List<RowNumAndSimilarity> search(
+  public static List<RowNumAndSimilarity> search(
       Comparator comparator,
       LongTermsAndValues query,
       LongTermsAndValues indexedQuery,
@@ -222,18 +225,18 @@ final class SparseMergeSearch {
     return low;
   }
 
-  interface Context extends SparseSearchContext {
+  public interface Context extends SparseSearchContext {
     /** Returns a query's Uni value summed in the same fixed order used for the indexed rows. */
     double stableSortedUniValue(LongTermsAndValues termsAndValues);
   }
 
   /** A query sparse key the index knows, paired with the inverted list it probes. */
-  static final class QueryKey {
+  public static final class QueryKey {
     private final SparseInvertedList invertedList;
     private final float value1;
     private final double uniTransformedValue;
 
-    QueryKey(SparseInvertedList invertedList, float value1, double uniTransformedValue) {
+    public QueryKey(SparseInvertedList invertedList, float value1, double uniTransformedValue) {
       this.invertedList = invertedList;
       this.value1 = value1;
       this.uniTransformedValue = uniTransformedValue;
@@ -247,7 +250,7 @@ final class SparseMergeSearch {
       return invertedList.getValues()[indexInList];
     }
 
-    int getNumRows() {
+    public int getNumRows() {
       return invertedList.size();
     }
   }

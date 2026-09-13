@@ -11,7 +11,7 @@ import com.uber.ussi.entity.termsandvalues.RecordType;
 import com.uber.ussi.error.IndexCreationError;
 import com.uber.ussi.searchablestructure.index.dense.DenseMatrixIndex;
 import com.uber.ussi.searchablestructure.index.generic.GenericIndex;
-import com.uber.ussi.searchablestructure.index.sparse.InvertedIndex;
+import com.uber.ussi.searchablestructure.index.sparse.TermIndex;
 import com.uber.ussi.searchablestructure.index.sparse.SequenceIndex;
 import com.uber.ussi.searchablestructure.index.sparse.SignatureIndex;
 import com.uber.ussi.searchablestructure.index.sparse.SparseIndex;
@@ -40,12 +40,12 @@ class IndexFactoryTest {
   }
 
   @Test
-  void createIndexCreatesInvertedIndex() {
+  void createIndexCreatesTermIndex() {
     Index index =
         IndexFactory.createIndex(
-            validConfig().indexType("INVERTED").build(), longObjectMap(), longObjectMap());
+            validConfig().indexType("TERM").build(), longObjectMap(), longObjectMap());
 
-    assertInstanceOf(InvertedIndex.class, index);
+    assertInstanceOf(TermIndex.class, index);
   }
 
   @Test
@@ -67,7 +67,7 @@ class IndexFactoryTest {
   }
 
   private static final IndexTypePredicateCase[] SPARSE_GENERATOR_CASES = {
-    new IndexTypePredicateCase("inverted", true),
+    new IndexTypePredicateCase("term", true),
     new IndexTypePredicateCase("sparse", true),
     new IndexTypePredicateCase("signature", true),
     new IndexTypePredicateCase("generic", false),
@@ -77,7 +77,7 @@ class IndexFactoryTest {
   private static final IndexTypePredicateCase[] MERGE_VERIFICATION_CASES = {
     new IndexTypePredicateCase("sparse", true),
     new IndexTypePredicateCase("signature", true),
-    new IndexTypePredicateCase("inverted", false),
+    new IndexTypePredicateCase("term", false),
     new IndexTypePredicateCase("generic", false),
   };
 
@@ -115,7 +115,7 @@ class IndexFactoryTest {
   @Test
   void getRecordTypeCases() {
     assertEquals(RecordType.DENSE, IndexFactory.getRecordType("dense"));
-    assertEquals(RecordType.SPARSE, IndexFactory.getRecordType("inverted"));
+    assertEquals(RecordType.SPARSE, IndexFactory.getRecordType("term"));
     assertEquals(RecordType.SPARSE, IndexFactory.getRecordType("signature"));
     assertEquals(RecordType.SPARSE, IndexFactory.getRecordType("SPARSE"));
     assertEquals(RecordType.SEQUENCE, IndexFactory.getRecordType("sequence"));

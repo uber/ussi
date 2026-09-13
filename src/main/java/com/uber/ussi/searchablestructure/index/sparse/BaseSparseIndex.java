@@ -107,7 +107,7 @@ abstract class BaseSparseIndex extends Index {
             : discardedTermFreeRows;
     this.indexedRowNumToTermsAndValuesMap = buildIndexedRows(discardedTermFreeRows);
     this.rowNumToUniValue = buildRowNumToUniValue(indexedRowNumToTermsAndValuesMap);
-    this.sparseKeyToInvertedList = buildSparseInvertedIndex(indexedRowNumToTermsAndValuesMap);
+    this.sparseKeyToInvertedList = buildSparseInvertedLists(indexedRowNumToTermsAndValuesMap);
     this.metadataFilteredSearchExecutor =
         new MetadataFilteredSearchExecutor(
             metadataFilteringStrategy,
@@ -346,7 +346,7 @@ abstract class BaseSparseIndex extends Index {
         metadataFilter,
         maxResults,
         (resolvedMetadataFilter, resolvedMaxResults) ->
-            invertedIndexSearch(
+            invertedListSearch(
                 verificationRecord,
                 indexedRecord,
                 resolvedMetadataFilter,
@@ -371,7 +371,7 @@ abstract class BaseSparseIndex extends Index {
    *     those keys because the two generators want them packaged differently and only one of the
    *     two packagings is ever built.
    */
-  private List<RowNumAndSimilarity> invertedIndexSearch(
+  private List<RowNumAndSimilarity> invertedListSearch(
       LongTermsAndValues query,
       LongTermsAndValues indexedQuery,
       @Nullable MetaFilter metadataFilter,
@@ -431,8 +431,8 @@ abstract class BaseSparseIndex extends Index {
   /**
    * Scores the pre-filtered candidate rows sequentially. These rows arrived from the metadata index
    * rather than from an inverted list, so nothing has established that any of them shares a key
-   * with the query. The shared-key restriction of the inverted search is therefore applied here by
-   * hand, so that both metadata filtering strategies return the same rows.
+   * with the query. The shared-key restriction of the inverted-list search is therefore applied
+   * here by hand, so that both metadata filtering strategies return the same rows.
    *
    * @param query the query in verification form, which is the only form the comparator can score.
    * @param indexedQuery the query in indexed form, which is the only form whose terms are keys of
@@ -617,7 +617,7 @@ abstract class BaseSparseIndex extends Index {
    * Builds the uni-sorted inverted list of every sparse key. The merge generator scores from the
    * inverted-list values when it can, so those are only materialized when they will be read.
    */
-  private LongObjectHashMap<SparseInvertedList> buildSparseInvertedIndex(
+  private LongObjectHashMap<SparseInvertedList> buildSparseInvertedLists(
       LongObjectHashMap<LongTermsAndValues> indexedRows) {
     LongObjectHashMap<ArrayList<RowNumAndUniValue>> entriesBySparseKey = new LongObjectHashMap<>();
     for (LongObjectCursor<LongTermsAndValues> row : indexedRows) {
@@ -635,7 +635,7 @@ abstract class BaseSparseIndex extends Index {
       }
     }
 
-    LongObjectHashMap<SparseInvertedList> invertedIndex =
+    LongObjectHashMap<SparseInvertedList> invertedLists =
         new LongObjectHashMap<>(entriesBySparseKey.size());
     for (LongObjectCursor<ArrayList<RowNumAndUniValue>> sparseKey : entriesBySparseKey) {
       List<RowNumAndUniValue> entries = sparseKey.value;
@@ -648,9 +648,9 @@ abstract class BaseSparseIndex extends Index {
           values[index] = entries.get(index).getValue();
         }
       }
-      invertedIndex.put(sparseKey.key, new SparseInvertedList(rowNums, values));
+      invertedLists.put(sparseKey.key, new SparseInvertedList(rowNums, values));
     }
-    return invertedIndex;
+    return invertedLists;
   }
 
   private void validateRows() {

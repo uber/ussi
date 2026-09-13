@@ -147,7 +147,7 @@ class SparseEndToEndTest {
         .maxCacheSize(maxCacheSize)
         .cacheType("sparse")
         .cacheParams(popularityParams)
-        .indexType("inverted")
+        .indexType("term")
         .indexParams(indexParams)
         .comparatorType("l2")
         .comparatorNormalizerType("reciprocal")

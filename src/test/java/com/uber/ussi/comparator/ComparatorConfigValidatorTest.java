@@ -116,7 +116,7 @@ class ComparatorConfigValidatorTest {
         .maxTermsAndValuesLength(4)
         .maxCacheSize(10)
         .cacheType("generic")
-        .indexType("inverted")
+        .indexType("term")
         .comparatorType("jaccard")
         .comparatorNormalizerType("identity")
         .maxNumSearchableStructures(3)

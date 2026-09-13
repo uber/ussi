@@ -34,20 +34,20 @@ import java.util.Random;
 import java.util.TreeMap;
 import org.junit.jupiter.api.Test;
 
-class InvertedIndexTest {
+class TermIndexTest {
   private static final float DELTA = 1e-6f;
   private static final String CANDIDATES_ONLY =
       NamespaceConfig.PopularTermDiscardScope.CANDIDATES_ONLY.getParamValue();
 
   @Test
-  void constructorBuildsForwardAndUniValueSortedInvertedIndexes() {
+  void constructorBuildsForwardAndUniValueSortedInvertedLists() {
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
     rows.put(12, jaccard(new long[] {1, 2, 3}, 1, 1, 1));
     rows.put(10, jaccard(new long[] {1}, 1));
     rows.put(9, jaccard(new long[] {1}, -1));
     rows.put(11, jaccard(new long[] {1, 2}, 1, 1));
 
-    InvertedIndex index = new InvertedIndex(config("jaccard"), rows, longObjectMap());
+    TermIndex index = new TermIndex(config("jaccard"), rows, longObjectMap());
 
     assertEquals(4, index.size());
     assertEquals(3, index.getNumIndexedSparseKeysForTests());
@@ -64,8 +64,8 @@ class InvertedIndexTest {
     rows.put(2, jaccard(new long[] {1, 3}, 1, 1));
     rows.put(3, jaccard(new long[] {1, 4}, 1, 1));
     rows.put(4, jaccard(new long[] {5}, 1));
-    InvertedIndex index =
-        new InvertedIndex(
+    TermIndex index =
+        new TermIndex(
             config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0.5")),
             rows,
             longObjectMap());
@@ -89,7 +89,7 @@ class InvertedIndexTest {
         Map.of(
             Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0.5",
             Constants.POPULAR_TERM_DISCARD_SCOPE, CANDIDATES_ONLY);
-    InvertedIndex index = new InvertedIndex(config("jaccard", params), rows, longObjectMap());
+    TermIndex index = new TermIndex(config("jaccard", params), rows, longObjectMap());
 
     // Candidate generation is unchanged: the discarded term still keys no list.
     assertArrayEquals(new long[] {1}, index.getDiscardedTermsForTests());
@@ -110,8 +110,8 @@ class InvertedIndexTest {
   @Test
   void candidatesAndVerificationScoresTheSameQueryWithoutTheHighFrequencyTerms() {
     LongObjectHashMap<LongTermsAndValues> rows = popularTermRows();
-    InvertedIndex index =
-        new InvertedIndex(
+    TermIndex index =
+        new TermIndex(
             config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0.5")),
             rows,
             longObjectMap());
@@ -130,7 +130,7 @@ class InvertedIndexTest {
         Map.of(
             Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0.5",
             Constants.POPULAR_TERM_DISCARD_SCOPE, CANDIDATES_ONLY);
-    InvertedIndex index = new InvertedIndex(config("jaccard", params), rows, longObjectMap());
+    TermIndex index = new TermIndex(config("jaccard", params), rows, longObjectMap());
 
     /*
      * Rows 1, 2 and 3 all share term 1 with this query, so scored as supplied each is one term out
@@ -150,7 +150,7 @@ class InvertedIndexTest {
         Map.of(
             Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0.5",
             Constants.POPULAR_TERM_DISCARD_SCOPE, CANDIDATES_ONLY);
-    InvertedIndex index = new InvertedIndex(config("jaccard", params), rows, longObjectMap());
+    TermIndex index = new TermIndex(config("jaccard", params), rows, longObjectMap());
 
     /*
      * Scored as supplied, row 1 is two terms out of three against this query, which clears a 0.6
@@ -174,8 +174,8 @@ class InvertedIndexTest {
             Constants.POPULAR_TERM_DISCARD_SCOPE, CANDIDATES_ONLY,
             Constants.SPARSE_CANDIDATE_GENERATOR,
                 NamespaceConfig.SparseCandidateGenerator.SPARS_MERGE.getParamValue());
-    InvertedIndex index =
-        new InvertedIndex(config("jaccard", params, "inverted"), rows, longObjectMap());
+    TermIndex index =
+        new TermIndex(config("jaccard", params, "term"), rows, longObjectMap());
 
     /*
      * A conjunction accumulated from the inverted lists can only report the similarity that
@@ -200,8 +200,8 @@ class InvertedIndexTest {
     rows.put(3, jaccard(new long[] {1, 4}, 1, 1));
     rows.put(4, jaccard(new long[] {2, 5}, 1, 1));
 
-    InvertedIndex index =
-        new InvertedIndex(
+    TermIndex index =
+        new TermIndex(
             config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0.5")),
             rows,
             longObjectMap());
@@ -216,7 +216,7 @@ class InvertedIndexTest {
     rows.put(2, jaccard(new long[] {1, 3}, 1, 1));
     rows.put(3, jaccard(new long[] {4}, 1));
     rows.put(4, jaccard(new long[] {1, 2, 3}, 1, 1, 1));
-    InvertedIndex index = new InvertedIndex(config("jaccard"), rows, longObjectMap());
+    TermIndex index = new TermIndex(config("jaccard"), rows, longObjectMap());
 
     List<RowNumAndSimilarity> result =
         index.getNearestNeighborRowNums(4, jaccard(new long[] {1, 2}, 1, 1), MetaFilter.empty());
@@ -239,7 +239,7 @@ class InvertedIndexTest {
     rows.put(19, jaccard(new long[] {1, 2}, 1, 1));
     rows.put(30, jaccard(new long[] {2, 3}, 1, 1));
     rows.put(31, jaccard(new long[] {2, 4}, 1, 1));
-    InvertedIndex index = new InvertedIndex(config("jaccard"), rows, longObjectMap());
+    TermIndex index = new TermIndex(config("jaccard"), rows, longObjectMap());
 
     List<RowNumAndSimilarity> result =
         index.getNearestNeighborRowNums(1, jaccard(new long[] {1, 2}, 1, 1), MetaFilter.empty());
@@ -253,7 +253,7 @@ class InvertedIndexTest {
     rows.put(10, jaccard(new long[] {1}, 1));
     rows.put(20, jaccard(new long[] {1, 2}, 1, 1));
     rows.put(40, jaccard(new long[] {1, 2, 3, 4}, 1, 1, 1, 1));
-    InvertedIndex index = new InvertedIndex(config("jaccard"), rows, longObjectMap());
+    TermIndex index = new TermIndex(config("jaccard"), rows, longObjectMap());
     long[] invertedList = index.getRowNumsForSparseKeyForTests(1);
 
     int first =
@@ -274,7 +274,7 @@ class InvertedIndexTest {
     for (int numTerms = 1; numTerms <= 80; ++numTerms) {
       rows.put(numTerms, jaccard(sequentialTerms(numTerms), repeatedValue(1.0f, numTerms)));
     }
-    InvertedIndex index = new InvertedIndex(config("jaccard"), rows, longObjectMap());
+    TermIndex index = new TermIndex(config("jaccard"), rows, longObjectMap());
     long[] invertedList = index.getRowNumsForSparseKeyForTests(1);
 
     int first =
@@ -296,12 +296,12 @@ class InvertedIndexTest {
   }
 
   @Test
-  void zeroUniValueQueriesSearchTheInvertedIndex() {
+  void zeroUniValueQueriesSearchTheTermIndex() {
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
     rows.put(1, jaccard(new long[] {1}, 0));
     rows.put(2, jaccard(new long[] {2}, 0));
     rows.put(3, jaccard(new long[] {2}, 1));
-    InvertedIndex index = new InvertedIndex(config("jaccard"), rows, longObjectMap());
+    TermIndex index = new TermIndex(config("jaccard"), rows, longObjectMap());
 
     List<RowNumAndSimilarity> result =
         index.getNearestNeighborRowNums(3, jaccard(new long[] {2}, 0), MetaFilter.empty());
@@ -315,11 +315,11 @@ class InvertedIndexTest {
   }
 
   @Test
-  void l2QueriesUseTheInvertedIndexAndRequireASharedTerm() {
+  void l2QueriesUseTheTermIndexAndRequireASharedTerm() {
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
     rows.put(1, l2(new long[] {1}, 1));
     rows.put(2, l2(new long[] {2}, 1));
-    InvertedIndex index = new InvertedIndex(config("l2"), rows, longObjectMap());
+    TermIndex index = new TermIndex(config("l2"), rows, longObjectMap());
 
     List<RowNumAndSimilarity> result =
         index.getNearestNeighborRowNums(2, l2(new long[] {1}, 1), MetaFilter.empty());
@@ -343,8 +343,8 @@ class InvertedIndexTest {
     metadata.put(1, longMeta("city", "sf"));
     metadata.put(2, longMeta("city", "la"));
     metadata.put(3, longMeta("city", "ny"));
-    InvertedIndex index =
-        new InvertedIndex(
+    TermIndex index =
+        new TermIndex(
             config("jaccard", Map.of(Index.MAX_PRE_FILTERING_ROWS_RATIO, "0.34")), rows, metadata);
 
     MetaFilter sf = new MetaFilter(Map.of("city", List.of("sf")));
@@ -372,8 +372,8 @@ class InvertedIndexTest {
     metadata.put(2, longMeta("city", "sf"));
     metadata.put(3, longMeta("city", "la"));
     MetaFilter sf = new MetaFilter(Map.of("city", List.of("sf")));
-    InvertedIndex preFilteringIndex =
-        new InvertedIndex(
+    TermIndex preFilteringIndex =
+        new TermIndex(
             config(
                 "jaccard",
                 Map.of(
@@ -392,8 +392,8 @@ class InvertedIndexTest {
         MetadataFilteringStrategy.IN_FILTERING,
         preFilteringIndex.getResolvedMetadataFilteringStrategyForLastSearchForTests());
 
-    InvertedIndex postFilteringIndex =
-        new InvertedIndex(
+    TermIndex postFilteringIndex =
+        new TermIndex(
             config("jaccard", Map.of(Index.METADATA_FILTERING_STRATEGY, "post_filtering")),
             rows,
             metadata);
@@ -419,16 +419,16 @@ class InvertedIndexTest {
 
     assertThrows(
         IndexCreationError.class,
-        () -> new InvertedIndex(config("jaccard"), emptyTerms, longObjectMap()));
+        () -> new TermIndex(config("jaccard"), emptyTerms, longObjectMap()));
     assertThrows(
         IndexCreationError.class,
-        () -> new InvertedIndex(config("jaccard"), unsortedTerms, longObjectMap()));
+        () -> new TermIndex(config("jaccard"), unsortedTerms, longObjectMap()));
     assertThrows(
         IndexCreationError.class,
-        () -> new InvertedIndex(config("jaccard"), wrongUniValue, longObjectMap()));
+        () -> new TermIndex(config("jaccard"), wrongUniValue, longObjectMap()));
 
-    InvertedIndex index =
-        new InvertedIndex(
+    TermIndex index =
+        new TermIndex(
             config("jaccard"), longObjectMap(1, jaccard(new long[] {1}, 1)), longObjectMap());
     assertThrows(
         IllegalArgumentException.class,
@@ -443,7 +443,7 @@ class InvertedIndexTest {
     assertThrows(
         IllegalArgumentException.class,
         () ->
-            new InvertedIndex(
+            new TermIndex(
                 config(
                     "jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "not-a-number")),
                 longObjectMap(),
@@ -451,13 +451,13 @@ class InvertedIndexTest {
     assertThrows(
         IllegalArgumentException.class,
         () ->
-            new InvertedIndex(
+            new TermIndex(
                 config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0")),
                 longObjectMap(),
                 longObjectMap()));
 
-    InvertedIndex index =
-        new InvertedIndex(
+    TermIndex index =
+        new TermIndex(
             config("jaccard"), longObjectMap(1, jaccard(new long[] {1}, 1)), longObjectMap());
     long[] invertedList = index.getRowNumsForSparseKeyForTests(1);
     assertThrows(
@@ -475,7 +475,7 @@ class InvertedIndexTest {
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
     rows.put(1, jaccard(new long[] {1}, 1));
     rows.put(2, jaccard(new long[] {1, 2}, 1, 1));
-    InvertedIndex index = new InvertedIndex(config("jaccard"), rows, longObjectMap());
+    TermIndex index = new TermIndex(config("jaccard"), rows, longObjectMap());
     long[] invertedList = index.getRowNumsForSparseKeyForTests(1);
 
     assertEquals(
@@ -487,16 +487,16 @@ class InvertedIndexTest {
 
   @Test
   void emptySparseIndexReturnsNoResults() {
-    InvertedIndex index = new InvertedIndex(config("jaccard"), longObjectMap(), longObjectMap());
+    TermIndex index = new TermIndex(config("jaccard"), longObjectMap(), longObjectMap());
 
     assertTrue(
         index.getNearestNeighborRowNums(1, jaccard(new long[] {1}, 1), MetaFilter.empty()).isEmpty());
   }
 
   @Test
-  void invertedSearchSkipsAnEmptyVerificationRow() throws ReflectiveOperationException {
-    InvertedIndex index =
-        new InvertedIndex(
+  void invertedListSearchSkipsAnEmptyVerificationRow() throws ReflectiveOperationException {
+    TermIndex index =
+        new TermIndex(
             config("jaccard"), longObjectMap(1, jaccard(new long[] {1}, 1)), longObjectMap());
     verificationRows(index)
         .put(1, LongTermsAndValuesTestFactory.create(new long[0], new float[0], 0.0));
@@ -529,16 +529,16 @@ class InvertedIndexTest {
 
     assertThrows(
         IndexCreationError.class,
-        () -> new InvertedIndex(config("jaccard"), nullRow, longObjectMap()));
+        () -> new TermIndex(config("jaccard"), nullRow, longObjectMap()));
     assertThrows(
         IndexCreationError.class,
-        () -> new InvertedIndex(config("jaccard"), mismatchedLengths, longObjectMap()));
+        () -> new TermIndex(config("jaccard"), mismatchedLengths, longObjectMap()));
   }
 
   @Test
   void uniValueLookupRejectsAStaleInvertedList() throws ReflectiveOperationException {
-    InvertedIndex index =
-        new InvertedIndex(
+    TermIndex index =
+        new TermIndex(
             config("jaccard"), longObjectMap(1, jaccard(new long[] {1}, 1)), longObjectMap());
     long[] invertedList = index.getRowNumsForSparseKeyForTests(1);
     rowNumToUniValues(index).remove(1);
@@ -594,7 +594,7 @@ class InvertedIndexTest {
       Random random = new Random(826_366L + comparatorType.hashCode());
       LongObjectHashMap<LongTermsAndValues> rows = randomRows(random, comparatorType, 80);
       NamespaceConfig config = config(comparatorType);
-      InvertedIndex invertedIndex = new InvertedIndex(config, rows, longObjectMap());
+      TermIndex termIndex = new TermIndex(config, rows, longObjectMap());
       GenericIndex genericIndex = new GenericIndex(config, rows, longObjectMap());
 
       for (int queryIndex = 0; queryIndex < 60; ++queryIndex) {
@@ -613,7 +613,7 @@ class InvertedIndexTest {
                 rows,
                 query,
                 k),
-            invertedIndex.getNearestNeighborRowNums(k, query, MetaFilter.empty()));
+            termIndex.getNearestNeighborRowNums(k, query, MetaFilter.empty()));
         assertEquivalent(
             comparatorType
                 + " threshold queryIndex="
@@ -627,7 +627,7 @@ class InvertedIndexTest {
                 rows,
                 query,
                 rows.size()),
-            invertedIndex.getSimilarRowNums(minSimilarity, query, MetaFilter.empty()));
+            termIndex.getSimilarRowNums(minSimilarity, query, MetaFilter.empty()));
       }
     }
   }
@@ -641,10 +641,10 @@ class InvertedIndexTest {
     for (String comparatorType : List.of("jaccard", "ruzicka", "l2")) {
       Random random = new Random(826_366L + comparatorType.hashCode());
       LongObjectHashMap<LongTermsAndValues> rows = randomRows(random, comparatorType, 80);
-      InvertedIndex filteredScanIndex =
-          new InvertedIndex(config(comparatorType, Map.of(), "inverted"), rows, longObjectMap());
-      InvertedIndex mergeIndex =
-          new InvertedIndex(mergeConfig(comparatorType), rows, longObjectMap());
+      TermIndex filteredScanIndex =
+          new TermIndex(config(comparatorType, Map.of(), "term"), rows, longObjectMap());
+      TermIndex mergeIndex =
+          new TermIndex(mergeConfig(comparatorType), rows, longObjectMap());
 
       for (int queryIndex = 0; queryIndex < 60; ++queryIndex) {
         LongTermsAndValues query = randomSparseRecord(random, comparatorType);
@@ -685,11 +685,11 @@ class InvertedIndexTest {
             Map.of(
                 Index.METADATA_FILTERING_STRATEGY, strategy,
                 Index.MAX_PRE_FILTERING_ROWS_RATIO, "0.9");
-        InvertedIndex filteredScanIndex =
-            new InvertedIndex(config(comparatorType, strategyParams, "inverted"), rows, metadata);
-        InvertedIndex mergeIndex =
-            new InvertedIndex(
-                config(comparatorType, withMergeParam(strategyParams), "inverted"), rows, metadata);
+        TermIndex filteredScanIndex =
+            new TermIndex(config(comparatorType, strategyParams, "term"), rows, metadata);
+        TermIndex mergeIndex =
+            new TermIndex(
+                config(comparatorType, withMergeParam(strategyParams), "term"), rows, metadata);
         MetaFilter sf = new MetaFilter(Map.of("city", List.of("sf")));
 
         for (int queryIndex = 0; queryIndex < 20; ++queryIndex) {
@@ -732,11 +732,11 @@ class InvertedIndexTest {
             Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0.2",
             Index.METADATA_FILTERING_STRATEGY, "pre_filtering",
             Index.MAX_PRE_FILTERING_ROWS_RATIO, "0.9");
-    InvertedIndex filteredScanIndex =
-        new InvertedIndex(config("jaccard", popularityParams, "inverted"), rows, metadata);
-    InvertedIndex mergeIndex =
-        new InvertedIndex(
-            config("jaccard", withMergeParam(popularityParams), "inverted"), rows, metadata);
+    TermIndex filteredScanIndex =
+        new TermIndex(config("jaccard", popularityParams, "term"), rows, metadata);
+    TermIndex mergeIndex =
+        new TermIndex(
+            config("jaccard", withMergeParam(popularityParams), "term"), rows, metadata);
     assertTrue(mergeIndex.discardsPopularSparseKeys());
     assertTrue(mergeIndex.getDiscardedTermsForTests().length > 0);
     MetaFilter sf = new MetaFilter(Map.of("city", List.of("sf")));
@@ -764,7 +764,7 @@ class InvertedIndexTest {
   void readingAValueAtAnAbsentSparseKeyIsRejected() {
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
     rows.put(1, jaccard(new long[] {2, 4, 6}, 1, 1, 1));
-    InvertedIndex index = new InvertedIndex(config("jaccard"), rows, longObjectMap());
+    TermIndex index = new TermIndex(config("jaccard"), rows, longObjectMap());
     LongTermsAndValues record = rows.get(1);
 
     assertEquals(1.0f, index.getValueAtSparseKey(record, 4), DELTA);
@@ -782,7 +782,7 @@ class InvertedIndexTest {
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
     rows.put(1, jaccard(new long[] {1, 2}, 1, 1));
     rows.put(2, jaccard(new long[] {3, 4}, 1, 1));
-    InvertedIndex index = new InvertedIndex(mergeConfig("jaccard"), rows, longObjectMap());
+    TermIndex index = new TermIndex(mergeConfig("jaccard"), rows, longObjectMap());
 
     List<RowNumAndSimilarity> results =
         index.getSimilarRowNums(0.2f, jaccard(new long[] {1, 2, 99}, 1, 1, 1), MetaFilter.empty());
@@ -815,7 +815,7 @@ class InvertedIndexTest {
         Map.of(
             Constants.SPARSE_CANDIDATE_GENERATOR,
             NamespaceConfig.SparseCandidateGenerator.SPARS_MERGE.getParamValue()),
-        "inverted");
+        "term");
   }
 
   private static NamespaceConfig config(String comparatorType) {

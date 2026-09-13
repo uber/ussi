@@ -235,7 +235,7 @@ class NearestNeighborSearchIndexTest {
         .maxTermsAndValuesLength(3)
         .maxCacheSize(maxCacheSize)
         .cacheType("generic")
-        .indexType("inverted")
+        .indexType("term")
         .comparatorType("jaccard")
         .comparatorNormalizerType("identity")
         .maxNumSearchableStructures(3)

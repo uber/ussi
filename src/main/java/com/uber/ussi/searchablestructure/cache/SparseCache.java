@@ -22,7 +22,7 @@ import java.util.List;
 import javax.annotation.Nullable;
 
 /**
- * Writable sparse cache with a mutable inverted term index.
+ * Writable sparse cache with mutable inverted term lists.
  *
  * <p>Inverted lists are mutable and kept in insertion order, unlike the immutable uni-value-sorted
  * inverted lists of the sparse index, so candidate generation uses unordered-prefix filtering
@@ -161,7 +161,7 @@ public final class SparseCache extends Cache {
       return bruteForceSearch(
           verificationQuery, preFiltering.getRowNums(), minSimilarity, maxResults);
     }
-    return invertedIndexSearch(
+    return invertedListSearch(
         verificationQuery, discardedTermFreeQuery, metadataFilter, minSimilarity, maxResults);
   }
 
@@ -191,7 +191,7 @@ public final class SparseCache extends Cache {
    *     inverted lists to visit and the uni value prefix filtering budgets against, since the
    *     prefix mass accumulates over this form's terms.
    */
-  private List<RowNumAndSimilarity> invertedIndexSearch(
+  private List<RowNumAndSimilarity> invertedListSearch(
       LongTermsAndValues query,
       LongTermsAndValues discardedTermFreeQuery,
       MetaFilter metadataFilter,

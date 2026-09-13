@@ -9,7 +9,7 @@ import com.uber.ussi.entity.termsandvalues.RecordType;
 import com.uber.ussi.error.IndexCreationError;
 import com.uber.ussi.searchablestructure.index.dense.DenseMatrixIndex;
 import com.uber.ussi.searchablestructure.index.generic.GenericIndex;
-import com.uber.ussi.searchablestructure.index.sparse.InvertedIndex;
+import com.uber.ussi.searchablestructure.index.sparse.TermIndex;
 import com.uber.ussi.searchablestructure.index.sparse.SequenceIndex;
 import com.uber.ussi.searchablestructure.index.sparse.SignatureIndex;
 import com.uber.ussi.searchablestructure.index.sparse.SparseIndex;
@@ -22,7 +22,7 @@ import javax.annotation.Nullable;
 /** Factory for the ERD index new(config, rows) API. */
 public final class IndexFactory {
   private static final Set<String> SPARSE_CANDIDATE_GENERATOR_INDEX_TYPES =
-      Set.of("inverted", "sequence", "signature", "sparse");
+      Set.of("term", "sequence", "signature", "sparse");
   private static final Set<String> MERGE_CANDIDATE_VERIFICATION_INDEX_TYPES =
       Set.of("sequence", "signature", "sparse");
 
@@ -34,7 +34,7 @@ public final class IndexFactory {
   public enum IndexType {
     GENERIC(null),
     DENSE(RecordType.DENSE),
-    INVERTED(RecordType.SPARSE),
+    TERM(RecordType.SPARSE),
     SEQUENCE(RecordType.SEQUENCE),
     SIGNATURE(RecordType.SPARSE),
     SPARSE(RecordType.SPARSE);
@@ -105,8 +105,8 @@ public final class IndexFactory {
     if (indexType.equals(IndexType.DENSE.name().toLowerCase(Locale.ROOT))) {
       return new DenseMatrixIndex(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);
     }
-    if (indexType.equals(IndexType.INVERTED.name().toLowerCase(Locale.ROOT))) {
-      return new InvertedIndex(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);
+    if (indexType.equals(IndexType.TERM.name().toLowerCase(Locale.ROOT))) {
+      return new TermIndex(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);
     }
     if (indexType.equals(IndexType.SEQUENCE.name().toLowerCase(Locale.ROOT))) {
       return new SequenceIndex(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);

@@ -35,7 +35,8 @@ public abstract class SignatureComparator extends Comparator {
             0.0,
             comparatorNormalizer.normalizedSimilarityValueToComparatorValue(minSimilarity)
                 - generator.getComparisonValueApproximationSafetyMargin());
-    return getMinPrefixSumForSignaturesInternal(numSignatures, comparatorValue) + MathUtils.EPSILON;
+    return getMinPrefixSumForSignaturesInternal(numSignatures, comparatorValue)
+        + MathUtils.EPSILON_12;
   }
 
   protected abstract double getMinPrefixSumForSignaturesInternal(

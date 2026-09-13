@@ -40,7 +40,6 @@ public final class DenseMatrixIndex extends Index {
       LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
       LongObjectHashMap<LongMeta> rowNumToMetaMap) {
     super(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);
-    validateL2ComparatorType(namespaceConfig);
     this.comparatorNormalizer =
         ComparatorNormalizerFactory.createComparatorNormalizer(
             namespaceConfig.getComparatorNormalizerType(),
@@ -352,15 +351,6 @@ public final class DenseMatrixIndex extends Index {
               numRows, dimension));
     }
     return numCells;
-  }
-
-  private static void validateL2ComparatorType(NamespaceConfig namespaceConfig) {
-    if (!"l2".equals(namespaceConfig.getComparatorType())) {
-      throw new IllegalArgumentException(
-          String.format(
-              "DenseMatrixIndex only supports the l2 comparator, got %s.",
-              namespaceConfig.getComparatorType()));
-    }
   }
 
   private static final class MatrixData {

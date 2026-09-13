@@ -346,53 +346,16 @@ public final class SparseCache extends Cache {
   }
 
   private static double parseMaxFractionIdsPerSparseKey(NamespaceConfig namespaceConfig) {
-    String value = namespaceConfig.getCacheParams().get(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY);
-    if (value == null || value.trim().isEmpty()) {
-      return Constants.DEFAULT_MAX_FRACTION_IDS_PER_SPARSE_KEY;
-    }
-    double maxFraction;
-    try {
-      maxFraction = Double.parseDouble(value);
-    } catch (NumberFormatException e) {
-      throw new IllegalArgumentException(
-          String.format(
-              "%s must be a double in (0.0, 1.0].", Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY),
-          e);
-    }
-    if (!(maxFraction > 0.0 && maxFraction <= 1.0)) {
-      throw new IllegalArgumentException(
-          String.format(
-              "%s must be a double in (0.0, 1.0].", Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY));
-    }
-    return maxFraction;
+    return namespaceConfig.readDoubleCacheParam(
+        Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY,
+        Constants.DEFAULT_MAX_FRACTION_IDS_PER_SPARSE_KEY);
   }
 
   private static double parseFullReevaluationCacheSizeDecreaseFraction(
       NamespaceConfig namespaceConfig) {
-    String value =
-        namespaceConfig
-            .getCacheParams()
-            .get(Constants.FULL_REEVALUATION_CACHE_SIZE_DECREASE_FRACTION);
-    if (value == null || value.trim().isEmpty()) {
-      return Constants.DEFAULT_FULL_REEVALUATION_CACHE_SIZE_DECREASE_FRACTION;
-    }
-    double decreaseFraction;
-    try {
-      decreaseFraction = Double.parseDouble(value);
-    } catch (NumberFormatException e) {
-      throw new IllegalArgumentException(
-          String.format(
-              "%s must be a double in [0.0, 1.0].",
-              Constants.FULL_REEVALUATION_CACHE_SIZE_DECREASE_FRACTION),
-          e);
-    }
-    if (!(decreaseFraction >= 0.0 && decreaseFraction <= 1.0)) {
-      throw new IllegalArgumentException(
-          String.format(
-              "%s must be a double in [0.0, 1.0].",
-              Constants.FULL_REEVALUATION_CACHE_SIZE_DECREASE_FRACTION));
-    }
-    return decreaseFraction;
+    return namespaceConfig.readDoubleCacheParam(
+        Constants.FULL_REEVALUATION_CACHE_SIZE_DECREASE_FRACTION,
+        Constants.DEFAULT_FULL_REEVALUATION_CACHE_SIZE_DECREASE_FRACTION);
   }
 
   /**
@@ -402,19 +365,8 @@ public final class SparseCache extends Cache {
    * ProportionConfidenceInterval1Sided.
    */
   private static double parseMaxFractionIdsPerSparseKeyConfidence(NamespaceConfig namespaceConfig) {
-    String value =
-        namespaceConfig.getCacheParams().get(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY_CONFIDENCE);
-    if (value == null || value.trim().isEmpty()) {
-      return Constants.DEFAULT_MAX_FRACTION_IDS_PER_SPARSE_KEY_CONFIDENCE;
-    }
-    try {
-      return Double.parseDouble(value);
-    } catch (NumberFormatException e) {
-      throw new IllegalArgumentException(
-          String.format(
-              "%s must be a double in [0.5, 1.0].",
-              Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY_CONFIDENCE),
-          e);
-    }
+    return namespaceConfig.readDoubleCacheParam(
+        Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY_CONFIDENCE,
+        Constants.DEFAULT_MAX_FRACTION_IDS_PER_SPARSE_KEY_CONFIDENCE);
   }
 }

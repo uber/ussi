@@ -5,6 +5,7 @@ import com.carrotsearch.hppc.LongObjectHashMap;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
+import java.util.Arrays;
 
 /** Exact inverted index for sparse terms and values. */
 public final class InvertedIndex extends BaseSparseIndex {
@@ -13,7 +14,8 @@ public final class InvertedIndex extends BaseSparseIndex {
       NamespaceConfig namespaceConfig,
       LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
       LongObjectHashMap<LongMeta> rowNumToMetaMap) {
-    super(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);
+    super(
+        namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap, SparseKeyType.EXACT_TERM);
   }
 
   @Override
@@ -38,5 +40,15 @@ public final class InvertedIndex extends BaseSparseIndex {
   @Override
   protected long[] getSparseKeys(LongTermsAndValues termsAndValues) {
     return termsAndValues.getTerms();
+  }
+
+  @Override
+  protected float getValueAtSparseKey(LongTermsAndValues termsAndValues, long sparseKey) {
+    int termIndex = Arrays.binarySearch(termsAndValues.getTerms(), sparseKey);
+    if (termIndex < 0) {
+      throw new IllegalArgumentException(
+          String.format("Sparse key %s is absent from the supplied terms and values.", sparseKey));
+    }
+    return termsAndValues.getValue(termIndex);
   }
 }

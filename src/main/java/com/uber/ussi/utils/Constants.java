@@ -1,6 +1,13 @@
 /* AUTHOR: Shijie Lu (shijie@uber.com), Shalini Kedlaya (skedlaya@uber.com), Ahmed Metwally (ametwally@uber.com) */
 package com.uber.ussi.utils;
 
+/**
+ * Constants shared across layers.
+ *
+ * <p>Param keys live here when more than one layer reads them, or when {@link
+ * com.uber.ussi.config.NamespaceConfig} itself reads them. Keys owned by a single layer stay on
+ * that layer, such as {@code Index.MAX_PRE_FILTERING_ROWS_RATIO}.
+ */
 public final class Constants {
   public static final double UNSET_UNI_VALUE = -Double.MAX_VALUE;
   public static final int NUM_SIGNATURES_PER_ID = 270;
@@ -10,6 +17,7 @@ public final class Constants {
       "max_fraction_ids_per_sparse_key_confidence";
   public static final String FULL_REEVALUATION_CACHE_SIZE_DECREASE_FRACTION =
       "full_reevaluation_cache_size_decrease_fraction";
+  public static final String SPARSE_CANDIDATE_GENERATOR = "sparse_candidate_generator";
   public static final double DEFAULT_MAX_FRACTION_IDS_PER_SPARSE_KEY = 1.0;
   public static final double DEFAULT_MAX_FRACTION_IDS_PER_SPARSE_KEY_CONFIDENCE = 0.95;
   public static final double DEFAULT_FULL_REEVALUATION_CACHE_SIZE_DECREASE_FRACTION = 0.10;

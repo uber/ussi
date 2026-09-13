@@ -129,7 +129,7 @@ class SparseComparatorTest {
     Comparator comparator = comparator("jaccard");
 
     assertEquals(
-        2.0 + MathUtils.EPSILON, comparator.getMinPrefixSumForTermsAndValues(4.0, 0.5), 0.0);
+        2.0 + MathUtils.EPSILON_12, comparator.getMinPrefixSumForTermsAndValues(4.0, 0.5), 0.0);
   }
 
   @Test
@@ -143,7 +143,8 @@ class SparseComparatorTest {
 
     assertTrue(comparator.supportsSignatures());
     assertEquals(1.0, comparator.getSignatureUniTransformedValue(), 0.0);
-    assertEquals(60.0 + MathUtils.EPSILON, comparator.getMinPrefixSumForSignatures(100, 0.5), 0.0);
+    assertEquals(
+        60.0 + MathUtils.EPSILON_12, comparator.getMinPrefixSumForSignatures(100, 0.5), 0.0);
     assertEquals(16, comparator.getSignatures(sparse(comparator, new long[] {1L}, 1f), 16).length);
   }
 

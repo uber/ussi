@@ -18,8 +18,8 @@ public class L2Comparator extends Comparator {
         || uni1 < 0.0
         || partialUni2 < 0.0
         || uni2 < 0.0
-        || partialUni1 > uni1 + MathUtils.EPSILON
-        || partialUni2 > uni2 + MathUtils.EPSILON) {
+        || partialUni1 > uni1 + MathUtils.EPSILON_12
+        || partialUni2 > uni2 + MathUtils.EPSILON_12) {
       throw new IllegalArgumentException(
           String.format(
               "Invalid partialUni1 (%s), uni1 (%s), partialUni2 (%s), uni2 (%s).",
@@ -113,7 +113,7 @@ public class L2Comparator extends Comparator {
           partialUni2.getSum(),
           termsAndValues2.getUniValue(),
           maxSquaredL2Distance)) {
-        return Math.sqrt(maxSquaredL2Distance + MathUtils.EPSILON);
+        return Math.sqrt(maxSquaredL2Distance + MathUtils.EPSILON_12);
       }
     }
     return Math.sqrt(Math.max(0.0, sumSquaredL2Distance.getSum()));
@@ -135,5 +135,58 @@ public class L2Comparator extends Comparator {
     double maxL2Distance =
         comparatorNormalizer.normalizedSimilarityValueToComparatorValue(minSimilarity);
     return mayPassLengthFilteringInternal(uniValue1, uniValue2, maxL2Distance * maxL2Distance);
+  }
+
+  @Override
+  public double conjunctionContribution(float value1, float value2) {
+    double gap = (double) value1 - value2;
+    return gap * gap;
+  }
+
+  @Override
+  public double similarityFromConjunction(
+      double conjunction,
+      double partialUniValue1,
+      double uniValue1,
+      double partialUniValue2,
+      double uniValue2) {
+    double unscannedUniValue1 = Math.max(0.0, uniValue1 - partialUniValue1);
+    double unscannedUniValue2 = Math.max(0.0, uniValue2 - partialUniValue2);
+    return comparatorNormalizer.comparatorValueToNormalizedSimilarityValue(
+        Math.sqrt(Math.max(0.0, conjunction + unscannedUniValue1 + unscannedUniValue2)));
+  }
+
+  @Override
+  public double maxSimilarityFromPartialConjunction(
+      double conjunction,
+      double unscannedKeysUniValue,
+      double partialUniValue1,
+      double uniValue1,
+      double partialUniValue2,
+      double uniValue2) {
+    double unscannedUniValue1 = Math.max(0.0, uniValue1 - partialUniValue1);
+    double unscannedUniValue2 = Math.max(0.0, uniValue2 - partialUniValue2);
+    double unscannedSquaredDistance =
+        unscannedUniValue1
+            + unscannedUniValue2
+            - 2.0 * Math.sqrt(Math.max(0.0, unscannedUniValue1 * unscannedUniValue2));
+    return comparatorNormalizer.comparatorValueToNormalizedSimilarityValue(
+        Math.sqrt(Math.max(0.0, conjunction + unscannedSquaredDistance)));
+  }
+
+  private static double computeMinPossibleSquaredL2Distance(
+      double partialUni1, double uni1, double partialUni2, double uni2) {
+    validatePartialUniValues(partialUni1, uni1, partialUni2, uni2);
+    double scannedSquaredDistance =
+        partialUni1
+            + partialUni2
+            - 2.0 * Math.sqrt(Math.max(0.0, partialUni1 * partialUni2));
+    double unscannedPartialUni1 = uni1 - partialUni1;
+    double unscannedPartialUni2 = uni2 - partialUni2;
+    double unscannedSquaredDistance =
+        unscannedPartialUni1
+            + unscannedPartialUni2
+            - 2.0 * Math.sqrt(Math.max(0.0, unscannedPartialUni1 * unscannedPartialUni2));
+    return scannedSquaredDistance + unscannedSquaredDistance;
   }
 }

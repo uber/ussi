@@ -263,6 +263,7 @@ Index parameters:
 | `metadata_filtering_strategy` | `auto`, `in_filtering`, `pre_filtering`, `post_filtering` | `auto` | Controls how indexes apply metadata filters. Values use underscores. |
 | `max_pre_filtering_rows_ratio` | double in `[0.0, 1.0]` | `0.1` | Maximum matching-row ratio that allows pre-filtering. |
 | `max_fraction_ids_per_sparse_key` | double in `(0.0, 1.0]` | `1.0` | For sparse indexes, removes a term from candidate generation and comparison when it occurs in more than this fraction of indexed rows. `1.0` disables this filtering. |
+| `sparse_candidate_generator` | `spars`, `spars_merge` | `spars` | For sparse indexes, selects the candidate generation algorithm. See [Sparse Candidate Generation](#sparse-candidate-generation). |
 
 The `generic` cache does not currently accept any `cacheParams`. The `sparse`
 cache accepts the following parameters:
@@ -440,7 +441,8 @@ If OpenBLAS cannot be loaded, it falls back to the Java scorer.
 terms. Inverted lists are sorted by each row's comparator-specific unilateral
 value, enabling length filtering. Candidate traversal combines length,
 position, and unordered-prefix filtering while tightening the similarity
-threshold as the top-k heap fills.
+threshold as the top-k heap fills. Either candidate generator can traverse
+these lists; see [Sparse Candidate Generation](#sparse-candidate-generation).
 
 Each row and each query must have non-empty terms and values arrays of equal
 length after canonicalization; a query and a row do not need to have the same
@@ -482,6 +484,43 @@ irrelevant. Results from the searched children are merged and limited by
 `maxNumSimilarities`.
 
 The hybrid requires a signature-capable Jaccard or Ruzicka comparator.
+
+#### Sparse Candidate Generation
+
+The three sparse index types — `inverted`, `signature`, and hybrid `sparse` —
+build the same uni-sorted inverted lists but can traverse them with either of
+two candidate generators, selected per namespace with the
+`sparse_candidate_generator` index parameter. Both return identical results and
+honor every metadata filtering strategy; they differ only in how much work they
+do to get there.
+
+`spars` is the default and is sparse-key-major. It visits the query's sparse
+keys cheapest first, narrows each key's inverted list to the rows that length
+filtering admits, and scores every surviving candidate with the comparator.
+Because it always scores through the comparator, it supports every sparse index
+type and every supported comparator.
+
+`spars_merge` is row-major. One frontier spans all of the query's sparse keys
+and advances them in step, so every inverted-list entry belonging to a candidate
+row arrives together. That lets the generator accumulate the row's conjunction —
+the part of the similarity that the query and the row derive from the sparse
+keys they share — as it goes, and abandon the row as soon as no completion of it
+can reach the active similarity threshold. It trades a priority queue over the
+query's keys for the ability to prune a row mid-scan, which pays off when a
+query has many sparse keys and the threshold rejects most rows early.
+
+When the sparse keys are exact terms, the inverted lists also carry each row's
+value at that key, so the accumulated conjunction is the row's exact similarity
+and no further comparison is needed. Signature keys carry no usable value, so
+over a `signature` index the merge generator scores each retained candidate with
+the comparator, exactly as the filtered scan does. The hybrid `sparse` index
+applies the generator independently to each child, so its inverted child scores
+from the conjunction while its signature child verifies.
+
+A comparator opts into the merge generator by implementing its conjunction
+hooks. Jaccard, Ruzicka, and L2 all do, so `spars_merge` is available for every
+supported sparse comparator; the inverted-list values it needs are only
+materialized for the index types that read them.
 
 ## Build and Test
 

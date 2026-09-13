@@ -1,6 +1,7 @@
 package com.uber.ussi.searchablestructure.index;
 
 import static com.uber.ussi.TestLongObjectMaps.longObjectMap;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -61,6 +62,43 @@ class IndexFactoryTest {
 
     assertInstanceOf(SparseIndex.class, index);
   }
+
+  private static final IndexTypePredicateCase[] SPARSE_GENERATOR_CASES = {
+    new IndexTypePredicateCase("inverted", true),
+    new IndexTypePredicateCase("sparse", true),
+    new IndexTypePredicateCase("signature", true),
+    new IndexTypePredicateCase("generic", false),
+    new IndexTypePredicateCase("dense", false),
+  };
+
+  private static final IndexTypePredicateCase[] MERGE_VERIFICATION_CASES = {
+    new IndexTypePredicateCase("sparse", true),
+    new IndexTypePredicateCase("signature", true),
+    new IndexTypePredicateCase("inverted", false),
+    new IndexTypePredicateCase("generic", false),
+  };
+
+  @Test
+  void supportsSparseCandidateGeneratorCases() {
+    for (IndexTypePredicateCase testCase : SPARSE_GENERATOR_CASES) {
+      assertEquals(
+          testCase.expected,
+          IndexFactory.supportsSparseCandidateGenerator(testCase.indexType),
+          testCase.indexType);
+    }
+  }
+
+  @Test
+  void mergeRequiresCandidateVerificationCases() {
+    for (IndexTypePredicateCase testCase : MERGE_VERIFICATION_CASES) {
+      assertEquals(
+          testCase.expected,
+          IndexFactory.mergeRequiresCandidateVerification(testCase.indexType),
+          testCase.indexType);
+    }
+  }
+
+  private record IndexTypePredicateCase(String indexType, boolean expected) {}
 
   @Test
   void createIndexRejectsUnsupportedIndexType() {

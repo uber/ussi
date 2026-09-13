@@ -16,11 +16,7 @@ public final class SignatureIndex extends BaseSparseIndex {
       NamespaceConfig namespaceConfig,
       LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
       LongObjectHashMap<LongMeta> rowNumToMetaMap) {
-    super(
-        namespaceConfig,
-        rowNumToTermsAndValuesMap,
-        rowNumToMetaMap,
-        /* requireSignatureSupport */ true);
+    super(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap, SparseKeyType.SIGNATURE);
   }
 
   @Override
@@ -56,5 +52,10 @@ public final class SignatureIndex extends BaseSparseIndex {
     long[] sparseKeys = LongHashSet.from(getSparseKeys(termsAndValues)).toArray();
     Arrays.sort(sparseKeys);
     return sparseKeys;
+  }
+
+  @Override
+  protected float getValueAtSparseKey(LongTermsAndValues termsAndValues, long sparseKey) {
+    return (float) getSignatureComparator().getSignatureUniTransformedValue();
   }
 }

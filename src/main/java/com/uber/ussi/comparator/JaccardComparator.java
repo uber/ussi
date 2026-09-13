@@ -37,7 +37,7 @@ public final class JaccardComparator extends BaseRuzickaComparator {
     }
     double minMatchingCardinality = queryCardinality * minJaccard;
     double maxMatchingCardinality = queryCardinality / minJaccard;
-    return maxNumTerms + MathUtils.EPSILON >= minMatchingCardinality
-        && minNumTerms <= maxMatchingCardinality + MathUtils.EPSILON;
+    return maxNumTerms + MathUtils.EPSILON_12 >= minMatchingCardinality
+        && minNumTerms <= maxMatchingCardinality + MathUtils.EPSILON_12;
   }
 }

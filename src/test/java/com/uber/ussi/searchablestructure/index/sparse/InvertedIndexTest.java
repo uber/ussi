@@ -8,8 +8,10 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.carrotsearch.hppc.LongDoubleHashMap;
 import com.carrotsearch.hppc.LongFloatHashMap;
 import com.carrotsearch.hppc.LongObjectHashMap;
+import com.carrotsearch.hppc.cursors.LongObjectCursor;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.meta.MetaFilter;
@@ -28,6 +30,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -71,7 +74,7 @@ class InvertedIndexTest {
 
     assertArrayEquals(new long[] {1}, index.getFilteredOutTermsForTests());
     assertArrayEquals(new long[0], index.getRowNumsForSparseKeyForTests(1));
-    assertArrayEquals(new long[] {2}, index.getComparisonTermsAndValuesForTests(1).getTerms());
+    assertArrayEquals(new long[] {2}, index.getComparisonTermsAndValues(1).getTerms());
     assertArrayEquals(new long[] {1, 2}, index.getAll().get(1).getTerms());
 
     List<RowNumAndSimilarity> result =
@@ -149,8 +152,10 @@ class InvertedIndexTest {
     InvertedIndex index = new InvertedIndex(config("jaccard"), rows, longObjectMap());
     long[] invertedList = index.getRowNumsForSparseKeyForTests(1);
 
-    int first = index.getFirstMatchingUniValue(invertedList, 2.0, 0.6, 0, invertedList.length);
-    int last = index.getLastMatchingUniValue(invertedList, 2.0, 0.6, first, invertedList.length);
+    int first =
+        index.getFirstMatchingUniValueForTests(invertedList, 2.0, 0.6, 0, invertedList.length);
+    int last =
+        index.getLastMatchingUniValueForTests(invertedList, 2.0, 0.6, first, invertedList.length);
 
     assertEquals(1, first);
     assertEquals(2, last);
@@ -168,8 +173,10 @@ class InvertedIndexTest {
     InvertedIndex index = new InvertedIndex(config("jaccard"), rows, longObjectMap());
     long[] invertedList = index.getRowNumsForSparseKeyForTests(1);
 
-    int first = index.getFirstMatchingUniValue(invertedList, 40.0, 0.8, 0, invertedList.length);
-    int last = index.getLastMatchingUniValue(invertedList, 40.0, 0.8, first, invertedList.length);
+    int first =
+        index.getFirstMatchingUniValueForTests(invertedList, 40.0, 0.8, 0, invertedList.length);
+    int last =
+        index.getLastMatchingUniValueForTests(invertedList, 40.0, 0.8, first, invertedList.length);
 
     assertEquals(31, first);
     assertEquals(50, last);
@@ -351,10 +358,12 @@ class InvertedIndexTest {
     long[] invertedList = index.getRowNumsForSparseKeyForTests(1);
     assertThrows(
         IllegalArgumentException.class,
-        () -> index.getFirstMatchingUniValue(invertedList, Constants.UNSET_UNI_VALUE, 0.5, 0, 1));
+        () ->
+            index.getFirstMatchingUniValueForTests(
+                invertedList, Constants.UNSET_UNI_VALUE, 0.5, 0, 1));
     assertThrows(
         IndexOutOfBoundsException.class,
-        () -> index.getLastMatchingUniValue(invertedList, 1.0, 0.5, -1, 1));
+        () -> index.getLastMatchingUniValueForTests(invertedList, 1.0, 0.5, -1, 1));
   }
 
   @Test
@@ -366,9 +375,10 @@ class InvertedIndexTest {
     long[] invertedList = index.getRowNumsForSparseKeyForTests(1);
 
     assertEquals(
-        invertedList.length, index.getFirstMatchingUniValue(invertedList, 100.0, 0.9, 0, 2));
+        invertedList.length,
+        index.getFirstMatchingUniValueForTests(invertedList, 100.0, 0.9, 0, 2));
     assertEquals(
-        invertedList.length, index.getLastMatchingUniValue(invertedList, 100.0, 0.9, 0, 2));
+        invertedList.length, index.getLastMatchingUniValueForTests(invertedList, 100.0, 0.9, 0, 2));
   }
 
   @Test
@@ -427,11 +437,12 @@ class InvertedIndexTest {
         new InvertedIndex(
             config("jaccard"), longObjectMap(1, jaccard(new long[] {1}, 1)), longObjectMap());
     long[] invertedList = index.getRowNumsForSparseKeyForTests(1);
-    comparisonRows(index).remove(1);
+    rowNumToUniValues(index).remove(1);
 
     assertThrows(
         IllegalStateException.class,
-        () -> index.getFirstMatchingUniValue(invertedList, 2.0, 0.5, 0, invertedList.length));
+        () ->
+            index.getFirstMatchingUniValueForTests(invertedList, 2.0, 0.5, 0, invertedList.length));
   }
 
   @Test
@@ -557,17 +568,154 @@ class InvertedIndexTest {
     }
   }
 
+  /**
+   * The merge generator reaches the same rows as the filtered scan and scores them identically, so
+   * any divergence between the two is a bug in one of them.
+   */
+  @Test
+  void randomizedMergeResultsMatchFilteredScanForEverySparseComparator() {
+    for (String comparatorType : List.of("jaccard", "ruzicka", "l2")) {
+      Random random = new Random(826_366L + comparatorType.hashCode());
+      LongObjectHashMap<LongTermsAndValues> rows = randomRows(random, comparatorType, 80);
+      InvertedIndex filteredScanIndex =
+          new InvertedIndex(config(comparatorType, Map.of(), "inverted"), rows, longObjectMap());
+      InvertedIndex mergeIndex =
+          new InvertedIndex(mergeConfig(comparatorType), rows, longObjectMap());
+
+      for (int queryIndex = 0; queryIndex < 60; ++queryIndex) {
+        LongTermsAndValues query = randomSparseRecord(random, comparatorType);
+        int k = 1 + random.nextInt(10);
+        float minSimilarity = new float[] {0.0f, 0.2f, 0.5f, 0.8f}[random.nextInt(4)];
+
+        assertEquivalent(
+            comparatorType + " merge nearest queryIndex=" + queryIndex + " k=" + k,
+            filteredScanIndex.getNearestNeighborRowNums(k, query, MetaFilter.empty()),
+            mergeIndex.getNearestNeighborRowNums(k, query, MetaFilter.empty()));
+        assertEquivalent(
+            comparatorType
+                + " merge threshold queryIndex="
+                + queryIndex
+                + " minSimilarity="
+                + minSimilarity,
+            filteredScanIndex.getSimilarRowNums(minSimilarity, query, MetaFilter.empty()),
+            mergeIndex.getSimilarRowNums(minSimilarity, query, MetaFilter.empty()));
+      }
+    }
+  }
+
+  /**
+   * Metadata filtering wraps candidate generation, so the merge has to agree with the filtered scan
+   * under every strategy, including the pre-filtering path that bypasses the generator entirely.
+   */
+  @Test
+  void mergeResultsMatchFilteredScanUnderEveryMetadataFilteringStrategy() {
+    for (String strategy : List.of("auto", "pre_filtering", "in_filtering", "post_filtering")) {
+      Random random = new Random(5_512L + strategy.hashCode());
+      LongObjectHashMap<LongTermsAndValues> rows = randomRows(random, "jaccard", 40);
+      LongObjectHashMap<LongMeta> metadata = longObjectMap();
+      for (LongObjectCursor<LongTermsAndValues> row : rows) {
+        metadata.put(row.key, longMeta("city", row.key % 2 == 0 ? "sf" : "la"));
+      }
+      Map<String, String> strategyParams =
+          Map.of(
+              Index.METADATA_FILTERING_STRATEGY, strategy,
+              Index.MAX_PRE_FILTERING_ROWS_RATIO, "0.9");
+      InvertedIndex filteredScanIndex =
+          new InvertedIndex(config("jaccard", strategyParams, "inverted"), rows, metadata);
+      InvertedIndex mergeIndex =
+          new InvertedIndex(
+              config("jaccard", withMergeParam(strategyParams), "inverted"), rows, metadata);
+      MetaFilter sf = new MetaFilter(Map.of("city", List.of("sf")));
+
+      for (int queryIndex = 0; queryIndex < 20; ++queryIndex) {
+        LongTermsAndValues query = randomSparseRecord(random, "jaccard");
+        int k = 1 + random.nextInt(8);
+        assertEquivalent(
+            strategy + " merge nearest queryIndex=" + queryIndex + " k=" + k,
+            filteredScanIndex.getNearestNeighborRowNums(k, query, sf),
+            mergeIndex.getNearestNeighborRowNums(k, query, sf));
+        assertEquivalent(
+            strategy + " merge threshold queryIndex=" + queryIndex,
+            filteredScanIndex.getSimilarRowNums(0.2f, query, sf),
+            mergeIndex.getSimilarRowNums(0.2f, query, sf));
+      }
+    }
+  }
+
+  /**
+   * Sparse-key popularity filtering makes the comparison rows differ from the indexed rows, so the
+   * metadata pre-filtering path can only agree with the merge path if it scores the comparison
+   * rows too.
+   */
+  @Test
+  void mergeResultsMatchFilteredScanWhenPopularSparseKeysAreDropped() {
+    Random random = new Random(9_713L);
+    LongObjectHashMap<LongTermsAndValues> rows = randomRows(random, "jaccard", 40);
+    LongObjectHashMap<LongMeta> metadata = longObjectMap();
+    for (LongObjectCursor<LongTermsAndValues> row : rows) {
+      metadata.put(row.key, longMeta("city", row.key % 2 == 0 ? "sf" : "la"));
+    }
+    Map<String, String> popularityParams =
+        Map.of(
+            Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0.2",
+            Index.METADATA_FILTERING_STRATEGY, "pre_filtering",
+            Index.MAX_PRE_FILTERING_ROWS_RATIO, "0.9");
+    InvertedIndex filteredScanIndex =
+        new InvertedIndex(config("jaccard", popularityParams, "inverted"), rows, metadata);
+    InvertedIndex mergeIndex =
+        new InvertedIndex(
+            config("jaccard", withMergeParam(popularityParams), "inverted"), rows, metadata);
+    assertTrue(mergeIndex.hasSparseKeyPopularityFiltering());
+    assertTrue(mergeIndex.getFilteredOutTermsForTests().length > 0);
+    MetaFilter sf = new MetaFilter(Map.of("city", List.of("sf")));
+
+    for (int queryIndex = 0; queryIndex < 20; ++queryIndex) {
+      LongTermsAndValues query = randomSparseRecord(random, "jaccard");
+      int k = 1 + random.nextInt(8);
+      assertEquivalent(
+          "merge nearest queryIndex=" + queryIndex + " k=" + k,
+          filteredScanIndex.getNearestNeighborRowNums(k, query, sf),
+          mergeIndex.getNearestNeighborRowNums(k, query, sf));
+      assertEquivalent(
+          "merge threshold queryIndex=" + queryIndex,
+          filteredScanIndex.getSimilarRowNums(0.2f, query, sf),
+          mergeIndex.getSimilarRowNums(0.2f, query, sf));
+    }
+  }
+
+  private static Map<String, String> withMergeParam(Map<String, String> indexParams) {
+    Map<String, String> merged = new LinkedHashMap<>(indexParams);
+    merged.put(
+        Constants.SPARSE_CANDIDATE_GENERATOR,
+        NamespaceConfig.SparseCandidateGenerator.SPARS_MERGE.getIndexParamValue());
+    return merged;
+  }
+
+  private static NamespaceConfig mergeConfig(String comparatorType) {
+    return config(
+        comparatorType,
+        Map.of(
+            Constants.SPARSE_CANDIDATE_GENERATOR,
+            NamespaceConfig.SparseCandidateGenerator.SPARS_MERGE.getIndexParamValue()),
+        "inverted");
+  }
+
   private static NamespaceConfig config(String comparatorType) {
     return config(comparatorType, Map.of());
   }
 
   private static NamespaceConfig config(String comparatorType, Map<String, String> indexParams) {
+    return config(comparatorType, indexParams, "sparse");
+  }
+
+  private static NamespaceConfig config(
+      String comparatorType, Map<String, String> indexParams, String indexType) {
     return NamespaceConfig.builder()
         .minTermsAndValuesLength(0)
         .maxTermsAndValuesLength(100)
         .maxCacheSize(100)
         .cacheType("generic")
-        .indexType("sparse")
+        .indexType(indexType)
         .indexParams(indexParams)
         .comparatorType(comparatorType)
         .comparatorNormalizerType(comparatorType.equals("l2") ? "reciprocal" : "identity")
@@ -608,25 +756,35 @@ class InvertedIndexTest {
     return (LongObjectHashMap<LongTermsAndValues>) field.get(index);
   }
 
+  @SuppressWarnings("unchecked")
+  private static LongDoubleHashMap rowNumToUniValues(BaseSparseIndex index)
+      throws ReflectiveOperationException {
+    Field field = BaseSparseIndex.class.getDeclaredField("rowNumToUniValue");
+    field.setAccessible(true);
+    return (LongDoubleHashMap) field.get(index);
+  }
+
+  private static com.uber.ussi.comparator.Comparator comparator(BaseSparseIndex index)
+      throws ReflectiveOperationException {
+    Field field =
+        com.uber.ussi.searchablestructure.index.Index.class.getDeclaredField("comparator");
+    field.setAccessible(true);
+    return (com.uber.ussi.comparator.Comparator) field.get(index);
+  }
+
   private static Object newCandidateIterator(
       BaseSparseIndex index, SparseKeyAndPrefixFilteringData[] sparseKeyData, double minSimilarity)
       throws ReflectiveOperationException {
-    Class<?> iteratorClass = candidateIteratorClass();
     Constructor<?> constructor =
-        iteratorClass.getDeclaredConstructor(
-            BaseSparseIndex.class,
+        SparseFilteredSearch.CandidateIterator.class.getDeclaredConstructor(
+            com.uber.ussi.comparator.Comparator.class,
+            SparseFilteredSearch.Context.class,
             SparseKeyAndPrefixFilteringData[].class,
             double.class,
             double.class);
     constructor.setAccessible(true);
-    return constructor.newInstance(index, sparseKeyData, 1.0, minSimilarity);
-  }
-
-  private static Class<?> candidateIteratorClass() {
-    return Arrays.stream(BaseSparseIndex.class.getDeclaredClasses())
-        .filter(type -> type.getSimpleName().equals("CandidateIterator"))
-        .findFirst()
-        .orElseThrow();
+    return constructor.newInstance(
+        comparator(index), index.getSearchContext(), sparseKeyData, 1.0, minSimilarity);
   }
 
   private static void invokeSetMinSimilarity(Object iterator, double minSimilarity)
@@ -763,7 +921,8 @@ class InvertedIndexTest {
         NamespaceConfig namespaceConfig,
         LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
         LongObjectHashMap<LongMeta> rowNumToMetaMap) {
-      super(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);
+      super(
+          namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap, SparseKeyType.EXACT_TERM);
     }
 
     @Override
@@ -785,6 +944,11 @@ class InvertedIndexTest {
       return termsAndValues.getTerms();
     }
 
+    @Override
+    protected float getValueAtSparseKey(LongTermsAndValues termsAndValues, long sparseKey) {
+      return termsAndValues.getValue(0);
+    }
+
     private double getLastSparseKeysUniValue() {
       return lastSparseKeysUniValue;
     }
@@ -795,7 +959,8 @@ class InvertedIndexTest {
         NamespaceConfig namespaceConfig,
         LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
         LongObjectHashMap<LongMeta> rowNumToMetaMap) {
-      super(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);
+      super(
+          namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap, SparseKeyType.EXACT_TERM);
     }
 
     @Override
@@ -814,6 +979,11 @@ class InvertedIndexTest {
     @Override
     protected long[] getSparseKeys(LongTermsAndValues termsAndValues) {
       return termsAndValues.getTerms();
+    }
+
+    @Override
+    protected float getValueAtSparseKey(LongTermsAndValues termsAndValues, long sparseKey) {
+      return termsAndValues.getValue(0);
     }
   }
 }

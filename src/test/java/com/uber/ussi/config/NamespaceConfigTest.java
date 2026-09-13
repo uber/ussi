@@ -5,7 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.uber.ussi.utils.Constants;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class NamespaceConfigTest {
@@ -64,5 +66,38 @@ class NamespaceConfigTest {
 
     assertFalse(violations.isEmpty());
     assertThrows(IllegalArgumentException.class, config::validate);
+  }
+
+  @Test
+  void validateRejectsUnsupportedSparseCandidateGenerator() {
+    NamespaceConfig config =
+        validBuilder()
+            .indexParams(Map.of(Constants.SPARSE_CANDIDATE_GENERATOR, "uni_outward"))
+            .build();
+
+    assertFalse(config.collectStructuralViolations().isEmpty());
+    assertThrows(IllegalArgumentException.class, config::validate);
+  }
+
+  @Test
+  void collectViolationsAppendsWhatEachValidatorReports() {
+    NamespaceConfig config = validBuilder().build();
+
+    assertTrue(config.collectViolations().isEmpty());
+    assertEquals(
+        List.of("first", "second"),
+        config.collectViolations(
+            (validated, violations) -> violations.add("first"),
+            (validated, violations) -> violations.add("second")));
+  }
+
+  @Test
+  void validateThrowsWhenAValidatorReportsAViolation() {
+    NamespaceConfig config = validBuilder().build();
+    NamespaceConfigValidator validator = (validated, violations) -> violations.add("nope");
+
+    IllegalArgumentException error =
+        assertThrows(IllegalArgumentException.class, () -> config.validate(validator));
+    assertEquals("nope", error.getMessage());
   }
 }

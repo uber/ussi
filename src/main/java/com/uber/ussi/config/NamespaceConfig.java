@@ -1,6 +1,7 @@
 /* AUTHOR: Shijie Lu (shijie@uber.com), Shalini Kedlaya (skedlaya@uber.com), Ahmed Metwally (ametwally@uber.com) */
 package com.uber.ussi.config;
 
+import com.uber.ussi.utils.Constants;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -8,11 +9,16 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import javax.annotation.Nullable;
 
 /**
  * Platform-agnostic USSI namespace configuration.
  *
  * <p>This contains only the fields required by the memory-only index.
+ *
+ * <p>Validation is split by ownership. This class checks the structural invariants it can see on
+ * its own, and each layer contributes a {@link NamespaceConfigValidator} for the params and
+ * cross-field rules only that layer knows about.
  */
 public final class NamespaceConfig {
   private final int minTermsAndValuesLength;
@@ -97,27 +103,73 @@ public final class NamespaceConfig {
     return maxNumSearchableStructures;
   }
 
-  public void validate() {
-    List<String> violations = collectStructuralViolations();
+  /** Returns the index param at {@code key}, or null when unset. */
+  @Nullable
+  public String getIndexParam(String key) {
+    return NamespaceConfigParams.getParam(indexParams, key);
+  }
+
+  /** Returns the cache param at {@code key}, or null when unset. */
+  @Nullable
+  public String getCacheParam(String key) {
+    return NamespaceConfigParams.getParam(cacheParams, key);
+  }
+
+  /** Returns the comparator param at {@code key}, or null when unset. */
+  @Nullable
+  public String getComparatorParam(String key) {
+    return NamespaceConfigParams.getParam(comparatorParams, key);
+  }
+
+  /** Returns the index param at {@code key} as a double, or {@code defaultValue} when unset. */
+  public double readDoubleIndexParam(String key, double defaultValue) {
+    return NamespaceConfigParams.readDoubleParam(indexParams, key, defaultValue);
+  }
+
+  /** Returns the cache param at {@code key} as a double, or {@code defaultValue} when unset. */
+  public double readDoubleCacheParam(String key, double defaultValue) {
+    return NamespaceConfigParams.readDoubleParam(cacheParams, key, defaultValue);
+  }
+
+  public SparseCandidateGenerator getSparseCandidateGenerator() {
+    return parseSparseCandidateGenerator(indexParams);
+  }
+
+  /** Throws if this config is structurally invalid or a supplied validator reports a violation. */
+  public void validate(NamespaceConfigValidator... validators) {
+    List<String> violations = collectViolations(validators);
     if (!violations.isEmpty()) {
-      throw new IllegalArgumentException(formatViolations(violations));
+      throw new IllegalArgumentException(ConfigViolations.format(violations));
     }
   }
 
+  /** Returns the structural violations plus those reported by every supplied validator. */
+  public List<String> collectViolations(NamespaceConfigValidator... validators) {
+    List<String> violations = collectStructuralViolations();
+    for (NamespaceConfigValidator validator : validators) {
+      validator.collectViolations(this, violations);
+    }
+    return violations;
+  }
+
+  /** Returns the violations visible from the config alone, without consulting any layer. */
   public List<String> collectStructuralViolations() {
     List<String> violations = new ArrayList<>();
-    checkNonNegative(violations, "minTermsAndValuesLength", minTermsAndValuesLength);
-    checkNonNegative(violations, "maxTermsAndValuesLength", maxTermsAndValuesLength);
-    checkPositive(violations, "maxCacheSize", maxCacheSize);
-    checkNonBlank(violations, "cacheType", cacheType);
-    checkNonBlank(violations, "indexType", indexType);
-    checkNonBlank(violations, "comparatorType", comparatorType);
-    checkNonBlank(violations, "comparatorNormalizerType", comparatorNormalizerType);
+    ConfigViolations.checkNonNegative(
+        violations, "minTermsAndValuesLength", minTermsAndValuesLength);
+    ConfigViolations.checkNonNegative(
+        violations, "maxTermsAndValuesLength", maxTermsAndValuesLength);
+    ConfigViolations.checkPositive(violations, "maxCacheSize", maxCacheSize);
+    ConfigViolations.checkNonBlank(violations, "cacheType", cacheType);
+    ConfigViolations.checkNonBlank(violations, "indexType", indexType);
+    ConfigViolations.checkNonBlank(violations, "comparatorType", comparatorType);
+    ConfigViolations.checkNonBlank(
+        violations, "comparatorNormalizerType", comparatorNormalizerType);
     if (maxNumSearchableStructures <= 2) {
       violations.add(
           "maxNumSearchableStructures must be > 2, got " + maxNumSearchableStructures + ".");
     }
-    checkPositive(violations, "maxNumSimilarities", maxNumSimilarities);
+    ConfigViolations.checkPositive(violations, "maxNumSimilarities", maxNumSimilarities);
     if (minTermsAndValuesLength > maxTermsAndValuesLength) {
       violations.add(
           "minTermsAndValuesLength must be <= maxTermsAndValuesLength, got "
@@ -126,41 +178,58 @@ public final class NamespaceConfig {
               + maxTermsAndValuesLength
               + ".");
     }
+    collectSparseCandidateGeneratorViolations(violations);
     return violations;
+  }
+
+  private void collectSparseCandidateGeneratorViolations(List<String> violations) {
+    try {
+      parseSparseCandidateGenerator(indexParams);
+    } catch (IllegalArgumentException e) {
+      violations.add(e.getMessage());
+    }
+  }
+
+  private static SparseCandidateGenerator parseSparseCandidateGenerator(
+      Map<String, String> indexParams) {
+    String rawValue =
+        NamespaceConfigParams.getParam(indexParams, Constants.SPARSE_CANDIDATE_GENERATOR);
+    if (NamespaceConfigParams.isBlank(rawValue)) {
+      return SparseCandidateGenerator.SPARS;
+    }
+    String normalizedValue = rawValue.trim().toLowerCase(Locale.ROOT);
+    for (SparseCandidateGenerator generator : SparseCandidateGenerator.values()) {
+      if (generator.indexParamValue.equals(normalizedValue)) {
+        return generator;
+      }
+    }
+    throw new IllegalArgumentException(
+        String.format(
+            "Unsupported %s (%s). Supported values: %s, %s.",
+            Constants.SPARSE_CANDIDATE_GENERATOR,
+            rawValue,
+            SparseCandidateGenerator.SPARS.getIndexParamValue(),
+            SparseCandidateGenerator.SPARS_MERGE.getIndexParamValue()));
+  }
+
+  /** Candidate-generation strategy for immutable sparse indexes. */
+  public enum SparseCandidateGenerator {
+    SPARS("spars"),
+    SPARS_MERGE("spars_merge");
+
+    private final String indexParamValue;
+
+    SparseCandidateGenerator(String indexParamValue) {
+      this.indexParamValue = indexParamValue;
+    }
+
+    public String getIndexParamValue() {
+      return indexParamValue;
+    }
   }
 
   public static Builder builder() {
     return new Builder();
-  }
-
-  private static void checkNonBlank(List<String> violations, String name, String value) {
-    if (value == null || value.trim().isEmpty()) {
-      violations.add(name + " must be a non-blank string.");
-    }
-  }
-
-  private static void checkPositive(List<String> violations, String name, int value) {
-    if (value <= 0) {
-      violations.add(name + " must be > 0, got " + value + ".");
-    }
-  }
-
-  private static void checkNonNegative(List<String> violations, String name, int value) {
-    if (value < 0) {
-      violations.add(name + " must be >= 0, got " + value + ".");
-    }
-  }
-
-  private static String formatViolations(List<String> violations) {
-    if (violations.size() == 1) {
-      return violations.get(0);
-    }
-    StringBuilder sb =
-        new StringBuilder("NamespaceConfig has ").append(violations.size()).append(" violations:");
-    for (String violation : violations) {
-      sb.append("\n  - ").append(violation);
-    }
-    return sb.toString();
   }
 
   private static Map<String, String> unmodifiableMap(Map<String, String> map) {

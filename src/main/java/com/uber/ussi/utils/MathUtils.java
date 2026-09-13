@@ -4,7 +4,8 @@ package com.uber.ussi.utils;
 import org.apache.commons.math3.distribution.NormalDistribution;
 
 public final class MathUtils {
-  public static final double EPSILON = 1e-12;
+  /** Tolerance for double-precision numeric comparisons in comparators and uni validation. */
+  public static final double EPSILON_12 = 1e-12;
   private static final long SPLITTABLE_GAMMA = 0x9e3779b97f4a7c15L;
   private static final double DOUBLE_UNIT = 0x1.0p-53;
 
@@ -82,7 +83,7 @@ public final class MathUtils {
                 confidence));
       }
       if (confidence == 1.0) {
-        this.kAlphaAtConfidence = 1.0 / EPSILON;
+        this.kAlphaAtConfidence = 1.0 / EPSILON_12;
       } else {
         this.kAlphaAtConfidence = new NormalDistribution().inverseCumulativeProbability(confidence);
       }

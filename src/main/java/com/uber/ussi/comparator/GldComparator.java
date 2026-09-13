@@ -6,7 +6,12 @@ import com.uber.ussi.comparatornormalizer.ComparatorNormalizer;
 import com.uber.ussi.utils.MathUtils;
 
 /**
- * The raw generalized Levenshtein distance between two sequences, as a count of edits.
+ * The raw generalized Levenshtein distance (GLD) between two sequences, as a count of edits.
+ *
+ * <p>GLD is the number of single-element edits that turn one sequence into the other. It is
+ * generalized in that which edits count is not fixed: the {@link SequenceDistance} this composes
+ * decides that, so the same comparator measures a Levenshtein, Damerau-Levenshtein, or
+ * longest-common-subsequence distance depending on how the namespace is configured.
  *
  * <p>The comparator value is the edit count itself, so it is unbounded above and grows with the
  * sequences rather than with how different they are: one edit is a near match between two long

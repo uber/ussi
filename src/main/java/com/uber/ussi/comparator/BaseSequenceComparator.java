@@ -12,8 +12,9 @@ import java.util.Set;
 
 /**
  * Shared implementation for the comparators reporting an edit distance, with length and prefix
- * filtering. Subclasses differ only in how they report that distance, and compose the {@link
- * SequenceDistance} deciding which edits it counts.
+ * filtering. Subclasses differ only in how they report that distance, as a raw edit count for
+ * {@link GldComparator} or a length-normalized fraction for {@link NgldComparator}, and compose the
+ * {@link SequenceDistance} deciding which edits it counts.
  *
  * <p>Sequences are held differently from the other comparators' records. A sequence carries its
  * elements, in order and with repeats, in the record's terms and has no values, so {@code terms} is

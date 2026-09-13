@@ -8,6 +8,10 @@ import java.util.Objects;
 /**
  * A unit-cost, L1-boundable edit distance between two sequences.
  *
+ * <p>These distances are what the generalized Levenshtein distance generalizes over. A sequence
+ * comparator decides how to express a distance, as a raw edit count for {@code gld} or a normalized
+ * fraction for {@code ngld}, while the distance it composes decides which edits that count is over.
+ *
  * <p>A sequence is a record that carries its elements, in order and with repeats, in its terms and
  * has no values. Every distance here charges unit cost for inserting or deleting one element, which
  * is what bounds the normalized distance the comparators report to [0.0, 1.0]. They differ in the

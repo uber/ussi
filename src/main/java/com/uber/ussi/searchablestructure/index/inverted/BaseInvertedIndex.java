@@ -41,7 +41,7 @@ import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
 /**
- * Shared inverted-list index implementation with length and unordered-prefix filtering.
+ * Shared inverted-list index implementation with length and prefix filtering.
  *
  * <p>A record travels through a search in two derived forms, and the names are used consistently
  * throughout this package:

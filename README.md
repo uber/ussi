@@ -26,7 +26,7 @@ memory-only index structure:
   over ordered sequences, each over a configurable Levenshtein,
   Damerau-Levenshtein, or longest common subsequence distance.
 - Exact candidate generation through inverted term lists with length, position,
-  and unordered-prefix filtering.
+  and prefix filtering.
 - Approximate candidate generation using MinHash for Jaccard and I2CWS, ICWS,
   PCWS, or SCWS for Ruzicka.
 - A hybrid index that sends rows with at most 270 terms to the exact term lists
@@ -496,8 +496,8 @@ before scoring rows.
 #### Inverted Term Cache
 
 `InvertedTermCache` is mutable and keeps inverted term lists in insertion order.
-It generates deduplicated candidates from query terms using unordered-prefix
-filtering, then scores candidates with the configured comparator. A metadata
+It generates deduplicated candidates from query terms using prefix filtering,
+then scores candidates with the configured comparator. A metadata
 filter matching at most 1% of the cache uses a direct scan of those matching
 rows instead.
 
@@ -542,9 +542,11 @@ candidate share determine their similarity exactly rather than bounding it.
 
 Inverted lists are sorted by each row's comparator-specific unilateral value,
 enabling length filtering. Candidate traversal combines length, position, and
-unordered-prefix filtering while tightening the similarity threshold as the
-top-k heap fills. Either candidate generator can traverse
-these lists; see [Candidate Generation](#candidate-generation).
+prefix filtering while tightening the similarity threshold as the top-k heap
+fills. The prefix is chosen per query, cheapest inverted list first, and is
+bounded by the uni mass the visited keys accumulate, rather than being a prefix
+under an order fixed over the whole term universe. Either candidate generator
+can traverse these lists; see [Candidate Generation](#candidate-generation).
 
 Each row and each query must have non-empty terms and values arrays of equal
 length after canonicalization; a query and a row do not need to have the same

@@ -25,7 +25,7 @@ import javax.annotation.Nullable;
  * Writable inverted term cache with mutable lists.
  *
  * <p>Inverted lists are mutable and kept in insertion order, unlike the immutable uni-value-sorted
- * inverted lists of the inverted indexes, so candidate generation uses unordered-prefix filtering
+ * inverted lists of the inverted indexes, so candidate generation uses prefix filtering
  * without per-list length bounds. As in those indexes, results are limited to the rows sharing
  * at least one term with the query.
  *
@@ -183,7 +183,7 @@ public final class InvertedTermCache extends Cache {
 
   /**
    * Generates candidates from the inverted lists of the query terms in nondecreasing
-   * unordered-prefix cost, stopping once the accumulated uni-transformed prefix mass exceeds the
+   * prefix cost, stopping once the accumulated uni-transformed prefix mass exceeds the
    * budget implied by the dynamically tightened similarity threshold.
    *
    * @param query the query in verification form, which is the only form the comparator can score.

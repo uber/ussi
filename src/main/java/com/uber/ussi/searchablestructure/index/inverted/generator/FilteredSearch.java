@@ -211,7 +211,7 @@ public final class FilteredSearch {
   }
 
   /**
-   * Iterates deduplicated candidates in nondecreasing unordered-prefix cost. Takes ownership of the
+   * Iterates deduplicated candidates in nondecreasing prefix cost. Takes ownership of the
    * {@code keyData} it is handed and sorts it in place.
    */
   static final class CandidateIterator implements Iterator<Long> {

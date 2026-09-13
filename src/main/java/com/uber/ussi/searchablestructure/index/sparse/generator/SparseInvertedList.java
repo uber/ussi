@@ -1,5 +1,5 @@
 /* AUTHOR: Shijie Lu (shijie@uber.com), Shalini Kedlaya (skedlaya@uber.com), Ahmed Metwally (ametwally@uber.com) */
-package com.uber.ussi.searchablestructure.index.sparse;
+package com.uber.ussi.searchablestructure.index.sparse.generator;
 
 import java.util.Arrays;
 
@@ -8,25 +8,28 @@ import java.util.Arrays;
  *
  * <p>The arrays are owned by the index and must not be mutated. Values are only populated when a
  * candidate generator scores from them, so callers that need them must know they were requested.
+ *
+ * <p>Public only so that the sparse indexes in the parent package can reach it. Nothing outside
+ * this library's sparse implementation should depend on it.
  */
-final class SparseInvertedList {
+public final class SparseInvertedList {
   private final long[] rowNums;
   private final float[] values;
 
-  SparseInvertedList(long[] rowNums, float[] values) {
+  public SparseInvertedList(long[] rowNums, float[] values) {
     this.rowNums = rowNums;
     this.values = values;
   }
 
-  long[] getRowNums() {
+  public long[] getRowNums() {
     return rowNums;
   }
 
-  float[] getValues() {
+  public float[] getValues() {
     return values;
   }
 
-  int size() {
+  public int size() {
     return rowNums.length;
   }
 

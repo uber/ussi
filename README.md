@@ -432,10 +432,19 @@ sub-packages by index type:
   (`DenseMatrixDotProductScorers` and the Java and OpenBLAS scorers).
 - `index.sparse`: `InvertedIndex`, `SequenceIndex`, `SignatureIndex`, and the
   hybrid `SparseIndex`. All four share `BaseSparseIndex`, which owns the
-  uni-sorted inverted lists and the two candidate generators. `InvertedIndex`
+  uni-sorted inverted lists and drives the candidate generators. `InvertedIndex`
   and `SequenceIndex` further share `BaseTermKeyedIndex`, which covers the
   indexes whose list keys are the terms of the record being indexed rather than
   a signature derived from it.
+- `index.sparse.generator`: the two generators every sparse index draws its
+  candidates from, `SparseFilteredSearch` (sparse-key-major) and
+  `SparseMergeSearch` (row-major), along with the inverted list they walk and
+  the search context, row filter, and results heap they walk it with. A
+  generator only ever reads sparse keys and uni values, so sequences reuse both
+  unchanged: a sequence is indexed by the multiset of its elements, and only the
+  comparator that scores a candidate cares about their order. Every type here is
+  public purely to be reachable from the indexes in the parent package, and says
+  so in its javadoc.
 
 The shared `Index` base class, `IndexFactory`, and
 `MetadataFilteredSearchExecutor` stay in the `index` package itself. Mutable

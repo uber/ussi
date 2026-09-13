@@ -24,16 +24,12 @@ import com.uber.ussi.searchablestructure.index.generic.GenericIndex;
 import com.uber.ussi.searchablestructure.metadata.MetadataFilteringStrategy;
 import com.uber.ussi.searchablestructure.sparse.SparseKeyAndPrefixFilteringData;
 import com.uber.ussi.utils.Constants;
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Random;
 import java.util.TreeMap;
 import org.junit.jupiter.api.Test;
@@ -554,46 +550,6 @@ class InvertedIndexTest {
   }
 
   @Test
-  void candidateIteratorDefendsItsThresholdAndInvertedListInvariants()
-      throws ReflectiveOperationException {
-    InvertedIndex index =
-        new InvertedIndex(
-            config("jaccard"), longObjectMap(1, jaccard(new long[] {1}, 1)), longObjectMap());
-
-    Object thresholdIterator =
-        newCandidateIterator(index, new SparseKeyAndPrefixFilteringData[0], 0.5);
-    invokeSetMinSimilarity(thresholdIterator, 0.5);
-    InvocationTargetException lowerThresholdError =
-        assertThrows(
-            InvocationTargetException.class, () -> invokeSetMinSimilarity(thresholdIterator, 0.4));
-    assertTrue(lowerThresholdError.getCause() instanceof IllegalArgumentException);
-
-    Object exhaustedPrefixIterator =
-        newCandidateIterator(index, new SparseKeyAndPrefixFilteringData[0], 0.0);
-    setField(exhaustedPrefixIterator, "sparseKeyIndex", 0);
-    setField(exhaustedPrefixIterator, "currentRowStartIndex", 0);
-    setField(exhaustedPrefixIterator, "currentRowEndIndex", 1);
-    setField(exhaustedPrefixIterator, "currentSparseKeyPrefixSum", 1.0);
-    invokeSetMinSimilarity(exhaustedPrefixIterator, 0.9);
-    assertEquals(1, getIntField(exhaustedPrefixIterator, "currentRowStartIndex"));
-
-    SparseKeyAndPrefixFilteringData[] inconsistentInvertedList = {
-      new SparseKeyAndPrefixFilteringData(1, 2, 1.0)
-    };
-    Object inconsistentInvertedListIterator =
-        newCandidateIterator(index, inconsistentInvertedList, 0.0);
-    InvocationTargetException invertedListError =
-        assertThrows(
-            InvocationTargetException.class, () -> invokeHasNext(inconsistentInvertedListIterator));
-    assertTrue(invertedListError.getCause() instanceof IllegalStateException);
-
-    Object emptyIterator = newCandidateIterator(index, new SparseKeyAndPrefixFilteringData[0], 0.0);
-    InvocationTargetException exhaustedError =
-        assertThrows(InvocationTargetException.class, () -> invokeNext(emptyIterator));
-    assertTrue(exhaustedError.getCause() instanceof NoSuchElementException);
-  }
-
-  @Test
   void sparseValueObjectsHaveDeterministicOrderingAndAccessors() {
     SparseKeyAndPrefixFilteringData lowFrequency = new SparseKeyAndPrefixFilteringData(2, 1, 1.0);
     SparseKeyAndPrefixFilteringData highContribution =
@@ -932,54 +888,6 @@ class InvertedIndexTest {
         com.uber.ussi.searchablestructure.index.Index.class.getDeclaredField("comparator");
     field.setAccessible(true);
     return (com.uber.ussi.comparator.Comparator) field.get(index);
-  }
-
-  private static Object newCandidateIterator(
-      BaseSparseIndex index, SparseKeyAndPrefixFilteringData[] sparseKeyData, double minSimilarity)
-      throws ReflectiveOperationException {
-    Constructor<?> constructor =
-        SparseFilteredSearch.CandidateIterator.class.getDeclaredConstructor(
-            com.uber.ussi.comparator.Comparator.class,
-            SparseFilteredSearch.Context.class,
-            SparseKeyAndPrefixFilteringData[].class,
-            double.class,
-            double.class);
-    constructor.setAccessible(true);
-    return constructor.newInstance(
-        comparator(index), index.getSearchContext(), sparseKeyData, 1.0, minSimilarity);
-  }
-
-  private static void invokeSetMinSimilarity(Object iterator, double minSimilarity)
-      throws ReflectiveOperationException {
-    Method method = iterator.getClass().getDeclaredMethod("setMinSimilarity", double.class);
-    method.setAccessible(true);
-    method.invoke(iterator, minSimilarity);
-  }
-
-  private static boolean invokeHasNext(Object iterator) throws ReflectiveOperationException {
-    Method method = iterator.getClass().getDeclaredMethod("hasNext");
-    method.setAccessible(true);
-    return (boolean) method.invoke(iterator);
-  }
-
-  private static long invokeNext(Object iterator) throws ReflectiveOperationException {
-    Method method = iterator.getClass().getDeclaredMethod("next");
-    method.setAccessible(true);
-    return (long) method.invoke(iterator);
-  }
-
-  private static void setField(Object target, String fieldName, Object value)
-      throws ReflectiveOperationException {
-    Field field = target.getClass().getDeclaredField(fieldName);
-    field.setAccessible(true);
-    field.set(target, value);
-  }
-
-  private static int getIntField(Object target, String fieldName)
-      throws ReflectiveOperationException {
-    Field field = target.getClass().getDeclaredField(fieldName);
-    field.setAccessible(true);
-    return field.getInt(target);
   }
 
   private static LongMeta longMeta(String key, String value) {

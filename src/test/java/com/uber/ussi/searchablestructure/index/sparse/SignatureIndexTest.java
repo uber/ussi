@@ -16,6 +16,7 @@ import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
 import com.uber.ussi.error.IndexCreationError;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
+import com.uber.ussi.searchablestructure.index.sparse.generator.SparseInvertedList;
 import com.uber.ussi.utils.Constants;
 import java.lang.reflect.Field;
 import java.util.List;

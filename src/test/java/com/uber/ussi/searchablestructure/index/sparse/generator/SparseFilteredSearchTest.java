@@ -1,6 +1,7 @@
-package com.uber.ussi.searchablestructure.index.sparse;
+package com.uber.ussi.searchablestructure.index.sparse.generator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -14,6 +15,8 @@ import com.uber.ussi.searchablestructure.sparse.SparseKeyAndPrefixFilteringData;
 import com.uber.ussi.utils.Constants;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.function.DoubleUnaryOperator;
 import org.junit.jupiter.api.Test;
 
 class SparseFilteredSearchTest {
@@ -96,11 +99,62 @@ class SparseFilteredSearchTest {
 
   @Test
   void candidateIteratorRejectsLoweringMinSimilarity() {
-    SparseFilteredSearch.CandidateIterator iterator =
-        new SparseFilteredSearch.CandidateIterator(
-            COMPARATOR, stubContext(), new SparseKeyAndPrefixFilteringData[0], 1.0, 0.5);
+    SparseFilteredSearch.CandidateIterator iterator = candidateIterator(0.5);
 
     assertThrows(IllegalArgumentException.class, () -> iterator.setMinSimilarity(0.4));
+  }
+
+  @Test
+  void candidateIteratorHasNothingLeftOnceExhausted() {
+    SparseFilteredSearch.CandidateIterator iterator = candidateIterator(0.0);
+
+    assertFalse(iterator.hasNext());
+    assertThrows(NoSuchElementException.class, iterator::next);
+  }
+
+  /**
+   * A query key carries the length of the inverted list it was built against, so a list of another
+   * length means the index changed underneath the query rather than that the key is absent.
+   */
+  @Test
+  void candidateIteratorRejectsAnInvertedListOfUnexpectedLength() {
+    SparseFilteredSearch.CandidateIterator iterator =
+        candidateIterator(0.0, new SparseKeyAndPrefixFilteringData(10, 99, 1.0));
+
+    assertThrows(IllegalStateException.class, iterator::hasNext);
+  }
+
+  /**
+   * Raising the threshold mid-traversal can put the prefix cost already spent over the new budget,
+   * which abandons the key being walked rather than finishing rows that can no longer qualify.
+   */
+  @Test
+  void candidateIteratorAbandonsTheCurrentKeyWhenTheTighterThresholdOutlawsItsPrefixCost() {
+    // Every row here shares the query's uni value, so length filtering alone would keep them all
+    // and only the prefix budget can end the traversal early.
+    SparseFilteredSearch.Context context =
+        stubContext(
+            Map.of(10L, new long[] {1}, 20L, new long[] {5, 6}),
+            Map.of(1L, 1.0, 5L, 1.0, 6L, 1.0),
+            minSimilarity -> minSimilarity < 0.6 ? Double.POSITIVE_INFINITY : 0.5);
+    SparseFilteredSearch.CandidateIterator iterator =
+        new SparseFilteredSearch.CandidateIterator(
+            COMPARATOR,
+            context,
+            new SparseKeyAndPrefixFilteringData[] {
+              new SparseKeyAndPrefixFilteringData(10, 1, 1.0),
+              new SparseKeyAndPrefixFilteringData(20, 2, 1.0)
+            },
+            1.0,
+            0.0);
+
+    // Drains the first key, then takes one row of the second, whose prefix cost is the first's
+    // uni-transformed value. Row 6 is left pending.
+    assertEquals(List.of(1L, 5L), List.of(iterator.next(), iterator.next()));
+
+    iterator.setMinSimilarity(0.9);
+
+    assertFalse(iterator.hasNext());
   }
 
   @Test
@@ -118,15 +172,29 @@ class SparseFilteredSearchTest {
                 1));
   }
 
+  private static SparseFilteredSearch.CandidateIterator candidateIterator(
+      double minSimilarity, SparseKeyAndPrefixFilteringData... queryKeys) {
+    return new SparseFilteredSearch.CandidateIterator(
+        COMPARATOR, stubContext(), queryKeys, 1.0, minSimilarity);
+  }
+
   private static SparseFilteredSearch.Context stubContext() {
     return stubContext(Map.of(10L, new long[] {1, 2}, 20L, new long[] {1, 3}));
   }
 
+
   private static SparseFilteredSearch.Context stubContext(Map<Long, long[]> rowNumsBySparseKey) {
+    return stubContext(rowNumsBySparseKey, UNI_VALUES, minSimilarity -> Double.POSITIVE_INFINITY);
+  }
+
+  private static SparseFilteredSearch.Context stubContext(
+      Map<Long, long[]> rowNumsBySparseKey,
+      Map<Long, Double> uniValuesByRowNum,
+      DoubleUnaryOperator minPrefixSum) {
     return new SparseFilteredSearch.Context() {
       @Override
       public double getMinPrefixSum(double sparseKeysUniValue, double minSimilarity) {
-        return Double.POSITIVE_INFINITY;
+        return minPrefixSum.applyAsDouble(minSimilarity);
       }
 
       @Override
@@ -136,7 +204,7 @@ class SparseFilteredSearchTest {
 
       @Override
       public double getUniValue(long rowNum) {
-        Double uniValue = UNI_VALUES.get(rowNum);
+        Double uniValue = uniValuesByRowNum.get(rowNum);
         if (uniValue == null) {
           throw new IllegalStateException("missing uni value for row " + rowNum);
         }

@@ -6,12 +6,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.uber.ussi.comparator.sequencedistance.SequenceDistanceFactory.SequenceDistanceType;
 import com.uber.ussi.comparatornormalizer.ComparatorNormalizer;
 import com.uber.ussi.comparatornormalizer.ComparatorNormalizerFactory;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.TermsAndValues;
 import com.uber.ussi.error.ComparatorCreationError;
-import com.uber.ussi.sequencedistance.SequenceDistanceFactory.SequenceDistanceType;
 import com.uber.ussi.utils.Constants;
 import com.uber.ussi.utils.MathUtils;
 import java.util.List;

@@ -1,5 +1,5 @@
 /* AUTHOR: Shijie Lu (shijie@uber.com), Shalini Kedlaya (skedlaya@uber.com), Ahmed Metwally (ametwally@uber.com) */
-package com.uber.ussi.signaturegenerator;
+package com.uber.ussi.comparator.signaturegenerator;
 
 /** Shared conversion support for consistent weighted sampling algorithms. */
 abstract class BaseCwsSignatureGenerator extends SignatureGenerator {

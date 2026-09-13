@@ -1,4 +1,4 @@
-package com.uber.ussi.signaturegenerator;
+package com.uber.ussi.comparator.signaturegenerator;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -8,9 +8,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.uber.ussi.comparator.signaturegenerator.SignatureGeneratorFactory.SignatureGeneratorType;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
-import com.uber.ussi.signaturegenerator.SignatureGeneratorFactory.SignatureGeneratorType;
 import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 

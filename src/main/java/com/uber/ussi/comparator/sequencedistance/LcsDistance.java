@@ -1,5 +1,5 @@
 /* AUTHOR: Ahmed Metwally (ametwally@uber.com) */
-package com.uber.ussi.sequencedistance;
+package com.uber.ussi.comparator.sequencedistance;
 
 /**
  * The number of insertions and deletions of single elements needed to turn one sequence into the

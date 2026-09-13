@@ -1,5 +1,5 @@
 /* AUTHOR: Ahmed Metwally (ametwally@uber.com) */
-package com.uber.ussi.sequencedistance;
+package com.uber.ussi.comparator.sequencedistance;
 
 /**
  * Levenshtein distance that also counts transposing two adjacent elements as a single edit, so a

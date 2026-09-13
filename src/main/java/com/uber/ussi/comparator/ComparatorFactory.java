@@ -1,16 +1,16 @@
 /* AUTHOR: Shijie Lu (shijie@uber.com), Shalini Kedlaya (skedlaya@uber.com), Ahmed Metwally (ametwally@uber.com) */
 package com.uber.ussi.comparator;
 
+import com.uber.ussi.comparator.sequencedistance.SequenceDistance;
+import com.uber.ussi.comparator.sequencedistance.SequenceDistanceFactory;
+import com.uber.ussi.comparator.sequencedistance.SequenceDistanceFactory.SequenceDistanceType;
+import com.uber.ussi.comparator.signaturegenerator.SignatureGenerator;
+import com.uber.ussi.comparator.signaturegenerator.SignatureGeneratorFactory;
+import com.uber.ussi.comparator.signaturegenerator.SignatureGeneratorFactory.SignatureGeneratorType;
 import com.uber.ussi.comparatornormalizer.ComparatorNormalizer;
 import com.uber.ussi.comparatornormalizer.ComparatorNormalizerFactory;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.error.ComparatorCreationError;
-import com.uber.ussi.sequencedistance.SequenceDistance;
-import com.uber.ussi.sequencedistance.SequenceDistanceFactory;
-import com.uber.ussi.sequencedistance.SequenceDistanceFactory.SequenceDistanceType;
-import com.uber.ussi.signaturegenerator.SignatureGenerator;
-import com.uber.ussi.signaturegenerator.SignatureGeneratorFactory;
-import com.uber.ussi.signaturegenerator.SignatureGeneratorFactory.SignatureGeneratorType;
 import com.uber.ussi.utils.Constants;
 import java.util.Locale;
 import java.util.Map;

@@ -421,6 +421,20 @@ The shared `Index` base class, `IndexFactory`, and
 `GenericCache` and `SparseCache` implementations live under
 `searchablestructure.cache`.
 
+### Comparators
+
+Comparator implementations live under `com.uber.ussi.comparator`, with the two
+pieces that only a comparator composes in sub-packages of their own:
+
+- `comparator.sequencedistance`: the edit distances the `gld` and `ngld`
+  comparators measure with, sharing the banded dynamic program in
+  `SequenceDistance`.
+- `comparator.signaturegenerator`: the MinHash and consistent weighted sampling
+  generators the `jaccard` and `ruzicka` comparators draw signatures from.
+
+Normalizers are separate, under `com.uber.ussi.comparatornormalizer`, because a
+namespace configures one independently of its comparator.
+
 #### Generic Cache
 
 `GenericCache` is mutable and supports insert, update, delete, kNN search, and

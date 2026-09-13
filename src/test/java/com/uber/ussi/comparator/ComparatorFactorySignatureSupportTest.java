@@ -3,7 +3,7 @@ package com.uber.ussi.comparator;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.uber.ussi.signaturegenerator.SignatureGeneratorFactory.SignatureGeneratorType;
+import com.uber.ussi.comparator.signaturegenerator.SignatureGeneratorFactory.SignatureGeneratorType;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 

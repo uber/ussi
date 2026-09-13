@@ -1,8 +1,8 @@
 /* AUTHOR: Ahmed Metwally (ametwally@uber.com) */
 package com.uber.ussi.comparator;
 
+import com.uber.ussi.comparator.sequencedistance.SequenceDistance;
 import com.uber.ussi.comparatornormalizer.ComparatorNormalizer;
-import com.uber.ussi.sequencedistance.SequenceDistance;
 import com.uber.ussi.utils.MathUtils;
 
 /**

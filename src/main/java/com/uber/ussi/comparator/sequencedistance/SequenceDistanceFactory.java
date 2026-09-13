@@ -1,5 +1,5 @@
 /* AUTHOR: Ahmed Metwally (ametwally@uber.com) */
-package com.uber.ussi.sequencedistance;
+package com.uber.ussi.comparator.sequencedistance;
 
 import java.util.Locale;
 import java.util.Objects;

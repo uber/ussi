@@ -22,9 +22,9 @@ memory-only index structure:
   hybrid `sparse` indexes built from graduated cache contents.
 - L2, signed Jaccard, and signed weighted-Jaccard (Ruzicka) comparators with
   configurable normalization into a `[0.0, 1.0]` similarity score.
-- Generalized edit distance (`gld`) and its normalized form (`ngld`) over
-  ordered sequences, each over a configurable Levenshtein,
-  Damerau-Levenshtein, or longest-common-subsequence distance.
+- Generalized Levenshtein distance (`gld`) and its normalized form (`ngld`)
+  over ordered sequences, each over a configurable Levenshtein,
+  Damerau-Levenshtein, or longest common subsequence distance.
 - Exact sparse candidate generation through inverted term lists with length,
   position, and unordered-prefix filtering.
 - Approximate sparse candidate generation using MinHash for Jaccard and I2CWS,
@@ -315,6 +315,27 @@ Without `signature_generator_type`, Jaccard and Ruzicka still work in generic,
 sparse-cache, and exact inverted paths. The `signature` and hybrid `sparse`
 indexes require it. L2 does not support signature generation.
 
+Both sequence comparators are named for the distance they report. `gld` is the
+generalized Levenshtein distance, the number of single-element edits that turn
+one sequence into the other. It is generalized in that which edits count is
+itself configurable, through `sequence_distance_type`. `ngld` is the normalized
+generalized Levenshtein distance, that same edit count divided by the two
+sequences' lengths as `2 * d / (length1 + length2 + d)`, which is what makes it
+comparable across sequences of different lengths.
+
+The distances differ only in the edits they permit:
+
+- `levenshtein`: insertion, deletion, and substitution of one element.
+- `damerau_levenshtein`: the Levenshtein edits plus transposition of two
+  adjacent elements, so a pair of elements in the wrong order costs one edit
+  rather than two.
+- `lcs`: insertion and deletion only, the distance complementing the longest
+  common subsequence. Every element outside that subsequence has to be deleted
+  from one sequence or inserted into the other, so the distance is
+  `length1 + length2 - 2 * lcsLength`. Rewriting an element costs a deletion and
+  an insertion, so an `lcs` distance is never below the `levenshtein` distance
+  over the same pair.
+
 When `metadata_filtering_strategy` is `auto`, `GenericIndex` resolves metadata
 filtering to in-filtering. `DenseMatrixIndex` tries pre-filtering when the
 metadata filter is selective enough according to `max_pre_filtering_rows_ratio`;
@@ -421,6 +442,20 @@ The shared `Index` base class, `IndexFactory`, and
 `GenericCache` and `SparseCache` implementations live under
 `searchablestructure.cache`.
 
+### Comparators
+
+Comparator implementations live under `com.uber.ussi.comparator`, with the two
+pieces that only a comparator composes in sub-packages of their own:
+
+- `comparator.sequencedistance`: the edit distances the `gld` and `ngld`
+  comparators measure with, sharing the banded dynamic program in
+  `SequenceDistance`.
+- `comparator.signaturegenerator`: the MinHash and consistent weighted sampling
+  generators the `jaccard` and `ruzicka` comparators draw signatures from.
+
+Normalizers are separate, under `com.uber.ussi.comparatornormalizer`, because a
+namespace configures one independently of its comparator.
+
 #### Generic Cache
 
 `GenericCache` is mutable and supports insert, update, delete, kNN search, and
@@ -494,10 +529,13 @@ default fraction of `1.0` disables this behavior. See
 depends on the order the elements appear in, so it cannot be read off the
 elements a query and a row share. What those shared elements do give is a
 bound: two sequences within edit distance `d` have element multisets within L1
-distance `l1BoundFactor * d` of each other, where the factor is `1.0` for
-Levenshtein and Damerau-Levenshtein and `2.0` for LCS. A row sharing too few
-elements with the query, disregarding their order, therefore cannot be close
-enough in order either.
+distance `l1BoundFactor * d` of each other, where the factor is `2.0` for
+`levenshtein` and `damerau_levenshtein` and `1.0` for `lcs`. A substitution
+takes one element out of a multiset and puts another in, moving two, while an
+insertion or a deletion moves one, which is why forbidding substitution halves
+the factor and makes `lcs` the more selective choice for candidate generation. A
+row sharing too few elements with the query, disregarding their order, therefore
+cannot be close enough in order either.
 
 Each row travels through a search in two forms. The inverted lists are keyed by
 the distinct elements of the row's multiset and carry how many times each

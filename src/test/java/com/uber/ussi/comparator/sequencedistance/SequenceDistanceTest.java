@@ -1,13 +1,13 @@
-package com.uber.ussi.sequencedistance;
+package com.uber.ussi.comparator.sequencedistance;
 
 import static com.uber.ussi.utils.MathUtils.EPSILON_9;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.uber.ussi.comparator.sequencedistance.SequenceDistanceFactory.SequenceDistanceType;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
-import com.uber.ussi.sequencedistance.SequenceDistanceFactory.SequenceDistanceType;
 import com.uber.ussi.utils.MathUtils;
 import java.util.ArrayList;
 import java.util.Collections;

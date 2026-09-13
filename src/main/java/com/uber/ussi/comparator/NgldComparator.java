@@ -1,12 +1,16 @@
 /* AUTHOR: Ahmed Metwally (ametwally@uber.com) */
 package com.uber.ussi.comparator;
 
+import com.uber.ussi.comparator.sequencedistance.SequenceDistance;
 import com.uber.ussi.comparatornormalizer.ComparatorNormalizer;
-import com.uber.ussi.sequencedistance.SequenceDistance;
 import com.uber.ussi.utils.MathUtils;
 
 /**
- * The normalized generalized Levenshtein distance between two sequences.
+ * The normalized generalized Levenshtein distance (NGLD) between two sequences.
+ *
+ * <p>NGLD is the generalized Levenshtein distance {@link GldComparator} reports, divided by the
+ * two sequences' lengths. It measures the same edits, over whichever {@link SequenceDistance} the
+ * namespace configures, and differs only in expressing them as a fraction rather than a count.
  *
  * <p>The comparator value is {@code 2 * distance / (length1 + length2 + distance)}, which is 0.0
  * for identical sequences and 1.0 for maximally different ones. Dividing by the lengths is what

@@ -17,7 +17,7 @@ class SparseHybridEndToEndTest {
   private static final float DELTA = 1e-6f;
 
   @Test
-  void hybridResultsRemainStableAcrossSparseCacheGraduation() {
+  void hybridResultsRemainStableAcrossInvertedTermCacheGraduation() {
     TermsAndValues exactRecord = sparseRecord(270);
     TermsAndValues signatureRecord = sparseRecord(271);
     try (NearestNeighborSearchIndex index = NearestNeighborSearchIndex.create(config(2))) {

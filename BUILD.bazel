@@ -5,7 +5,7 @@ load("@rules_java//java:defs.bzl", "java_library", "java_plugin", "java_test")
 # - NearestNeighborSearchIndex  : top-level `new(config)` facade
 # - TermsAndValues              : platform-agnostic record representation
 # - SearchResults               : ordered rowNums plus parallel similarity scores
-# - GenericCache                : writable sequential-scan cache
+# - ScanCache                : writable sequential-scan cache
 
 java_plugin(
     name = "lombok_processor",

@@ -336,8 +336,8 @@ The distances differ only in the edits they permit:
   an insertion, so an `lcs` distance is never below the `levenshtein` distance
   over the same pair.
 
-When `metadata_filtering_strategy` is `auto`, `GenericIndex` resolves metadata
-filtering to in-filtering. `DenseMatrixIndex` tries pre-filtering when the
+When `metadata_filtering_strategy` is `auto`, `ScanIndex` resolves metadata
+filtering to in-filtering. `MatrixIndex` tries pre-filtering when the
 metadata filter is selective enough according to `max_pre_filtering_rows_ratio`;
 otherwise it falls back to post-filtering. Term and signature indexes also
 try selective pre-filtering, then fall back to in-filtering.
@@ -424,32 +424,45 @@ deleted rows from that rebuilt snapshot.
 ### Searchable Structures
 
 Index implementations live under
-`com.uber.ussi.searchablestructure.index`, split into
-sub-packages by index type:
+`com.uber.ussi.searchablestructure.index`, split into sub-packages by the
+technology each one indexes with. Density and sparsity name no package: they are
+preconditions of a technology rather than dimensions of the layout, so
+`IndexConfigValidator` enforces them and the package names stay free to describe
+the record shapes each technology serves.
 
-- `index.generic`: `GenericIndex`, the generic sequential-scan index.
-- `index.dense`: `DenseMatrixIndex` and its matrix-vector dot-product scorers
-  (`DenseMatrixDotProductScorers` and the Java and OpenBLAS scorers).
-- `index.sparse`: `TermIndex`, `SequenceIndex`, `SignatureIndex`, and the
-  hybrid `SparseIndex`. All four share `BaseSparseIndex`, which owns the
-  uni-sorted inverted lists and drives the candidate generators. `TermIndex`
-  and `SequenceIndex` further share `BaseTermKeyedIndex`, which covers the
-  indexes whose list keys are the terms of the record being indexed rather than
-  a signature derived from it.
-- `index.sparse.generator`: the two generators every sparse index draws its
-  candidates from, `SparseFilteredSearch` (sparse-key-major) and
-  `SparseMergeSearch` (row-major), along with the inverted list they walk and
-  the search context, row filter, and results heap they walk it with. A
-  generator only ever reads sparse keys and uni values, so sequences reuse both
-  unchanged: a sequence is indexed by the multiset of its elements, and only the
-  comparator that scores a candidate cares about their order. Every type here is
-  public purely to be reachable from the indexes in the parent package, and says
-  so in its javadoc.
+- `index.scan`: `ScanIndex`, the sequential-scan index, which reads no record
+  layout of its own and so accepts every record type.
+- `index.matrix`: `MatrixIndex` and its matrix-vector dot-product scorers
+  (`MatrixDotProductScorers` and the Java and OpenBLAS scorers). The technology
+  presumes dense vectors.
+- `index.inverted`: the inverted-list family, which presumes a sparse key
+  alphabet, since its pruning is only worth its bookkeeping when a key selects
+  few rows. `BaseInvertedIndex` owns the uni-sorted inverted lists and drives
+  the candidate generators, and `BaseTermKeyedIndex` covers the indexes whose
+  list keys are the terms of the record being indexed rather than a signature
+  derived from it. The family splits further by record shape, because the shape
+  is what decides whether the keys determine a similarity or only bound it:
+  - `index.inverted.unordered`: `TermIndex`, `SignatureIndex`, and the hybrid
+    `HybridIndex`, each named for the key it builds its lists from.
+  - `index.inverted.sequence`: `TermIndex`, whose keys are the elements of an
+    ordered sequence. It shares its name with the unordered `TermIndex` because
+    both key their lists by the record's own terms; the packages are what
+    distinguish the records they read.
+- `index.inverted.generator`: the two generators every inverted index draws its
+  candidates from, `FilteredSearch` (sparse-key-major) and `MergeSearch`
+  (row-major), along with the inverted list they walk and the search context,
+  row filter, and results heap they walk it with. A generator only ever reads
+  sparse keys and uni values, so sequences reuse both unchanged: a sequence is
+  indexed by the multiset of its elements, and only the comparator that scores a
+  candidate cares about their order. Every type here is public purely to be
+  reachable from the indexes in the parent packages, and says so in its javadoc.
 
 The shared `Index` base class, `IndexFactory`, and
-`MetadataFilteredSearchExecutor` stay in the `index` package itself. Mutable
-`GenericCache` and `SparseCache` implementations live under
-`searchablestructure.cache`.
+`MetadataFilteredSearchExecutor` stay in the `index` package itself.
+`searchablestructure.inverted` holds `KeyAndPrefixFilteringData`, the one type
+the inverted indexes and the inverted cache both order their query keys with,
+which is why it sits beside both rather than inside either. Mutable `ScanCache`
+and `InvertedTermCache` implementations live under `searchablestructure.cache`.
 
 ### Comparators
 
@@ -467,13 +480,13 @@ namespace configures one independently of its comparator.
 
 #### Generic Cache
 
-`GenericCache` is mutable and supports insert, update, delete, kNN search, and
+`ScanCache` is mutable and supports insert, update, delete, kNN search, and
 minimum-similarity search. It scans all cached rows and applies metadata filters
 before scoring rows.
 
 #### Sparse Cache
 
-`SparseCache` is mutable and keeps inverted term lists in insertion order.
+`InvertedTermCache` is mutable and keeps inverted term lists in insertion order.
 It generates deduplicated candidates from query terms using unordered-prefix
 filtering, then scores candidates with the configured comparator. A metadata
 filter matching at most 1% of the cache uses a direct scan of those matching
@@ -489,13 +502,13 @@ reversed as the cache changes.
 
 #### Generic Index
 
-`GenericIndex` (in `index.generic`) is delete-only and uses sequential scan
+`ScanIndex` (in `index.scan`) is delete-only and uses sequential scan
 search over a snapshot of graduated rows. It supports metadata in-filtering and
 can participate in pre-filtering or post-filtering depending on configuration.
 
 #### Dense Matrix Index
 
-`DenseMatrixIndex` (in `index.dense`) is delete-only and stores dense vectors in
+`MatrixIndex` (in `index.matrix`) is delete-only and stores dense vectors in
 a row-major float matrix. It supports only the `l2` comparator. Rows must have
 empty terms and the same non-zero dimension.
 
@@ -512,11 +525,11 @@ If OpenBLAS cannot be loaded, it falls back to the Java scorer.
 
 #### Term Index
 
-`TermIndex` is a delete-only sparse index whose keys are the terms themselves,
-canonicalized. Every sparse index keeps inverted lists, so what sets this one
-apart is the source of its keys: a row's own terms, with nothing derived from
-them, which is why the terms a query and a candidate share determine their
-similarity exactly rather than bounding it.
+The `index.inverted.unordered` `TermIndex` is a delete-only sparse index whose
+keys are the terms themselves, canonicalized. Every inverted index keeps
+inverted lists, so what sets this one apart is the source of its keys: a row's
+own terms, with nothing derived from them, which is why the terms a query and a
+candidate share determine their similarity exactly rather than bounding it.
 
 Inverted lists are sorted by each row's comparator-specific unilateral value,
 enabling length filtering. Candidate traversal combines length, position, and
@@ -539,7 +552,8 @@ default fraction of `1.0` disables this behavior. See
 
 #### Sequence Index
 
-`SequenceIndex` is a delete-only index over ordered sequences. An edit distance
+The `index.inverted.sequence` `TermIndex` is a delete-only index over ordered
+sequences, keyed by the elements a sequence carries. An edit distance
 depends on the order the elements appear in, so it cannot be read off the
 elements a query and a row share. What those shared elements do give is a
 bound: two sequences within edit distance `d` have element multisets within L1
@@ -576,7 +590,7 @@ margins broaden candidate generation but do not make the signature index exact.
 
 #### Hybrid Sparse Index
 
-`SparseIndex` combines a `TermIndex` and a `SignatureIndex`. During each
+`HybridIndex` combines a `TermIndex` and a `SignatureIndex`. During each
 index build, rows with at most 270 terms go to the term child and rows
 with more than 270 terms go to the signature child. The configured length range
 may be entirely below, entirely above, or span this internal boundary.

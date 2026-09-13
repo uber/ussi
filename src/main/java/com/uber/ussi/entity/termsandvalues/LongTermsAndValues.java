@@ -139,10 +139,10 @@ public final class LongTermsAndValues {
    * the distinct elements in ascending order and whose values are how many times each occurs.
    *
    * <p>Candidate generation for an order-sensitive distance runs over this form rather than over
-   * the sequence itself: it has the sorted, distinct, value-carrying layout the sparse machinery
-   * requires, and two sequences within a given edit distance have element multisets within a
-   * bounded L1 distance of each other. The counts sum to the sequence length, so the multiset
-   * reports the same Uni value as the sequence it came from.
+   * the sequence itself: it has the sorted, distinct, value-carrying layout the inverted-index
+   * machinery requires, and two sequences within a given edit distance have element multisets
+   * within a bounded L1 distance of each other. The counts sum to the sequence length, so the
+   * multiset reports the same Uni value as the sequence it came from.
    */
   public LongTermsAndValues toElementMultiset(Comparator comparator) {
     Objects.requireNonNull(comparator, "comparator is null.");

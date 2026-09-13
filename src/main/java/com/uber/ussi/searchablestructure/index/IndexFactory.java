@@ -7,12 +7,11 @@ import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.RecordType;
 import com.uber.ussi.error.IndexCreationError;
-import com.uber.ussi.searchablestructure.index.dense.DenseMatrixIndex;
-import com.uber.ussi.searchablestructure.index.generic.GenericIndex;
-import com.uber.ussi.searchablestructure.index.sparse.TermIndex;
-import com.uber.ussi.searchablestructure.index.sparse.SequenceIndex;
-import com.uber.ussi.searchablestructure.index.sparse.SignatureIndex;
-import com.uber.ussi.searchablestructure.index.sparse.SparseIndex;
+import com.uber.ussi.searchablestructure.index.inverted.unordered.HybridIndex;
+import com.uber.ussi.searchablestructure.index.inverted.unordered.SignatureIndex;
+import com.uber.ussi.searchablestructure.index.inverted.unordered.TermIndex;
+import com.uber.ussi.searchablestructure.index.matrix.MatrixIndex;
+import com.uber.ussi.searchablestructure.index.scan.ScanIndex;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
@@ -100,22 +99,24 @@ public final class IndexFactory {
 
     String indexType = namespaceConfig.getIndexType().toLowerCase(Locale.ROOT);
     if (indexType.equals(IndexType.GENERIC.name().toLowerCase(Locale.ROOT))) {
-      return new GenericIndex(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);
+      return new ScanIndex(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);
     }
     if (indexType.equals(IndexType.DENSE.name().toLowerCase(Locale.ROOT))) {
-      return new DenseMatrixIndex(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);
+      return new MatrixIndex(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);
     }
     if (indexType.equals(IndexType.TERM.name().toLowerCase(Locale.ROOT))) {
       return new TermIndex(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);
     }
     if (indexType.equals(IndexType.SEQUENCE.name().toLowerCase(Locale.ROOT))) {
-      return new SequenceIndex(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);
+      // Qualified because the unordered TermIndex imported above shares this simple name.
+      return new com.uber.ussi.searchablestructure.index.inverted.sequence.TermIndex(
+          namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);
     }
     if (indexType.equals(IndexType.SIGNATURE.name().toLowerCase(Locale.ROOT))) {
       return new SignatureIndex(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);
     }
     if (indexType.equals(IndexType.SPARSE.name().toLowerCase(Locale.ROOT))) {
-      return new SparseIndex(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);
+      return new HybridIndex(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);
     }
 
     throw new IndexCreationError(String.format("Unsupported index type (%s).", indexType));

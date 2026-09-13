@@ -240,7 +240,7 @@ class SparseIndexTest {
                 1000,
                 Map.of(
                     Constants.SPARSE_CANDIDATE_GENERATOR,
-                    NamespaceConfig.SparseCandidateGenerator.SPARS_MERGE.getIndexParamValue())),
+                    NamespaceConfig.SparseCandidateGenerator.SPARS_MERGE.getParamValue())),
             rows,
             longObjectMap());
 

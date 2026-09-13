@@ -44,7 +44,9 @@ public final class LongTermsAndValues {
     float[] values = termsAndValues.getValues();
     CanonicalTermsAndValues canonical = canonicalize(encodedTerms, values);
     return new LongTermsAndValues(
-        canonical.terms, canonical.values, comparator.computeUniValue(canonical.values));
+        canonical.terms,
+        canonical.values,
+        comparator.computeUniValue(canonical.terms, canonical.values));
   }
 
   public long[] getTerms() {
@@ -97,18 +99,17 @@ public final class LongTermsAndValues {
     return false;
   }
 
-  /** Returns this record without filtered terms, recomputing the comparator-specific uniValue. */
-  public LongTermsAndValues newWithFilteredTerms(
-      LongHashSet filteredOutTerms, Comparator comparator) {
-    Objects.requireNonNull(filteredOutTerms, "filteredOutTerms is null.");
+  /** Returns this record without the given terms, recomputing the comparator-specific uniValue. */
+  public LongTermsAndValues newWithoutTerms(LongHashSet discardedTerms, Comparator comparator) {
+    Objects.requireNonNull(discardedTerms, "discardedTerms is null.");
     Objects.requireNonNull(comparator, "comparator is null.");
-    if (filteredOutTerms.isEmpty() || terms.length == 0) {
+    if (discardedTerms.isEmpty() || terms.length == 0) {
       return this;
     }
 
     int numIncludedTerms = 0;
     for (long term : terms) {
-      if (!filteredOutTerms.contains(term)) {
+      if (!discardedTerms.contains(term)) {
         ++numIncludedTerms;
       }
     }
@@ -120,7 +121,7 @@ public final class LongTermsAndValues {
     float[] includedValues = values.length == 0 ? EMPTY_VALUES : new float[numIncludedTerms];
     int includedIndex = 0;
     for (int i = 0; i < terms.length; ++i) {
-      if (filteredOutTerms.contains(terms[i])) {
+      if (discardedTerms.contains(terms[i])) {
         continue;
       }
       includedTerms[includedIndex] = terms[i];
@@ -130,24 +131,82 @@ public final class LongTermsAndValues {
       ++includedIndex;
     }
     return new LongTermsAndValues(
-        includedTerms, includedValues, comparator.computeUniValue(includedValues));
+        includedTerms, includedValues, comparator.computeUniValue(includedTerms, includedValues));
   }
 
-  /** Validates that two records can be aligned for a numeric comparator. */
-  public static void verifyComparablePair(
+  /**
+   * Returns the multiset of this sequence's elements as an ordinary sparse record, whose terms are
+   * the distinct elements in ascending order and whose values are how many times each occurs.
+   *
+   * <p>Candidate generation for an order-sensitive distance runs over this form rather than over
+   * the sequence itself: it has the sorted, distinct, value-carrying layout the sparse machinery
+   * requires, and two sequences within a given edit distance have element multisets within a
+   * bounded L1 distance of each other. The counts sum to the sequence length, so the multiset
+   * reports the same Uni value as the sequence it came from.
+   */
+  public LongTermsAndValues toElementMultiset(Comparator comparator) {
+    Objects.requireNonNull(comparator, "comparator is null.");
+    if (values.length != 0) {
+      throw new IllegalArgumentException(
+          String.format(
+              "Only a record without values is a sequence, got terms=%s values=%s.",
+              Arrays.toString(terms), Arrays.toString(values)));
+    }
+    /*
+     * Sorting a copy and then counting equal runs keeps this on primitives. A sorted map would read
+     * more directly but would box every element of the sequence, and the long sequences that most
+     * need the multiset to filter for them are exactly the ones that would pay the most for it.
+     */
+    long[] sortedElements = terms.clone();
+    Arrays.sort(sortedElements);
+    int numDistinctElements = 0;
+    for (int i = 0; i < sortedElements.length; ++i) {
+      if (i == 0 || sortedElements[i] != sortedElements[i - 1]) {
+        ++numDistinctElements;
+      }
+    }
+    long[] distinctElements = new long[numDistinctElements];
+    float[] counts = new float[numDistinctElements];
+    int index = -1;
+    for (int i = 0; i < sortedElements.length; ++i) {
+      if (i == 0 || sortedElements[i] != sortedElements[i - 1]) {
+        distinctElements[++index] = sortedElements[i];
+      }
+      ++counts[index];
+    }
+    return new LongTermsAndValues(
+        distinctElements, counts, comparator.computeUniValue(distinctElements, counts));
+  }
+
+  /** Validates that two records can be aligned by the comparator that is about to score them. */
+  public static void validateComparablePair(
       LongTermsAndValues termsAndValues1, LongTermsAndValues termsAndValues2) {
     Objects.requireNonNull(termsAndValues1, "termsAndValues1 is null.");
     Objects.requireNonNull(termsAndValues2, "termsAndValues2 is null.");
     /*
-     * TODO: Remove this check when sequence comparators are implemented. Sequence
-     * TermsAndValues have non-empty terms and no values.
+     * A sequence carries its elements, in order and with repeats, in terms and has no values.
+     * Sequences align against each other by the comparator walking both term arrays, so they need
+     * no length agreement, but they cannot be aligned against a record that does carry values.
      */
-    if (termsAndValues1.valuesLength() == 0 || termsAndValues2.valuesLength() == 0) {
-      throw new IllegalArgumentException(
+    boolean isSequence1 = termsAndValues1.valuesLength() == 0;
+    boolean isSequence2 = termsAndValues2.valuesLength() == 0;
+    if (isSequence1 != isSequence2) {
+      throw new ArraysSizeMismatchError(
           String.format(
-              "Cannot compare TermsAndValues with no values "
-                  + "(termsAndValues1 = %s, termsAndValues2 = %s).",
+              "Cannot compare TermsAndValues carrying values against TermsAndValues carrying "
+                  + "none (termsAndValues1 = %s, termsAndValues2 = %s).",
               termsAndValues1, termsAndValues2));
+    }
+    if (isSequence1) {
+      // A record with neither terms nor values carries nothing to compare under any comparator.
+      if (termsAndValues1.termsLength() == 0 && termsAndValues2.termsLength() == 0) {
+        throw new IllegalArgumentException(
+            String.format(
+                "Cannot compare TermsAndValues with no terms and no values "
+                    + "(termsAndValues1 = %s, termsAndValues2 = %s).",
+                termsAndValues1, termsAndValues2));
+      }
+      return;
     }
     if (termsAndValues1.termsLength() == 0 || termsAndValues2.termsLength() == 0) {
       if (termsAndValues1.termsLength() != termsAndValues2.termsLength()) {

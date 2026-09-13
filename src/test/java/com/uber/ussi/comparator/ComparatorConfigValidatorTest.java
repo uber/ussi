@@ -1,6 +1,7 @@
 package com.uber.ussi.comparator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.uber.ussi.config.NamespaceConfig;
@@ -33,6 +34,54 @@ class ComparatorConfigValidatorTest {
         false,
         null),
     new ValidationCase(
+        "unknown comparator type",
+        builder -> builder.comparatorType("cosine"),
+        false,
+        "Unsupported comparator type (cosine)."),
+    // The unknown name is the only thing reported, rather than piling on what it cannot support.
+    new ValidationCase(
+        "unknown comparator type carrying a signature param",
+        builder ->
+            builder
+                .comparatorType("cosine")
+                .comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR_TYPE, "minhash")),
+        false,
+        "Unsupported comparator type (cosine)."),
+    new ValidationCase(
+        "sequence distance type for ngld",
+        builder ->
+            builder
+                .comparatorType("ngld")
+                .comparatorNormalizerType("complement")
+                .comparatorParams(Map.of(Constants.SEQUENCE_DISTANCE_TYPE, "levenshtein")),
+        true,
+        null),
+    new ValidationCase(
+        "sequence distance param on jaccard",
+        builder ->
+            builder.comparatorParams(Map.of(Constants.SEQUENCE_DISTANCE_TYPE, "levenshtein")),
+        false,
+        "JACCARD does not compare sequences, so it has no sequence distance type."),
+    new ValidationCase(
+        "unknown sequence distance type",
+        builder ->
+            builder
+                .comparatorType("ngld")
+                .comparatorNormalizerType("complement")
+                .comparatorParams(Map.of(Constants.SEQUENCE_DISTANCE_TYPE, "hamming")),
+        false,
+        null),
+    // A blank value is the same as leaving it unset, which is what a sequence comparator defaults.
+    new ValidationCase(
+        "blank sequence distance type",
+        builder ->
+            builder
+                .comparatorType("ngld")
+                .comparatorNormalizerType("complement")
+                .comparatorParams(Map.of(Constants.SEQUENCE_DISTANCE_TYPE, "  ")),
+        true,
+        null),
+    new ValidationCase(
         "minhash for ruzicka",
         builder ->
             builder
@@ -51,6 +100,14 @@ class ComparatorConfigValidatorTest {
         assertTrue(violations.contains(testCase.expectedMessage), testCase.name);
       }
     }
+  }
+
+  /** A config carries whatever string the caller set, including none at all. */
+  @Test
+  void aBlankOrMissingComparatorTypeIsNotASupportedType() {
+    assertFalse(ComparatorFactory.isSupportedComparatorType(null));
+    assertFalse(ComparatorFactory.isSupportedComparatorType(""));
+    assertTrue(ComparatorFactory.isSupportedComparatorType(" Jaccard "));
   }
 
   private static NamespaceConfig.Builder validBuilder() {

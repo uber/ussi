@@ -28,7 +28,7 @@ class SignatureIndexTest {
   private static final float DELTA = 1e-6f;
 
   @Test
-  void constructorDeduplicatesGeneratedSignatureKeys() {
+  void theCollidingSignaturesOfOneRecordCollapseToASingleKey() {
     SignatureIndex index =
         new SignatureIndex(
             config("jaccard", "minhash"),
@@ -38,8 +38,13 @@ class SignatureIndexTest {
     assertEquals(1, index.getNumIndexedSparseKeysForTests());
     assertEquals(
         1, index.getSparseKeysAndUniTransformedValues(jaccard(new long[] {11}, 1f)).length);
+    /*
+     * A single-term record hashes to the same signature all NUM_SIGNATURES_PER_ID times, and
+     * getSparseKeys owes its caller distinct keys, so it reports the one key rather than the
+     * repeats behind it.
+     */
     long[] signatures = index.getSparseKeys(jaccard(new long[] {11}, 1f));
-    assertEquals(Constants.NUM_SIGNATURES_PER_ID, signatures.length);
+    assertEquals(1, signatures.length);
     assertArrayEquals(new long[] {7}, index.getRowNumsForSparseKeyForTests(signatures[0]));
   }
 
@@ -96,7 +101,7 @@ class SignatureIndexTest {
             longObjectMap(1, record, 2, record),
             longObjectMap());
 
-    assertArrayEquals(new long[] {11}, index.getFilteredOutTermsForTests());
+    assertArrayEquals(new long[] {11}, index.getDiscardedTermsForTests());
     assertEquals(0, index.getNumIndexedSparseKeysForTests());
     assertEquals(2, index.size());
     assertTrue(index.getNearestNeighborRowNums(2, record, MetaFilter.empty()).isEmpty());
@@ -213,7 +218,7 @@ class SignatureIndexTest {
   private static Map<String, String> mergeIndexParams() {
     return Map.of(
         Constants.SPARSE_CANDIDATE_GENERATOR,
-        NamespaceConfig.SparseCandidateGenerator.SPARS_MERGE.getIndexParamValue());
+        NamespaceConfig.SparseCandidateGenerator.SPARS_MERGE.getParamValue());
   }
 
   private static NamespaceConfig invertedConfig(

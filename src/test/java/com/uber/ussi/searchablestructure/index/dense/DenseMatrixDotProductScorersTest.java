@@ -246,7 +246,7 @@ class DenseMatrixDotProductScorersTest {
   }
 
   @Test
-  void validateMatrixRejectsHugeShape() {
+  void validateMatrixRejectsHugeDimensions() {
     assertThrows(
         IllegalArgumentException.class,
         () -> DenseMatrixDotProductScorers.validateMatrix(null, 46_342, 46_342));
@@ -276,7 +276,7 @@ class DenseMatrixDotProductScorersTest {
   }
 
   @Test
-  void validateScoreInputsAcceptsConsistentShapes() {
+  void validateScoreInputsAcceptsConsistentDimensions() {
     DenseMatrixDotProductScorers.validateScoreInputs(
         new float[] {1f, 2f}, 1, 2, new float[] {1f, 2f}, new float[] {0f});
   }

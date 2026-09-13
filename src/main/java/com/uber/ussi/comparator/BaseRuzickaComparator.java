@@ -3,9 +3,11 @@ package com.uber.ussi.comparator;
 
 import com.uber.ussi.comparatornormalizer.ComparatorNormalizer;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
+import com.uber.ussi.entity.termsandvalues.RecordType;
 import com.uber.ussi.error.ArraysSizeMismatchError;
 import com.uber.ussi.signaturegenerator.SignatureGenerator;
 import com.uber.ussi.utils.MathUtils;
+import java.util.Set;
 import javax.annotation.Nullable;
 
 /**
@@ -155,6 +157,17 @@ abstract class BaseRuzickaComparator extends SignatureComparator {
         comparatorNormalizer.normalizedSimilarityValueToComparatorValue(minSimilarity);
     return computeMaxPossibleComparatorValue(0.0, uniValue1, 0.0, uniValue2, 0.0, 0.0)
         >= minComparatorValue;
+  }
+
+  /** Both measures walk two records term by term, which needs the terms aligned and distinct. */
+  @Override
+  public Set<RecordType> getSupportedRecordTypes() {
+    return Set.of(RecordType.SPARSE);
+  }
+
+  @Override
+  public boolean supportsMergeCandidateGeneration() {
+    return true;
   }
 
   @Override

@@ -3,8 +3,10 @@ package com.uber.ussi.comparator;
 
 import com.uber.ussi.comparatornormalizer.ComparatorNormalizer;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
+import com.uber.ussi.entity.termsandvalues.RecordType;
 import com.uber.ussi.error.ArraysSizeMismatchError;
 import com.uber.ussi.utils.MathUtils;
+import java.util.Set;
 
 public class L2Comparator extends Comparator {
 
@@ -137,6 +139,20 @@ public class L2Comparator extends Comparator {
     return mayPassLengthFilteringInternal(uniValue1, uniValue2, maxL2Distance * maxL2Distance);
   }
 
+  /**
+   * An L2 distance is defined over either layout: a dense record's values are the vector itself,
+   * and a sparse record's terms name the non-zero coordinates of the same vector.
+   */
+  @Override
+  public Set<RecordType> getSupportedRecordTypes() {
+    return Set.of(RecordType.DENSE, RecordType.SPARSE);
+  }
+
+  @Override
+  public boolean supportsMergeCandidateGeneration() {
+    return true;
+  }
+
   @Override
   public double conjunctionContribution(float value1, float value2) {
     double gap = (double) value1 - value2;
@@ -172,21 +188,5 @@ public class L2Comparator extends Comparator {
             - 2.0 * Math.sqrt(Math.max(0.0, unscannedUniValue1 * unscannedUniValue2));
     return comparatorNormalizer.comparatorValueToNormalizedSimilarityValue(
         Math.sqrt(Math.max(0.0, conjunction + unscannedSquaredDistance)));
-  }
-
-  private static double computeMinPossibleSquaredL2Distance(
-      double partialUni1, double uni1, double partialUni2, double uni2) {
-    validatePartialUniValues(partialUni1, uni1, partialUni2, uni2);
-    double scannedSquaredDistance =
-        partialUni1
-            + partialUni2
-            - 2.0 * Math.sqrt(Math.max(0.0, partialUni1 * partialUni2));
-    double unscannedPartialUni1 = uni1 - partialUni1;
-    double unscannedPartialUni2 = uni2 - partialUni2;
-    double unscannedSquaredDistance =
-        unscannedPartialUni1
-            + unscannedPartialUni2
-            - 2.0 * Math.sqrt(Math.max(0.0, unscannedPartialUni1 * unscannedPartialUni2));
-    return scannedSquaredDistance + unscannedSquaredDistance;
   }
 }

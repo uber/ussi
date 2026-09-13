@@ -3,13 +3,16 @@ package com.uber.ussi.searchablestructure.index;
 import static com.uber.ussi.TestLongObjectMaps.longObjectMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.uber.ussi.config.NamespaceConfig;
+import com.uber.ussi.entity.termsandvalues.RecordType;
 import com.uber.ussi.error.IndexCreationError;
 import com.uber.ussi.searchablestructure.index.dense.DenseMatrixIndex;
 import com.uber.ussi.searchablestructure.index.generic.GenericIndex;
 import com.uber.ussi.searchablestructure.index.sparse.InvertedIndex;
+import com.uber.ussi.searchablestructure.index.sparse.SequenceIndex;
 import com.uber.ussi.searchablestructure.index.sparse.SignatureIndex;
 import com.uber.ussi.searchablestructure.index.sparse.SparseIndex;
 import com.uber.ussi.utils.Constants;
@@ -101,6 +104,28 @@ class IndexFactoryTest {
   private record IndexTypePredicateCase(String indexType, boolean expected) {}
 
   @Test
+  void createIndexCreatesSequenceIndex() {
+    Index index =
+        IndexFactory.createIndex(
+            sequenceConfig().indexType("SEQUENCE").build(), longObjectMap(), longObjectMap());
+
+    assertInstanceOf(SequenceIndex.class, index);
+  }
+
+  @Test
+  void getRecordTypeCases() {
+    assertEquals(RecordType.DENSE, IndexFactory.getRecordType("dense"));
+    assertEquals(RecordType.SPARSE, IndexFactory.getRecordType("inverted"));
+    assertEquals(RecordType.SPARSE, IndexFactory.getRecordType("signature"));
+    assertEquals(RecordType.SPARSE, IndexFactory.getRecordType("SPARSE"));
+    assertEquals(RecordType.SEQUENCE, IndexFactory.getRecordType("sequence"));
+    // The generic index scores through the comparator without reading a record's layout itself.
+    assertNull(IndexFactory.getRecordType("generic"));
+    // An unknown index type has no record type to require, and createIndex reports the name.
+    assertNull(IndexFactory.getRecordType("hnsw"));
+  }
+
+  @Test
   void createIndexRejectsUnsupportedIndexType() {
     NamespaceConfig config = validConfig().indexType("hnsw").build();
 
@@ -120,6 +145,10 @@ class IndexFactoryTest {
         .comparatorNormalizerType("reciprocal")
         .maxNumSearchableStructures(3)
         .maxNumSimilarities(10);
+  }
+
+  private static NamespaceConfig.Builder sequenceConfig() {
+    return validConfig().comparatorType("ngld").comparatorNormalizerType("complement");
   }
 
   private static NamespaceConfig.Builder signatureConfig() {

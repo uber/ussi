@@ -1,24 +1,25 @@
 package com.uber.ussi.comparatornormalizer;
 
+import static com.uber.ussi.utils.MathUtils.EPSILON_9;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.uber.ussi.error.ComparatorNormalizerCreationError;
 import com.uber.ussi.error.SearchResponseError;
+import com.uber.ussi.utils.MathUtils;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class ComparatorNormalizerTest {
 
-  private static final double DELTA = 1e-9;
 
   @Test
   void identityNormalizerIsIdentityWithinRange() {
     IdentityComparatorNormalizer normalizer = new IdentityComparatorNormalizer();
 
-    assertEquals(0.4, normalizer.comparatorValueToNormalizedSimilarityValue(0.4), DELTA);
-    assertEquals(0.4, normalizer.normalizedSimilarityValueToComparatorValue(0.4), DELTA);
+    assertEquals(0.4, normalizer.comparatorValueToNormalizedSimilarityValue(0.4), EPSILON_9);
+    assertEquals(0.4, normalizer.normalizedSimilarityValueToComparatorValue(0.4), EPSILON_9);
   }
 
   @Test
@@ -39,18 +40,39 @@ class ComparatorNormalizerTest {
         () -> normalizer.normalizedSimilarityValueToComparatorValue(-0.1));
   }
 
+  /** A complement only inverts a value that is already normalized, so it has no other domain. */
+  @Test
+  void complementNormalizerInvertsWithinRangeAndRejectsOutOfRange() {
+    ComplementComparatorNormalizer normalizer = new ComplementComparatorNormalizer();
+
+    assertEquals(0.6, normalizer.comparatorValueToNormalizedSimilarityValue(0.4), EPSILON_9);
+    assertEquals(0.6, normalizer.normalizedSimilarityValueToComparatorValue(0.4), EPSILON_9);
+    assertThrows(
+        SearchResponseError.class,
+        () -> normalizer.comparatorValueToNormalizedSimilarityValue(1.5));
+    assertThrows(
+        SearchResponseError.class,
+        () -> normalizer.comparatorValueToNormalizedSimilarityValue(-0.1));
+    assertThrows(
+        SearchResponseError.class,
+        () -> normalizer.normalizedSimilarityValueToComparatorValue(1.5));
+    assertThrows(
+        SearchResponseError.class,
+        () -> normalizer.normalizedSimilarityValueToComparatorValue(-0.1));
+  }
+
   @Test
   void lpNormalizerMapsComparatorValueToSimilarity() {
     LpComparatorNormalizer normalizer = new LpComparatorNormalizer();
 
-    assertEquals(0.5, normalizer.comparatorValueToNormalizedSimilarityValue(1.0), DELTA);
+    assertEquals(0.5, normalizer.comparatorValueToNormalizedSimilarityValue(1.0), EPSILON_9);
   }
 
   @Test
   void lpNormalizerInvertsSimilarityToComparatorValue() {
     LpComparatorNormalizer normalizer = new LpComparatorNormalizer();
 
-    assertEquals(1.0, normalizer.normalizedSimilarityValueToComparatorValue(0.5), DELTA);
+    assertEquals(1.0, normalizer.normalizedSimilarityValueToComparatorValue(0.5), EPSILON_9);
   }
 
   @Test
@@ -75,14 +97,14 @@ class ComparatorNormalizerTest {
   void reciprocalNormalizerMapsComparatorValueToSimilarity() {
     ReciprocalComparatorNormalizer normalizer = new ReciprocalComparatorNormalizer();
 
-    assertEquals(0.5, normalizer.comparatorValueToNormalizedSimilarityValue(1.0), DELTA);
+    assertEquals(0.5, normalizer.comparatorValueToNormalizedSimilarityValue(1.0), EPSILON_9);
   }
 
   @Test
   void reciprocalNormalizerInvertsSimilarityToComparatorValue() {
     ReciprocalComparatorNormalizer normalizer = new ReciprocalComparatorNormalizer();
 
-    assertEquals(1.0, normalizer.normalizedSimilarityValueToComparatorValue(0.5), DELTA);
+    assertEquals(1.0, normalizer.normalizedSimilarityValueToComparatorValue(0.5), EPSILON_9);
   }
 
   @Test

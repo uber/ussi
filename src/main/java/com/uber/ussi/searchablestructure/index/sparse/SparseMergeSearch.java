@@ -27,12 +27,19 @@ final class SparseMergeSearch {
    * Generates and scores candidates for {@code query}.
    *
    * <p>When {@code scoresFromConjunction} is set, the accumulated conjunction is the row's exact
-   * score and {@code comparisonRowLookup} is never consulted. The approximate index types key their
-   * lists by signature rather than by term, so they verify each candidate through the comparator.
+   * score and {@code verificationRowLookup} is never consulted. The approximate index types key
+   * their lists by signature rather than by term, so they verify each candidate through the
+   * comparator.
+   *
+   * @param query the query in verification form, which is the only form the comparator can score.
+   * @param indexedQuery the query in indexed form, which is the form the rows behind {@code
+   *     context}'s uni values are in. Length filtering compares the two uni values, so it has to
+   *     read the query's from the same form, not from {@code query}.
    */
   static List<RowNumAndSimilarity> search(
       Comparator comparator,
       LongTermsAndValues query,
+      LongTermsAndValues indexedQuery,
       @Nullable MetaFilter metadataFilter,
       float minSimilarity,
       int maxResults,
@@ -40,11 +47,11 @@ final class SparseMergeSearch {
       Context context,
       SparseSearchRowFilter rowFilter,
       boolean scoresFromConjunction,
-      LongFunction<LongTermsAndValues> comparisonRowLookup) {
+      LongFunction<LongTermsAndValues> verificationRowLookup) {
     if (queryKeys.length == 0) {
       return List.of();
     }
-    double uniValue1 = context.stableSortedUniValue(query);
+    double uniValue1 = context.stableSortedUniValue(indexedQuery);
     double[] unscannedKeysUniValue =
         scoresFromConjunction ? computeUnscannedKeysUniValue(comparator, queryKeys) : null;
     Frontier frontier =
@@ -93,7 +100,7 @@ final class SparseMergeSearch {
           scoresFromConjunction
               ? conjunction.getSimilarity(comparator, uniValue1, uniValue2)
               : getVerifiedSimilarity(
-                  comparator, query, comparisonRowLookup.apply(rowNum), currentMinSimilarity);
+                  comparator, query, verificationRowLookup.apply(rowNum), currentMinSimilarity);
       if (similarity < currentMinSimilarity) {
         continue;
       }

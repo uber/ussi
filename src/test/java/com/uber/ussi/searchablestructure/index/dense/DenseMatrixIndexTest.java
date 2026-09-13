@@ -343,8 +343,8 @@ class DenseMatrixIndexTest {
   }
 
   @Test
-  void constructorRejectsNonL2Comparator() {
-    NamespaceConfig config = configWithComparatorType("cosine");
+  void constructorRejectsAComparatorThatCannotReadDenseRecords() {
+    NamespaceConfig config = configWithComparatorType("jaccard");
 
     assertThrows(
         IllegalArgumentException.class,

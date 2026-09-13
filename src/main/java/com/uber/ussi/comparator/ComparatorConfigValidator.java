@@ -3,6 +3,7 @@ package com.uber.ussi.comparator;
 
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.config.NamespaceConfigValidator;
+import com.uber.ussi.error.ComparatorCreationError;
 import com.uber.ussi.signaturegenerator.SignatureGeneratorFactory.SignatureGeneratorType;
 import com.uber.ussi.utils.Constants;
 import java.util.List;
@@ -21,6 +22,42 @@ public final class ComparatorConfigValidator implements NamespaceConfigValidator
 
   @Override
   public void collectViolations(NamespaceConfig config, List<String> violations) {
+    /*
+     * Every other check here asks what a named comparator supports, which has no answer when the
+     * name is not one of them. Reporting only the unknown name keeps the violation list pointed at
+     * the one thing that has to change.
+     */
+    if (!ComparatorFactory.isSupportedComparatorType(config.getComparatorType())) {
+      violations.add(
+          String.format("Unsupported comparator type (%s).", config.getComparatorType()));
+      return;
+    }
+    collectSequenceDistanceTypeViolations(config, violations);
+    collectSignatureGeneratorTypeViolations(config, violations);
+  }
+
+  private static void collectSequenceDistanceTypeViolations(
+      NamespaceConfig config, List<String> violations) {
+    String rawType = config.getComparatorParam(Constants.SEQUENCE_DISTANCE_TYPE);
+    if (rawType == null || rawType.trim().isEmpty()) {
+      return;
+    }
+    if (!ComparatorFactory.isSequenceComparatorType(config.getComparatorType())) {
+      violations.add(
+          String.format(
+              "%s does not compare sequences, so it has no sequence distance type.",
+              config.getComparatorType().toUpperCase(Locale.ROOT)));
+      return;
+    }
+    try {
+      ComparatorFactory.createSequenceDistance(config.getComparatorParams());
+    } catch (ComparatorCreationError e) {
+      violations.add(e.getMessage());
+    }
+  }
+
+  private static void collectSignatureGeneratorTypeViolations(
+      NamespaceConfig config, List<String> violations) {
     String rawType = config.getComparatorParam(Constants.SIGNATURE_GENERATOR_TYPE);
     if (rawType == null || rawType.trim().isEmpty()) {
       return;

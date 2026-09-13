@@ -18,16 +18,21 @@ memory-only index structure:
 
 - Mutable `generic` and `sparse` caches for inserts, updates, deletes, and
   search.
-- Delete-only `generic`, `dense`, `inverted`, `signature`, and hybrid `sparse`
-  indexes built from graduated cache contents.
+- Delete-only `generic`, `dense`, `inverted`, `sequence`, `signature`, and
+  hybrid `sparse` indexes built from graduated cache contents.
 - L2, signed Jaccard, and signed weighted-Jaccard (Ruzicka) comparators with
   configurable normalization into a `[0.0, 1.0]` similarity score.
+- Generalized edit distance (`gld`) and its normalized form (`ngld`) over
+  ordered sequences, each over a configurable Levenshtein,
+  Damerau-Levenshtein, or longest-common-subsequence distance.
 - Exact sparse candidate generation through inverted term lists with length,
   position, and unordered-prefix filtering.
 - Approximate sparse candidate generation using MinHash for Jaccard and I2CWS,
   ICWS, PCWS, or SCWS for Ruzicka.
 - A hybrid sparse index that sends rows with at most 270 terms to the exact
   inverted index and longer rows to the signature index.
+- A sequence index that generates candidates from element multisets and has the
+  configured edit distance verify each candidate against the ordered sequences.
 - Metadata filtering with in-filtering, pre-filtering, post-filtering, and
   automatic strategy selection.
 - Bounded top-k accumulation with `BoundedSizeMaxHeap`, so each searchable
@@ -35,13 +40,16 @@ memory-only index structure:
 - Optional OpenBLAS acceleration for dense matrix-vector dot products, with a
   Java fallback when the native scorer is unavailable.
 
-Dense and sparse numeric records use the same public `TermsAndValues` API and
-the same configured comparator. Sequence records can be represented by the data
-model but are not currently searchable because no sequence comparator is
-implemented.
+Dense, sparse numeric, and sequence records all use the same public
+`TermsAndValues` API. Which of the three a comparator can read is what decides
+the searchable structures it can be paired with, and a config pairing a
+comparator with a structure that stores a record type it cannot read is
+rejected up front.
 
 The library does not provide persistence, sharding, external document-id
-mapping, TTL enforcement, authorization, or platform-specific plugin/adapter layers for serving systems such as OpenSearch, RediSearch, Milvus, etc. Those concerns are expected to be handled by the hosting platform.
+mapping, TTL enforcement, authorization, or platform-specific plugin/adapter
+layers for serving systems such as OpenSearch, RediSearch, Milvus, etc.
+Those concerns are expected to be handled by the hosting platform.
 
 ## Architecture
 
@@ -108,19 +116,23 @@ the returned `rowNum` values.
 new TermsAndValues(String[] terms, float[] values)
 ```
 
-It can represent several feature shapes:
+It can represent three record types:
 
-- Dense vector: empty `terms`, non-empty `values`.
+- Dense vector: empty `terms`, non-empty `values` of a fixed dimension.
 - Sparse weighted feature: non-empty `terms`, non-empty `values` with the same
   length.
-- Sequence: non-empty `terms`, empty `values`. This shape is reserved for future
-  sequence comparators and is not currently searchable.
+- Sequence: non-empty `terms` holding the elements in the order they arrived,
+  repeats included, and empty `values`.
 
 The `l2`, `jaccard`, and `ruzicka` comparators work on both dense and sparse
 numeric records. Dense values align by array position. Sparse values align by
 term, and a term missing from either record has value `0.0`. The `dense` index
 is the exception: it is a matrix implementation that requires dense L2 records
 with a fixed number of dimensions.
+
+The `gld` and `ngld` comparators read sequences only. Sequence terms are left
+in the order they arrived rather than canonicalized, since that order is what
+an edit distance measures.
 
 Jaccard compares signed presence: every non-zero magnitude contributes `1.0`,
 and opposite signs do not intersect. Ruzicka uses the same signed matching rule
@@ -229,11 +241,11 @@ Search behavior:
 | `maxCacheSize` | Number of active-cache rows that triggers cache graduation to an index. Must be positive. |
 | `cacheType` | Supported values: `generic`, `sparse`. |
 | `cacheParams` | Cache-specific options, including sparse-term popularity filtering. |
-| `indexType` | Supported values: `generic`, `dense`, `inverted`, `signature`, `sparse`. |
+| `indexType` | Supported values: `generic`, `dense`, `inverted`, `sequence`, `signature`, `sparse`. |
 | `indexParams` | Index-specific options such as metadata filtering strategy. |
-| `comparatorType` | Supported values: `l2`, `jaccard`, `ruzicka`. |
-| `comparatorParams` | Comparator-specific options, including signature generation. |
-| `comparatorNormalizerType` | Supported values: `identity`, `lp`, `reciprocal`. |
+| `comparatorType` | Supported values: `l2`, `jaccard`, `ruzicka`, `gld`, `ngld`. |
+| `comparatorParams` | Comparator-specific options, including signature generation and sequence distance. |
+| `comparatorNormalizerType` | Supported values: `identity`, `lp`, `reciprocal`, `complement`. |
 | `comparatorNormalizerParams` | Currently unused; reserved for future normalizer-specific options. |
 | `maxNumSearchableStructures` | Maximum number of active, graduating, and indexed structures before consolidation. Must be greater than `2`. |
 | `maxNumSimilarities` | Maximum result count kept by structure-level search and final merge. Must be positive. |
@@ -243,18 +255,21 @@ not enforce them against each inserted record.
 
 Supported index combinations:
 
-| `indexType` | Record shape | Comparator | Candidate generation |
+| `indexType` | Record type | Comparator | Candidate generation |
 | --- | --- | --- | --- |
-| `generic` | Dense or sparse numeric | `l2`, `jaccard`, `ruzicka` | Exact sequential scan. |
+| `generic` | Dense, sparse numeric, or sequence | `l2`, `jaccard`, `ruzicka`, `gld`, `ngld` | Exact sequential scan. |
 | `dense` | Fixed-dimension dense | `l2` | Exact matrix scan with Java or OpenBLAS dot products. |
 | `inverted` | Sparse numeric | `l2`, `jaccard`, `ruzicka` | Exact inverted term lists. |
+| `sequence` | Sequence | `gld`, `ngld` | Element-multiset inverted lists; retained candidates are scored against the ordered sequences. |
 | `signature` | Sparse numeric | `jaccard` or `ruzicka` with a signature generator | Approximate signature inverted lists; retained candidates are scored with the original comparator. |
 | `sparse` | Sparse numeric | `jaccard` or `ruzicka` with a signature generator | Hybrid exact/signature routing at 270 terms. |
 
 The `generic` cache is a sequential scan and works with dense or sparse numeric
 records. The `sparse` cache maintains mutable inverted term lists and is
 intended for sparse numeric records. A sparse cache should normally graduate to
-an `inverted`, `signature`, or hybrid `sparse` index.
+an `inverted`, `signature`, or hybrid `sparse` index. A sequence namespace
+caches generically, because the sparse cache reads one value per distinct term
+and a sequence supplies neither.
 
 Index parameters:
 
@@ -262,7 +277,8 @@ Index parameters:
 | --- | --- | --- | --- |
 | `metadata_filtering_strategy` | `auto`, `in_filtering`, `pre_filtering`, `post_filtering` | `auto` | Controls how indexes apply metadata filters. Values use underscores. |
 | `max_pre_filtering_rows_ratio` | double in `[0.0, 1.0]` | `0.1` | Maximum matching-row ratio that allows pre-filtering. |
-| `max_fraction_ids_per_sparse_key` | double in `(0.0, 1.0]` | `1.0` | For sparse indexes, removes a term from candidate generation and comparison when it occurs in more than this fraction of indexed rows. `1.0` disables this filtering. |
+| `max_fraction_ids_per_sparse_key` | double in `(0.0, 1.0]` | `1.0` | For sparse indexes, discards a term when it occurs in more than this fraction of indexed rows. `1.0` disables this filtering. |
+| `popular_term_discard_scope` | `candidates_and_verification`, `candidates_only` | `candidates_and_verification` | Which phases of a search a discarded term is absent from. See [Discarding Popular Terms](#discarding-popular-terms). |
 | `sparse_candidate_generator` | `spars`, `spars_merge` | `spars` | For sparse indexes, selects the candidate generation algorithm. See [Sparse Candidate Generation](#sparse-candidate-generation). |
 
 The `generic` cache does not currently accept any `cacheParams`. The `sparse`
@@ -271,6 +287,7 @@ cache accepts the following parameters:
 | Parameter | Values | Default | Description |
 | --- | --- | --- | --- |
 | `max_fraction_ids_per_sparse_key` | double in `(0.0, 1.0]` | `1.0` | Filters terms whose one-sided popularity confidence bound exceeds this fraction. `1.0` disables this filtering. |
+| `popular_term_discard_scope` | `candidates_and_verification`, `candidates_only` | `candidates_and_verification` | Which phases of a search a discarded term is absent from. See [Discarding Popular Terms](#discarding-popular-terms). |
 | `max_fraction_ids_per_sparse_key_confidence` | double in `[0.5, 1.0]` | `0.95` | Confidence used for the sparse-cache popularity bound. `0.5` reduces the check to observed popularity. |
 | `full_reevaluation_cache_size_decrease_fraction` | double in `[0.0, 1.0]` | `0.10` | Cache-size decrease from the last exact popularity evaluation that triggers a full reevaluation. `0.0` reevaluates after every deletion; `1.0` waits until the cache is empty. |
 
@@ -281,7 +298,10 @@ evaluation, it reevaluates all terms to account for the smaller denominator.
 
 To apply the same popularity threshold before and after cache graduation, set
 `max_fraction_ids_per_sparse_key` to the same value in both `cacheParams` and
-`indexParams`. The confidence parameter applies only to the mutable cache.
+`indexParams`. The same goes for `popular_term_discard_scope`: it is read from
+each structure's own params, so setting it on only one of the two leaves a
+namespace reporting one kind of similarity before graduation and the other kind
+after. The confidence parameter applies only to the mutable cache.
 
 Comparator parameters:
 
@@ -289,6 +309,7 @@ Comparator parameters:
 | --- | --- | --- | --- |
 | `signature_generator_type` | `jaccard` | `minhash` | None |
 | `signature_generator_type` | `ruzicka` | `i2cws`, `icws`, `pcws`, `scws` | None |
+| `sequence_distance_type` | `gld`, `ngld` | `levenshtein`, `damerau_levenshtein`, `lcs` | `levenshtein` |
 
 Without `signature_generator_type`, Jaccard and Ruzicka still work in generic,
 sparse-cache, and exact inverted paths. The `signature` and hybrid `sparse`
@@ -306,10 +327,14 @@ Normalizer behavior:
 - `reciprocal`: converts distance `d` to `1 / (1 + d)`.
 - `lp`: converts distance `d` to `1 - d / 2`, intended for bounded Lp-style
   distances.
+- `complement`: converts distance `d` to `1 - d`, and requires `d` to already
+  be in `[0.0, 1.0]`.
 
 Jaccard and Ruzicka naturally produce similarities and normally use `identity`.
 L2 produces a distance and normally uses `reciprocal`, or `lp` when the input
-domain guarantees distances in `[0.0, 2.0]`.
+domain guarantees distances in `[0.0, 2.0]`. `gld` produces an unbounded edit
+count and normally uses `reciprocal`; `ngld` produces one already normalized
+into `[0.0, 1.0]` and normally uses `complement`.
 
 None of the currently supported comparator normalizers accept parameters.
 `comparatorNormalizerParams` is reserved for future use.
@@ -384,8 +409,12 @@ sub-packages by index type:
 - `index.generic`: `GenericIndex`, the generic sequential-scan index.
 - `index.dense`: `DenseMatrixIndex` and its matrix-vector dot-product scorers
   (`DenseMatrixDotProductScorers` and the Java and OpenBLAS scorers).
-- `index.sparse`: `InvertedIndex`, `SignatureIndex`, and the hybrid
-  `SparseIndex`.
+- `index.sparse`: `InvertedIndex`, `SequenceIndex`, `SignatureIndex`, and the
+  hybrid `SparseIndex`. All four share `BaseSparseIndex`, which owns the
+  uni-sorted inverted lists and the two candidate generators. `InvertedIndex`
+  and `SequenceIndex` further share `BaseTermKeyedIndex`, which covers the
+  indexes whose list keys are the terms of the record being indexed rather than
+  a signature derived from it.
 
 The shared `Index` base class, `IndexFactory`, and
 `MetadataFilteredSearchExecutor` stay in the `index` package itself. Mutable
@@ -406,11 +435,13 @@ filtering, then scores candidates with the configured comparator. A metadata
 filter matching at most 1% of the cache uses a direct scan of those matching
 rows instead.
 
-Sparse-cache searches only return rows sharing at least one non-filtered term
-with the query. High-popularity terms are removed dynamically according to the
-configured one-sided confidence bound. The complete stored records and inverted
-lists retain those terms, allowing filtering decisions to be reversed as the
-cache changes.
+Sparse-cache searches only return rows sharing at least one non-discarded term
+with the query. High-popularity terms are discarded dynamically according to the
+configured one-sided confidence bound, and `popular_term_discard_scope` decides
+what that discard means; see
+[Discarding Popular Terms](#discarding-popular-terms). The complete stored
+records and inverted lists retain those terms, allowing the decisions to be
+reversed as the cache changes.
 
 #### Generic Index
 
@@ -447,23 +478,45 @@ these lists; see [Sparse Candidate Generation](#sparse-candidate-generation).
 Each row and each query must have non-empty terms and values arrays of equal
 length after canonicalization; a query and a row do not need to have the same
 number of terms as each other. Search only considers rows sharing at least one
-non-filtered term with the query. This is important for sparse L2: two disjoint sparse
-vectors can have a non-zero normalized L2 similarity, but `inverted` deliberately
-does not return such rows. Use `generic` when exhaustive scoring across disjoint
-sparse L2 records is required.
+non-discarded term with the query. This is important for sparse L2: two
+disjoint sparse vectors can have a non-zero normalized L2 similarity, but
+`inverted` deliberately does not return such rows. Use `generic` when
+exhaustive scoring across disjoint sparse L2 records is required.
 
 At build time, terms occurring in more than
-`floor(numRows * max_fraction_ids_per_sparse_key)` rows are removed from both
-candidate generation and comparison. The default fraction of `1.0` disables
-this behavior.
+`floor(numRows * max_fraction_ids_per_sparse_key)` rows are discarded. The
+default fraction of `1.0` disables this behavior. See
+[Discarding Popular Terms](#discarding-popular-terms) for what a discard means.
+
+#### Sequence Index
+
+`SequenceIndex` is a delete-only index over ordered sequences. An edit distance
+depends on the order the elements appear in, so it cannot be read off the
+elements a query and a row share. What those shared elements do give is a
+bound: two sequences within edit distance `d` have element multisets within L1
+distance `l1BoundFactor * d` of each other, where the factor is `1.0` for
+Levenshtein and Damerau-Levenshtein and `2.0` for LCS. A row sharing too few
+elements with the query, disregarding their order, therefore cannot be close
+enough in order either.
+
+Each row travels through a search in two forms. The inverted lists are keyed by
+the distinct elements of the row's multiset and carry how many times each
+occurs, which is what length and prefix filtering prune on. The comparator then
+verifies each surviving candidate against the ordered sequences, running the
+banded dynamic program under the budget the active similarity threshold allows.
+
+Each row and each query must have non-empty terms and an empty values array. A
+query and a row do not need to be the same length as each other. Search only
+considers rows sharing at least one non-discarded element with the query.
 
 #### Signature Index
 
 `SignatureIndex` replaces original terms as inverted-list keys with 270 deterministic,
 similarity-preserving signatures per row. Jaccard uses MinHash; Ruzicka uses the
 configured CWS variant. Signature collisions generate candidates approximately,
-but candidates are scored using canonical terms and values after configured
-popularity filtering, not by comparing the signatures themselves.
+but candidates are scored using canonical terms and values, in whichever form
+the configured discard scope leaves them, not by comparing the signatures
+themselves.
 
 Signature prefix filtering applies a generator-specific approximation safety
 margin: `0.1` for MinHash, I2CWS, ICWS, and SCWS, and `0.15` for PCWS. These
@@ -485,9 +538,39 @@ irrelevant. Results from the searched children are merged and limited by
 
 The hybrid requires a signature-capable Jaccard or Ruzicka comparator.
 
+#### Discarding Popular Terms
+
+A term that occurs in most rows generates most of the index as candidates
+without narrowing anything down, so both the sparse cache and the sparse
+indexes can discard the terms above a configured popularity. What a discard
+means is `popular_term_discard_scope`, and the two settings differ in which half
+of the answer stays exact rather than in how aggressive they are.
+
+Under the default `candidates_and_verification`, a discarded term is absent
+from the inverted lists and from the records the comparator scores. A search
+reports the similarity between the records that remain once the popular terms
+are removed from both, and every row within the threshold of the query,
+measured that same way, is found. This redefines what the reported similarities
+mean, which is the right trade when the popular terms carry no signal worth
+reporting.
+
+Under `candidates_only`, a discarded term is absent from the inverted lists
+only. A search reports the similarity between the records as supplied,
+including their discarded terms, which is the right trade when an application
+has to report an exact similarity on the original records but cannot pay to
+generate candidates from their popular terms. The cost is recall: candidate
+generation still prunes on the similarity measured without the discarded terms,
+and removing a shared term can only lower that measure, so a row within the
+threshold of the query can be pruned before verification ever scores it. How
+much is lost depends on how much of the similarity the discarded terms carried.
+This also rules out scoring a row from the conjunction accumulated over the
+inverted lists, since that conjunction can only report the similarity that
+excludes the discarded terms, so `spars_merge` verifies each candidate through
+the comparator under this scope.
+
 #### Sparse Candidate Generation
 
-The three sparse index types — `inverted`, `signature`, and hybrid `sparse` —
+The three sparse index types (`inverted`, `signature`, and hybrid `sparse`)
 build the same uni-sorted inverted lists but can traverse them with either of
 two candidate generators, selected per namespace with the
 `sparse_candidate_generator` index parameter. Both return identical results and
@@ -502,12 +585,12 @@ type and every supported comparator.
 
 `spars_merge` is row-major. One frontier spans all of the query's sparse keys
 and advances them in step, so every inverted-list entry belonging to a candidate
-row arrives together. That lets the generator accumulate the row's conjunction —
-the part of the similarity that the query and the row derive from the sparse
-keys they share — as it goes, and abandon the row as soon as no completion of it
-can reach the active similarity threshold. It trades a priority queue over the
-query's keys for the ability to prune a row mid-scan, which pays off when a
-query has many sparse keys and the threshold rejects most rows early.
+row arrives together. That lets the generator accumulate the row's conjunction,
+which is the part of the similarity that the query and the row derive from the
+sparse keys they share, as it goes, and abandon the row as soon as no completion
+of it can reach the active similarity threshold. It trades a priority queue
+over the query's keys for the ability to prune a row mid-scan, which pays off
+when a query has many sparse keys and the threshold rejects most rows early.
 
 When the sparse keys are exact terms, the inverted lists also carry each row's
 value at that key, so the accumulated conjunction is the row's exact similarity
@@ -555,4 +638,4 @@ This project follows the [Uber Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 
-Apache License 2.0 — see [`LICENSE.md`](LICENSE).
+Apache License 2.0. See [`LICENSE.md`](LICENSE).

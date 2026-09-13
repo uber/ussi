@@ -135,6 +135,16 @@ public final class NamespaceConfig {
     return parseSparseCandidateGenerator(indexParams);
   }
 
+  /** Returns the discard scope an index reads, which it takes from the index params. */
+  public PopularTermDiscardScope getIndexPopularTermDiscardScope() {
+    return parsePopularTermDiscardScope(indexParams);
+  }
+
+  /** Returns the discard scope a cache reads, which it takes from the cache params. */
+  public PopularTermDiscardScope getCachePopularTermDiscardScope() {
+    return parsePopularTermDiscardScope(cacheParams);
+  }
+
   /** Throws if this config is structurally invalid or a supplied validator reports a violation. */
   public void validate(NamespaceConfigValidator... validators) {
     List<String> violations = collectViolations(validators);
@@ -179,7 +189,18 @@ public final class NamespaceConfig {
               + ".");
     }
     collectSparseCandidateGeneratorViolations(violations);
+    collectPopularTermDiscardScopeViolations(violations);
     return violations;
+  }
+
+  private void collectPopularTermDiscardScopeViolations(List<String> violations) {
+    for (Map<String, String> params : List.of(indexParams, cacheParams)) {
+      try {
+        parsePopularTermDiscardScope(params);
+      } catch (IllegalArgumentException e) {
+        violations.add(e.getMessage());
+      }
+    }
   }
 
   private void collectSparseCandidateGeneratorViolations(List<String> violations) {
@@ -188,6 +209,26 @@ public final class NamespaceConfig {
     } catch (IllegalArgumentException e) {
       violations.add(e.getMessage());
     }
+  }
+
+  private static PopularTermDiscardScope parsePopularTermDiscardScope(Map<String, String> params) {
+    String rawValue = NamespaceConfigParams.getParam(params, Constants.POPULAR_TERM_DISCARD_SCOPE);
+    if (NamespaceConfigParams.isBlank(rawValue)) {
+      return PopularTermDiscardScope.CANDIDATES_AND_VERIFICATION;
+    }
+    String normalizedValue = rawValue.trim().toLowerCase(Locale.ROOT);
+    for (PopularTermDiscardScope scope : PopularTermDiscardScope.values()) {
+      if (scope.paramValue.equals(normalizedValue)) {
+        return scope;
+      }
+    }
+    throw new IllegalArgumentException(
+        String.format(
+            "Unsupported %s (%s). Supported values: %s, %s.",
+            Constants.POPULAR_TERM_DISCARD_SCOPE,
+            rawValue,
+            PopularTermDiscardScope.CANDIDATES_AND_VERIFICATION.getParamValue(),
+            PopularTermDiscardScope.CANDIDATES_ONLY.getParamValue()));
   }
 
   private static SparseCandidateGenerator parseSparseCandidateGenerator(
@@ -199,7 +240,7 @@ public final class NamespaceConfig {
     }
     String normalizedValue = rawValue.trim().toLowerCase(Locale.ROOT);
     for (SparseCandidateGenerator generator : SparseCandidateGenerator.values()) {
-      if (generator.indexParamValue.equals(normalizedValue)) {
+      if (generator.paramValue.equals(normalizedValue)) {
         return generator;
       }
     }
@@ -208,8 +249,46 @@ public final class NamespaceConfig {
             "Unsupported %s (%s). Supported values: %s, %s.",
             Constants.SPARSE_CANDIDATE_GENERATOR,
             rawValue,
-            SparseCandidateGenerator.SPARS.getIndexParamValue(),
-            SparseCandidateGenerator.SPARS_MERGE.getIndexParamValue()));
+            SparseCandidateGenerator.SPARS.getParamValue(),
+            SparseCandidateGenerator.SPARS_MERGE.getParamValue()));
+  }
+
+  /**
+   * Which phases of a search a discarded high-popularity term is absent from.
+   *
+   * <p>Discarding is governed by {@link Constants#MAX_FRACTION_IDS_PER_SPARSE_KEY}, and this
+   * decides what the discard means once a term qualifies. The two settings differ in which half of
+   * the answer stays exact, so neither is the safe one: the default keeps recall exact with respect
+   * to records the discarded terms have been removed from, while {@link #CANDIDATES_ONLY} keeps the
+   * reported similarities exact with respect to the records as supplied.
+   */
+  public enum PopularTermDiscardScope {
+    /**
+     * The term is absent from candidate generation and from verification, so a search reports the
+     * similarity between the records that remain once it is removed from both. Every record within
+     * the threshold of the query, measured that same way, is found.
+     */
+    CANDIDATES_AND_VERIFICATION("candidates_and_verification"),
+
+    /**
+     * The term is absent from candidate generation only, so a search reports the similarity between
+     * the records as supplied, including their discarded terms. Results are not complete: candidate
+     * generation prunes on similarity measured without the discarded terms, and removing a shared
+     * term can only lower that measure, so a record within the threshold of the query can be pruned
+     * before verification ever scores it. How much is lost depends on how much of the similarity
+     * the discarded terms carried.
+     */
+    CANDIDATES_ONLY("candidates_only");
+
+    private final String paramValue;
+
+    PopularTermDiscardScope(String paramValue) {
+      this.paramValue = paramValue;
+    }
+
+    public String getParamValue() {
+      return paramValue;
+    }
   }
 
   /** Candidate-generation strategy for immutable sparse indexes. */
@@ -217,14 +296,14 @@ public final class NamespaceConfig {
     SPARS("spars"),
     SPARS_MERGE("spars_merge");
 
-    private final String indexParamValue;
+    private final String paramValue;
 
-    SparseCandidateGenerator(String indexParamValue) {
-      this.indexParamValue = indexParamValue;
+    SparseCandidateGenerator(String paramValue) {
+      this.paramValue = paramValue;
     }
 
-    public String getIndexParamValue() {
-      return indexParamValue;
+    public String getParamValue() {
+      return paramValue;
     }
   }
 

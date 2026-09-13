@@ -37,6 +37,31 @@ class CacheConfigValidatorTest {
                 .cacheType("generic")
                 .cacheParams(Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0")),
         true),
+    /*
+     * The sparse cache keys its inverted lists by the record's own terms and reads a value per
+     * term, neither of which an ordered sequence supplies, so such a namespace caches generically.
+     */
+    new ValidationCase(
+        "sparse cache with a sequence comparator",
+        builder -> builder.comparatorType("ngld").comparatorNormalizerType("complement"),
+        false),
+    /*
+     * An unknown comparator has no answer to what it reads, and ComparatorConfigValidator already
+     * reports the name, so this validator stays quiet rather than reporting a consequence of it.
+     */
+    new ValidationCase(
+        "sparse cache with a comparator that cannot be created",
+        builder -> builder.comparatorType("cosine"),
+        true),
+    new ValidationCase(
+        "generic cache with a sequence comparator",
+        builder ->
+            builder
+                .cacheType("generic")
+                .indexType("sequence")
+                .comparatorType("ngld")
+                .comparatorNormalizerType("complement"),
+        true),
   };
 
   @Test

@@ -19,6 +19,15 @@ public final class SignatureIndex extends BaseSparseIndex {
     super(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap, SparseKeyType.SIGNATURE);
   }
 
+  /**
+   * The keys are signatures rather than terms, but the signature generator and the comparator that
+   * verifies the candidates both read a row as a sparse record, so a row still has to be one.
+   */
+  @Override
+  protected void validateRecordType(LongTermsAndValues termsAndValues, String source) {
+    validateSparseRecordType(termsAndValues, source);
+  }
+
   @Override
   protected double getMinPrefixSum(double sparseKeysUniValue, double minSimilarity) {
     return getSignatureComparator()
@@ -27,8 +36,8 @@ public final class SignatureIndex extends BaseSparseIndex {
 
   @Override
   protected SparseKeyAndUniTransformedValue[] getSparseKeysAndUniTransformedValues(
-      LongTermsAndValues termsAndValues) {
-    long[] sparseKeys = getDistinctSortedSparseKeys(termsAndValues);
+      LongTermsAndValues indexedRecord) {
+    long[] sparseKeys = getDistinctSortedSparseKeys(indexedRecord);
     SparseKeyAndUniTransformedValue[] sparseKeysAndValues =
         new SparseKeyAndUniTransformedValue[sparseKeys.length];
     double signatureUniTransformedValue =
@@ -40,22 +49,28 @@ public final class SignatureIndex extends BaseSparseIndex {
     return sparseKeysAndValues;
   }
 
+  /**
+   * Returns the record's distinct signatures. A record's signatures routinely collide with each
+   * other, so unlike terms they have to be deduplicated before they can serve as keys.
+   */
   @Override
-  protected long[] getSparseKeys(LongTermsAndValues termsAndValues) {
-    if (termsAndValues.termsLength() == 0) {
+  protected long[] getSparseKeys(LongTermsAndValues indexedRecord) {
+    if (indexedRecord.termsLength() == 0) {
       return new long[0];
     }
-    return getSignatureComparator().getSignatures(termsAndValues, Constants.NUM_SIGNATURES_PER_ID);
+    return LongHashSet.from(
+            getSignatureComparator().getSignatures(indexedRecord, Constants.NUM_SIGNATURES_PER_ID))
+        .toArray();
   }
 
-  private long[] getDistinctSortedSparseKeys(LongTermsAndValues termsAndValues) {
-    long[] sparseKeys = LongHashSet.from(getSparseKeys(termsAndValues)).toArray();
+  private long[] getDistinctSortedSparseKeys(LongTermsAndValues indexedRecord) {
+    long[] sparseKeys = getSparseKeys(indexedRecord);
     Arrays.sort(sparseKeys);
     return sparseKeys;
   }
 
   @Override
-  protected float getValueAtSparseKey(LongTermsAndValues termsAndValues, long sparseKey) {
+  protected float getValueAtSparseKey(LongTermsAndValues indexedRecord, long sparseKey) {
     return (float) getSignatureComparator().getSignatureUniTransformedValue();
   }
 }

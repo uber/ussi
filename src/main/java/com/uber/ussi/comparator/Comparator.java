@@ -3,11 +3,13 @@ package com.uber.ussi.comparator;
 
 import com.uber.ussi.comparatornormalizer.ComparatorNormalizer;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
+import com.uber.ussi.entity.termsandvalues.RecordType;
 import com.uber.ussi.error.ArraysSizeMismatchError;
 import com.uber.ussi.utils.Constants;
 import com.uber.ussi.utils.MathUtils;
 import java.io.Serializable;
 import java.util.Objects;
+import java.util.Set;
 
 public abstract class Comparator implements Serializable {
 
@@ -46,7 +48,7 @@ public abstract class Comparator implements Serializable {
               "The comparator was called on TermsAndValues with unset uniValues (%s), (%s).",
               termsAndValues1, termsAndValues2));
     }
-    LongTermsAndValues.verifyComparablePair(termsAndValues1, termsAndValues2);
+    LongTermsAndValues.validateComparablePair(termsAndValues1, termsAndValues2);
     if (!mayPassLengthFiltering(
         /* uniValue1 */ termsAndValues1.getUniValue(),
         /* uniValue2 */ termsAndValues2.getUniValue(),
@@ -70,6 +72,14 @@ public abstract class Comparator implements Serializable {
   }
 
   public abstract double getUniTransformedValue(float value);
+
+  /**
+   * Returns the unilateral value of a record's canonical arrays. Comparators whose records carry
+   * no values, such as the sequence comparators, derive it from the terms instead.
+   */
+  public double computeUniValue(long[] terms, float[] values) {
+    return computeUniValue(values);
+  }
 
   /** Returns the unilateral value used to length-filter records in an index. */
   public double computeUniValue(float[] values) {
@@ -143,6 +153,17 @@ public abstract class Comparator implements Serializable {
     return true;
   }
 
+  /**
+   * Returns every {@link RecordType} this comparator can read, which is what decides the
+   * searchable structures it can be paired with. There is no default: a comparator is defined as
+   * much by the layout it reads as by the similarity it computes, so each one states its own set
+   * rather than inheriting one record type as the norm and overriding for the rest.
+   *
+   * <p>A comparator may read more than one record type. A structure that stores a single record
+   * type is compatible with a comparator when that type is in this set.
+   */
+  public abstract Set<RecordType> getSupportedRecordTypes();
+
   /*
    * Merge candidate generation accumulates a conjunction: the part of the similarity that the query
    * and an indexed row derive from the sparse keys they share. What that means is up to each
@@ -150,6 +171,18 @@ public abstract class Comparator implements Serializable {
    * for L2 it is the squared distance over the shared keys. Comparators that leave these
    * unimplemented cannot be paired with the merge generator.
    */
+
+  /**
+   * Returns whether this comparator can generate candidates by merging inverted lists, which is
+   * exactly whether it implements the conjunction methods below.
+   *
+   * <p>Comparators that cannot must say so here rather than relying on those methods throwing, so
+   * that a config pairing one with the merge generator is rejected up front instead of failing
+   * partway through a search.
+   */
+  public boolean supportsMergeCandidateGeneration() {
+    return false;
+  }
 
   /** Returns what one sparse key the query and an indexed row share adds to the conjunction. */
   public double conjunctionContribution(float value1, float value2) {

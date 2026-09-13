@@ -40,6 +40,8 @@ import org.junit.jupiter.api.Test;
 
 class InvertedIndexTest {
   private static final float DELTA = 1e-6f;
+  private static final String CANDIDATES_ONLY =
+      NamespaceConfig.PopularTermDiscardScope.CANDIDATES_ONLY.getParamValue();
 
   @Test
   void constructorBuildsForwardAndUniValueSortedInvertedIndexes() {
@@ -60,7 +62,7 @@ class InvertedIndexTest {
   }
 
   @Test
-  void highFrequencyTermsAreRemovedFromComparisonRowsButNotConsolidationRows() {
+  void highFrequencyTermsAreRemovedFromVerificationRowsButNotConsolidationRows() {
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
     rows.put(1, jaccard(new long[] {1, 2}, 1, 1));
     rows.put(2, jaccard(new long[] {1, 3}, 1, 1));
@@ -72,9 +74,9 @@ class InvertedIndexTest {
             rows,
             longObjectMap());
 
-    assertArrayEquals(new long[] {1}, index.getFilteredOutTermsForTests());
+    assertArrayEquals(new long[] {1}, index.getDiscardedTermsForTests());
     assertArrayEquals(new long[0], index.getRowNumsForSparseKeyForTests(1));
-    assertArrayEquals(new long[] {2}, index.getComparisonTermsAndValues(1).getTerms());
+    assertArrayEquals(new long[] {2}, index.getVerificationRow(1).getTerms());
     assertArrayEquals(new long[] {1, 2}, index.getAll().get(1).getTerms());
 
     List<RowNumAndSimilarity> result =
@@ -82,6 +84,112 @@ class InvertedIndexTest {
     assertEquals(List.of(1L), rowNumsNearestFirst(result));
     assertTrue(
         index.getNearestNeighborRowNums(1, jaccard(new long[] {1}, 1), MetaFilter.empty()).isEmpty());
+  }
+
+  @Test
+  void candidatesOnlyKeepsTheHighFrequencyTermsInTheVerificationRows() {
+    LongObjectHashMap<LongTermsAndValues> rows = popularTermRows();
+    Map<String, String> params =
+        Map.of(
+            Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0.5",
+            Constants.POPULAR_TERM_DISCARD_SCOPE, CANDIDATES_ONLY);
+    InvertedIndex index = new InvertedIndex(config("jaccard", params), rows, longObjectMap());
+
+    // Candidate generation is unchanged: the discarded term still keys no list.
+    assertArrayEquals(new long[] {1}, index.getDiscardedTermsForTests());
+    assertArrayEquals(new long[0], index.getRowNumsForSparseKeyForTests(1));
+    // Scoring is what changes: the rows keep the discarded term.
+    assertArrayEquals(new long[] {1, 2}, index.getVerificationRow(1).getTerms());
+
+    /*
+     * Row 1 is reached through term 2 and then scored as the caller supplied it, so it is two
+     * terms out of three rather than the one out of two that the discard would have made it.
+     */
+    List<RowNumAndSimilarity> results =
+        index.getSimilarRowNums(0.4f, jaccard(new long[] {1, 2, 6}, 1, 1, 1), MetaFilter.empty());
+    assertEquals(List.of(1L), rowNumsNearestFirst(results));
+    assertEquals(2.0f / 3.0f, results.get(0).getSimilarity(), DELTA);
+  }
+
+  @Test
+  void candidatesAndVerificationScoresTheSameQueryWithoutTheHighFrequencyTerms() {
+    LongObjectHashMap<LongTermsAndValues> rows = popularTermRows();
+    InvertedIndex index =
+        new InvertedIndex(
+            config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0.5")),
+            rows,
+            longObjectMap());
+
+    // The same row and query as above, scored without term 1 on either side: one term out of two.
+    List<RowNumAndSimilarity> results =
+        index.getSimilarRowNums(0.4f, jaccard(new long[] {1, 2, 6}, 1, 1, 1), MetaFilter.empty());
+    assertEquals(List.of(1L), rowNumsNearestFirst(results));
+    assertEquals(0.5f, results.get(0).getSimilarity(), DELTA);
+  }
+
+  @Test
+  void candidatesOnlyMissesTheRowsThatOnlyADiscardedTermWouldHaveReached() {
+    LongObjectHashMap<LongTermsAndValues> rows = popularTermRows();
+    Map<String, String> params =
+        Map.of(
+            Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0.5",
+            Constants.POPULAR_TERM_DISCARD_SCOPE, CANDIDATES_ONLY);
+    InvertedIndex index = new InvertedIndex(config("jaccard", params), rows, longObjectMap());
+
+    /*
+     * Rows 1, 2 and 3 all share term 1 with this query, so scored as supplied each is one term out
+     * of two. None of them is reachable, because term 1 is the only key the query has and its list
+     * is the one the discard emptied. This is the recall the scope trades away.
+     */
+    assertTrue(
+        index
+            .getSimilarRowNums(0.4f, jaccard(new long[] {1}, 1), MetaFilter.empty())
+            .isEmpty());
+  }
+
+  @Test
+  void candidatesOnlyStillPrunesOnTheSimilarityThatExcludesTheDiscardedTerms() {
+    LongObjectHashMap<LongTermsAndValues> rows = popularTermRows();
+    Map<String, String> params =
+        Map.of(
+            Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0.5",
+            Constants.POPULAR_TERM_DISCARD_SCOPE, CANDIDATES_ONLY);
+    InvertedIndex index = new InvertedIndex(config("jaccard", params), rows, longObjectMap());
+
+    /*
+     * Scored as supplied, row 1 is two terms out of three against this query, which clears a 0.6
+     * threshold. It is still pruned, because length filtering can only bound the similarity that
+     * excludes term 1, and that bound is one term out of two. A threshold above what the surviving
+     * terms alone can reach therefore rejects rows the verification would have accepted, which is
+     * the same recall trade seen from the threshold's side rather than the query's.
+     */
+    assertTrue(
+        index
+            .getSimilarRowNums(0.6f, jaccard(new long[] {1, 2, 6}, 1, 1, 1), MetaFilter.empty())
+            .isEmpty());
+  }
+
+  @Test
+  void candidatesOnlyStopsTheMergeFromScoringRowsFromTheConjunction() {
+    LongObjectHashMap<LongTermsAndValues> rows = popularTermRows();
+    Map<String, String> params =
+        Map.of(
+            Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0.5",
+            Constants.POPULAR_TERM_DISCARD_SCOPE, CANDIDATES_ONLY,
+            Constants.SPARSE_CANDIDATE_GENERATOR,
+                NamespaceConfig.SparseCandidateGenerator.SPARS_MERGE.getParamValue());
+    InvertedIndex index =
+        new InvertedIndex(config("jaccard", params, "inverted"), rows, longObjectMap());
+
+    /*
+     * A conjunction accumulated from the inverted lists can only report the similarity that
+     * excludes the discarded terms, so under this scope the merge has to verify each candidate
+     * through the comparator instead. It therefore reports the same score the filtered scan does.
+     */
+    List<RowNumAndSimilarity> results =
+        index.getSimilarRowNums(0.4f, jaccard(new long[] {1, 2, 6}, 1, 1, 1), MetaFilter.empty());
+    assertEquals(List.of(1L), rowNumsNearestFirst(results));
+    assertEquals(2.0f / 3.0f, results.get(0).getSimilarity(), DELTA);
   }
 
   @Test
@@ -102,7 +210,7 @@ class InvertedIndexTest {
             rows,
             longObjectMap());
 
-    assertArrayEquals(new long[] {1}, index.getFilteredOutTermsForTests());
+    assertArrayEquals(new long[] {1}, index.getDiscardedTermsForTests());
   }
 
   @Test
@@ -390,11 +498,11 @@ class InvertedIndexTest {
   }
 
   @Test
-  void invertedSearchSkipsAnEmptyComparisonRow() throws ReflectiveOperationException {
+  void invertedSearchSkipsAnEmptyVerificationRow() throws ReflectiveOperationException {
     InvertedIndex index =
         new InvertedIndex(
             config("jaccard"), longObjectMap(1, jaccard(new long[] {1}, 1)), longObjectMap());
-    comparisonRows(index)
+    verificationRows(index)
         .put(1, LongTermsAndValuesTestFactory.create(new long[0], new float[0], 0.0));
 
     assertTrue(
@@ -609,43 +717,51 @@ class InvertedIndexTest {
    */
   @Test
   void mergeResultsMatchFilteredScanUnderEveryMetadataFilteringStrategy() {
-    for (String strategy : List.of("auto", "pre_filtering", "in_filtering", "post_filtering")) {
-      Random random = new Random(5_512L + strategy.hashCode());
-      LongObjectHashMap<LongTermsAndValues> rows = randomRows(random, "jaccard", 40);
-      LongObjectHashMap<LongMeta> metadata = longObjectMap();
-      for (LongObjectCursor<LongTermsAndValues> row : rows) {
-        metadata.put(row.key, longMeta("city", row.key % 2 == 0 ? "sf" : "la"));
-      }
-      Map<String, String> strategyParams =
-          Map.of(
-              Index.METADATA_FILTERING_STRATEGY, strategy,
-              Index.MAX_PRE_FILTERING_ROWS_RATIO, "0.9");
-      InvertedIndex filteredScanIndex =
-          new InvertedIndex(config("jaccard", strategyParams, "inverted"), rows, metadata);
-      InvertedIndex mergeIndex =
-          new InvertedIndex(
-              config("jaccard", withMergeParam(strategyParams), "inverted"), rows, metadata);
-      MetaFilter sf = new MetaFilter(Map.of("city", List.of("sf")));
+    for (String comparatorType : List.of("jaccard", "l2")) {
+      for (String strategy : List.of("auto", "pre_filtering", "in_filtering", "post_filtering")) {
+        Random random = new Random(5_512L + strategy.hashCode() + comparatorType.hashCode());
+        LongObjectHashMap<LongTermsAndValues> rows = randomRows(random, comparatorType, 40);
+        LongObjectHashMap<LongMeta> metadata = longObjectMap();
+        for (LongObjectCursor<LongTermsAndValues> row : rows) {
+          metadata.put(row.key, longMeta("city", row.key % 2 == 0 ? "sf" : "la"));
+        }
+        Map<String, String> strategyParams =
+            Map.of(
+                Index.METADATA_FILTERING_STRATEGY, strategy,
+                Index.MAX_PRE_FILTERING_ROWS_RATIO, "0.9");
+        InvertedIndex filteredScanIndex =
+            new InvertedIndex(config(comparatorType, strategyParams, "inverted"), rows, metadata);
+        InvertedIndex mergeIndex =
+            new InvertedIndex(
+                config(comparatorType, withMergeParam(strategyParams), "inverted"), rows, metadata);
+        MetaFilter sf = new MetaFilter(Map.of("city", List.of("sf")));
 
-      for (int queryIndex = 0; queryIndex < 20; ++queryIndex) {
-        LongTermsAndValues query = randomSparseRecord(random, "jaccard");
-        int k = 1 + random.nextInt(8);
-        assertEquivalent(
-            strategy + " merge nearest queryIndex=" + queryIndex + " k=" + k,
-            filteredScanIndex.getNearestNeighborRowNums(k, query, sf),
-            mergeIndex.getNearestNeighborRowNums(k, query, sf));
-        assertEquivalent(
-            strategy + " merge threshold queryIndex=" + queryIndex,
-            filteredScanIndex.getSimilarRowNums(0.2f, query, sf),
-            mergeIndex.getSimilarRowNums(0.2f, query, sf));
+        for (int queryIndex = 0; queryIndex < 20; ++queryIndex) {
+          LongTermsAndValues query = randomSparseRecord(random, comparatorType);
+          int k = 1 + random.nextInt(8);
+          assertEquivalent(
+              comparatorType
+                  + " "
+                  + strategy
+                  + " merge nearest queryIndex="
+                  + queryIndex
+                  + " k="
+                  + k,
+              filteredScanIndex.getNearestNeighborRowNums(k, query, sf),
+              mergeIndex.getNearestNeighborRowNums(k, query, sf));
+          assertEquivalent(
+              comparatorType + " " + strategy + " merge threshold queryIndex=" + queryIndex,
+              filteredScanIndex.getSimilarRowNums(0.2f, query, sf),
+              mergeIndex.getSimilarRowNums(0.2f, query, sf));
+        }
       }
     }
   }
 
   /**
-   * Sparse-key popularity filtering makes the comparison rows differ from the indexed rows, so the
-   * metadata pre-filtering path can only agree with the merge path if it scores the comparison
-   * rows too.
+   * Sparse-key popularity filtering makes the verification rows differ from the indexed rows, so
+   * the metadata pre-filtering path can only agree with the merge path if it scores the
+   * verification rows too.
    */
   @Test
   void mergeResultsMatchFilteredScanWhenPopularSparseKeysAreDropped() {
@@ -665,8 +781,8 @@ class InvertedIndexTest {
     InvertedIndex mergeIndex =
         new InvertedIndex(
             config("jaccard", withMergeParam(popularityParams), "inverted"), rows, metadata);
-    assertTrue(mergeIndex.hasSparseKeyPopularityFiltering());
-    assertTrue(mergeIndex.getFilteredOutTermsForTests().length > 0);
+    assertTrue(mergeIndex.discardsPopularSparseKeys());
+    assertTrue(mergeIndex.getDiscardedTermsForTests().length > 0);
     MetaFilter sf = new MetaFilter(Map.of("city", List.of("sf")));
 
     for (int queryIndex = 0; queryIndex < 20; ++queryIndex) {
@@ -683,11 +799,57 @@ class InvertedIndexTest {
     }
   }
 
+  /**
+   * Every caller asks for a key the record it hands over actually has, so this only fires if one
+   * stops doing that. It is checked rather than returning whatever value happens to sit at the
+   * insertion point, which would be scored as if the record carried a term it does not.
+   */
+  @Test
+  void readingAValueAtAnAbsentSparseKeyIsRejected() {
+    LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
+    rows.put(1, jaccard(new long[] {2, 4, 6}, 1, 1, 1));
+    InvertedIndex index = new InvertedIndex(config("jaccard"), rows, longObjectMap());
+    LongTermsAndValues record = rows.get(1);
+
+    assertEquals(1.0f, index.getValueAtSparseKey(record, 4), DELTA);
+    for (long absentKey : new long[] {1, 3, 5, 7}) {
+      assertThrows(
+          IllegalArgumentException.class,
+          () -> index.getValueAtSparseKey(record, absentKey),
+          "key " + absentKey);
+    }
+  }
+
+  /** A query key the index has no list for contributes nothing and no frontier entry either. */
+  @Test
+  void mergeSkipsTheQueryKeysThatKeyNoInvertedList() {
+    LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
+    rows.put(1, jaccard(new long[] {1, 2}, 1, 1));
+    rows.put(2, jaccard(new long[] {3, 4}, 1, 1));
+    InvertedIndex index = new InvertedIndex(mergeConfig("jaccard"), rows, longObjectMap());
+
+    List<RowNumAndSimilarity> results =
+        index.getSimilarRowNums(0.2f, jaccard(new long[] {1, 2, 99}, 1, 1, 1), MetaFilter.empty());
+
+    assertEquals(List.of(1L), rowNumsNearestFirst(results));
+    assertEquals(2.0f / 3.0f, results.get(0).getSimilarity(), DELTA);
+  }
+
+  /** Four jaccard rows in which term 1 is popular enough to be discarded at a 0.5 cap. */
+  private static LongObjectHashMap<LongTermsAndValues> popularTermRows() {
+    LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
+    rows.put(1, jaccard(new long[] {1, 2}, 1, 1));
+    rows.put(2, jaccard(new long[] {1, 3}, 1, 1));
+    rows.put(3, jaccard(new long[] {1, 4}, 1, 1));
+    rows.put(4, jaccard(new long[] {5}, 1));
+    return rows;
+  }
+
   private static Map<String, String> withMergeParam(Map<String, String> indexParams) {
     Map<String, String> merged = new LinkedHashMap<>(indexParams);
     merged.put(
         Constants.SPARSE_CANDIDATE_GENERATOR,
-        NamespaceConfig.SparseCandidateGenerator.SPARS_MERGE.getIndexParamValue());
+        NamespaceConfig.SparseCandidateGenerator.SPARS_MERGE.getParamValue());
     return merged;
   }
 
@@ -696,7 +858,7 @@ class InvertedIndexTest {
         comparatorType,
         Map.of(
             Constants.SPARSE_CANDIDATE_GENERATOR,
-            NamespaceConfig.SparseCandidateGenerator.SPARS_MERGE.getIndexParamValue()),
+            NamespaceConfig.SparseCandidateGenerator.SPARS_MERGE.getParamValue()),
         "inverted");
   }
 
@@ -749,9 +911,9 @@ class InvertedIndexTest {
   }
 
   @SuppressWarnings("unchecked")
-  private static LongObjectHashMap<LongTermsAndValues> comparisonRows(BaseSparseIndex index)
+  private static LongObjectHashMap<LongTermsAndValues> verificationRows(BaseSparseIndex index)
       throws ReflectiveOperationException {
-    Field field = BaseSparseIndex.class.getDeclaredField("comparisonRowNumToTermsAndValuesMap");
+    Field field = BaseSparseIndex.class.getDeclaredField("verificationRowNumToTermsAndValuesMap");
     field.setAccessible(true);
     return (LongObjectHashMap<LongTermsAndValues>) field.get(index);
   }
@@ -926,6 +1088,11 @@ class InvertedIndexTest {
     }
 
     @Override
+    protected void validateRecordType(LongTermsAndValues termsAndValues, String source) {
+      validateSparseRecordType(termsAndValues, source);
+    }
+
+    @Override
     protected double getMinPrefixSum(double sparseKeysUniValue, double minSimilarity) {
       lastSparseKeysUniValue = sparseKeysUniValue;
       return Double.POSITIVE_INFINITY;
@@ -961,6 +1128,11 @@ class InvertedIndexTest {
         LongObjectHashMap<LongMeta> rowNumToMetaMap) {
       super(
           namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap, SparseKeyType.EXACT_TERM);
+    }
+
+    @Override
+    protected void validateRecordType(LongTermsAndValues termsAndValues, String source) {
+      validateSparseRecordType(termsAndValues, source);
     }
 
     @Override

@@ -5,6 +5,9 @@ import com.uber.ussi.comparatornormalizer.ComparatorNormalizer;
 import com.uber.ussi.comparatornormalizer.ComparatorNormalizerFactory;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.error.ComparatorCreationError;
+import com.uber.ussi.sequencedistance.SequenceDistance;
+import com.uber.ussi.sequencedistance.SequenceDistanceFactory;
+import com.uber.ussi.sequencedistance.SequenceDistanceFactory.SequenceDistanceType;
 import com.uber.ussi.signaturegenerator.SignatureGenerator;
 import com.uber.ussi.signaturegenerator.SignatureGeneratorFactory;
 import com.uber.ussi.signaturegenerator.SignatureGeneratorFactory.SignatureGeneratorType;
@@ -19,21 +22,44 @@ public class ComparatorFactory {
   private ComparatorFactory() {}
 
   public enum COMPARATOR_TYPE {
-    L2,
+    GLD,
     JACCARD,
+    L2,
+    NGLD,
     RUZICKA
+  }
+
+  /** Returns whether the comparator type is one this factory can create. */
+  public static boolean isSupportedComparatorType(String comparatorType) {
+    if (comparatorType == null) {
+      return false;
+    }
+    for (COMPARATOR_TYPE supportedType : COMPARATOR_TYPE.values()) {
+      if (supportedType.name().equalsIgnoreCase(comparatorType.trim())) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Returns whether the comparator type compares sequences of elements rather than values. */
+  static boolean isSequenceComparatorType(String comparatorType) {
+    String trimmedComparatorType = comparatorType.trim();
+    return COMPARATOR_TYPE.GLD.name().equalsIgnoreCase(trimmedComparatorType)
+        || COMPARATOR_TYPE.NGLD.name().equalsIgnoreCase(trimmedComparatorType);
   }
 
   /**
    * Returns the signature generators the comparator type accepts, empty when it cannot generate
    * signatures at all. This is the single source of truth for both creation and config validation.
    */
-  static Set<SignatureGeneratorType> getSupportedSignatureGeneratorTypes(String comparatorType) {
-    String comparatorTypeLowerCase = comparatorType.toLowerCase(Locale.ROOT);
-    if (comparatorTypeLowerCase.equals(COMPARATOR_TYPE.JACCARD.name().toLowerCase(Locale.ROOT))) {
+  public static Set<SignatureGeneratorType> getSupportedSignatureGeneratorTypes(
+      String comparatorType) {
+    String trimmedComparatorType = comparatorType.trim();
+    if (COMPARATOR_TYPE.JACCARD.name().equalsIgnoreCase(trimmedComparatorType)) {
       return Set.of(SignatureGeneratorType.MINHASH);
     }
-    if (comparatorTypeLowerCase.equals(COMPARATOR_TYPE.RUZICKA.name().toLowerCase(Locale.ROOT))) {
+    if (COMPARATOR_TYPE.RUZICKA.name().equalsIgnoreCase(trimmedComparatorType)) {
       return Set.of(
           SignatureGeneratorType.I2CWS,
           SignatureGeneratorType.ICWS,
@@ -65,6 +91,18 @@ public class ComparatorFactory {
           comparatorNormalizer,
           createSignatureGenerator(comparatorParams, comparatorTypeLowerCase));
     }
+    if (isSequenceComparatorType(comparatorTypeLowerCase)) {
+      if (comparatorParams.containsKey(Constants.SIGNATURE_GENERATOR_TYPE)) {
+        throw new ComparatorCreationError(
+            String.format(
+                "%s does not support signature generation.",
+                comparatorTypeLowerCase.toUpperCase(Locale.ROOT)));
+      }
+      SequenceDistance sequenceDistance = createSequenceDistance(comparatorParams);
+      return comparatorTypeLowerCase.equals(COMPARATOR_TYPE.GLD.name().toLowerCase(Locale.ROOT))
+          ? new GldComparator(comparatorNormalizer, sequenceDistance)
+          : new NgldComparator(comparatorNormalizer, sequenceDistance);
+    }
     throw new ComparatorCreationError(
         String.format("Unsupported Comparator type (%s).", comparatorTypeLowerCase));
   }
@@ -77,6 +115,39 @@ public class ComparatorFactory {
         ComparatorNormalizerFactory.createComparatorNormalizer(
             namespaceConfig.getComparatorNormalizerType(),
             namespaceConfig.getComparatorNormalizerParams()));
+  }
+
+  /**
+   * Returns the configured comparator, or null when the config does not describe one that can be
+   * created. Config validators read this when a check asks what the comparator supports, so that
+   * the reason it cannot be created is reported once, by {@link ComparatorConfigValidator}, rather
+   * than once per check that could not be run.
+   */
+  @Nullable
+  public static Comparator tryCreateComparator(NamespaceConfig namespaceConfig) {
+    try {
+      return createComparator(namespaceConfig);
+    } catch (RuntimeException e) {
+      return null;
+    }
+  }
+
+  /**
+   * Returns the configured edit distance, defaulting to {@link SequenceDistanceType#LEVENSHTEIN}
+   * when the param is absent. This is the single source of truth for both creation and config
+   * validation.
+   */
+  static SequenceDistance createSequenceDistance(Map<String, String> comparatorParams)
+      throws ComparatorCreationError {
+    String configuredType = comparatorParams.get(Constants.SEQUENCE_DISTANCE_TYPE);
+    if (configuredType == null || configuredType.trim().isEmpty()) {
+      return SequenceDistanceFactory.createSequenceDistance(SequenceDistanceType.LEVENSHTEIN);
+    }
+    try {
+      return SequenceDistanceFactory.createSequenceDistance(configuredType);
+    } catch (IllegalArgumentException e) {
+      throw new ComparatorCreationError(e.getMessage());
+    }
   }
 
   @Nullable

@@ -34,19 +34,28 @@ final class SparseFilteredSearch {
 
   private SparseFilteredSearch() {}
 
-  /** Generates and scores candidates for {@code query}. */
+  /**
+   * Generates and scores candidates for {@code query}.
+   *
+   * @param query the query in verification form, which is the only form the comparator can score.
+   * @param indexedQuery the query in indexed form, which is the form the rows behind {@code
+   *     context}'s uni values are in. Length filtering compares the two uni values, so it has to
+   *     read the query's from the same form, not from {@code query}.
+   */
   static List<RowNumAndSimilarity> search(
       Comparator comparator,
       LongTermsAndValues query,
+      LongTermsAndValues indexedQuery,
       @Nullable MetaFilter metadataFilter,
       float minSimilarity,
       int maxResults,
       SparseKeyAndPrefixFilteringData[] queryKeys,
       Context context,
       SparseSearchRowFilter rowFilter,
-      LongFunction<LongTermsAndValues> comparisonRowLookup) {
+      LongFunction<LongTermsAndValues> verificationRowLookup) {
     CandidateIterator candidates =
-        new CandidateIterator(comparator, context, queryKeys, query.getUniValue(), minSimilarity);
+        new CandidateIterator(
+            comparator, context, queryKeys, indexedQuery.getUniValue(), minSimilarity);
     BoundedSizeMaxHeap<RowNumAndSimilarity> rows =
         SparseSearchResults.newTopResultsHeap(maxResults);
     double currentMinSimilarity = minSimilarity;
@@ -55,7 +64,7 @@ final class SparseFilteredSearch {
       if (!rowFilter.canScore(rowNum, metadataFilter)) {
         continue;
       }
-      LongTermsAndValues termsAndValues2 = comparisonRowLookup.apply(rowNum);
+      LongTermsAndValues termsAndValues2 = verificationRowLookup.apply(rowNum);
       if (termsAndValues2 == null || termsAndValues2.termsLength() == 0) {
         continue;
       }

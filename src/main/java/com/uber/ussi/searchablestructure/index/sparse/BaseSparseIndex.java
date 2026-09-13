@@ -10,6 +10,7 @@ import com.carrotsearch.hppc.cursors.LongIntCursor;
 import com.carrotsearch.hppc.cursors.LongObjectCursor;
 import com.uber.ussi.comparator.SignatureComparator;
 import com.uber.ussi.config.NamespaceConfig;
+import com.uber.ussi.config.NamespaceConfig.PopularTermDiscardScope;
 import com.uber.ussi.config.NamespaceConfig.SparseCandidateGenerator;
 import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.meta.MetaFilter;
@@ -30,17 +31,38 @@ import java.util.List;
 import java.util.Objects;
 import javax.annotation.Nullable;
 
-/** Shared sparse-key index implementation with length and unordered-prefix filtering. */
+/**
+ * Shared sparse-key index implementation with length and unordered-prefix filtering.
+ *
+ * <p>A record travels through a search in two derived forms, and the names are used consistently
+ * throughout this package:
+ *
+ * <ul>
+ *   <li><b>indexed</b> is the form a record would take if it were added to this index: the form
+ *       whose terms are the inverted-list keys. It is what candidate generation probes and what the
+ *       shared-key test reads. For most indexes it is the record itself; see {@link
+ *       #toIndexedRecord}.
+ *   <li><b>verification</b> is the form the comparator scores once candidate generation has
+ *       proposed a row, which is the record as supplied, minus any high-popularity terms dropped at
+ *       build time. It is never derived from the indexed form, so an index may key its lists by
+ *       something the comparator would not recognize.
+ * </ul>
+ *
+ * <p>Both forms always report the same Uni value, so length and prefix filtering read the same
+ * bound whichever one reaches them.
+ */
 abstract class BaseSparseIndex extends Index {
   private static final long[] EMPTY_ROW_NUMS = new long[0];
   private static final float[] EMPTY_VALUES = new float[0];
 
   @Nullable private final SignatureComparator signatureComparator;
   private final SparseCandidateGenerator sparseCandidateGenerator;
+  private final PopularTermDiscardScope popularTermDiscardScope;
   private final boolean scoresFromConjunction;
   private final double maxFractionIdsPerSparseKey;
-  private final LongHashSet filteredOutTerms;
-  private final LongObjectHashMap<LongTermsAndValues> comparisonRowNumToTermsAndValuesMap;
+  private final LongHashSet discardedTerms;
+  private final LongObjectHashMap<LongTermsAndValues> verificationRowNumToTermsAndValuesMap;
+  private final LongObjectHashMap<LongTermsAndValues> indexedRowNumToTermsAndValuesMap;
   private final LongDoubleHashMap rowNumToUniValue;
   private final LongObjectHashMap<SparseInvertedList> sparseKeyToInvertedList;
   private final MetadataFilteredSearchExecutor metadataFilteredSearchExecutor;
@@ -60,16 +82,28 @@ abstract class BaseSparseIndex extends Index {
           "A signature-based index requires a comparator with a configured signature generator.");
     }
     this.sparseCandidateGenerator = namespaceConfig.getSparseCandidateGenerator();
+    this.popularTermDiscardScope = namespaceConfig.getIndexPopularTermDiscardScope();
+    /*
+     * A conjunction is accumulated from the inverted lists, which are keyed and valued by the
+     * discarded-term-free indexed rows, so it can only ever report the similarity that excludes
+     * them. Under CANDIDATES_ONLY the caller asked for the other one, so the merge verifies each
+     * candidate through the comparator instead of scoring it from the lists.
+     */
     this.scoresFromConjunction =
         sparseCandidateGenerator == SparseCandidateGenerator.SPARS_MERGE
-            && sparseKeyType.supportsConjunctionScoring();
+            && sparseKeyType.supportsConjunctionScoring()
+            && popularTermDiscardScope == PopularTermDiscardScope.CANDIDATES_AND_VERIFICATION;
     this.maxFractionIdsPerSparseKey = parseMaxFractionIdsPerSparseKey(namespaceConfig);
     validateRows();
-    this.filteredOutTerms = buildFilteredOutTerms();
-    this.comparisonRowNumToTermsAndValuesMap = buildComparisonRows();
-    this.rowNumToUniValue = buildRowNumToUniValue(comparisonRowNumToTermsAndValuesMap);
-    this.sparseKeyToInvertedList =
-        buildSparseInvertedIndex(comparisonRowNumToTermsAndValuesMap);
+    this.discardedTerms = buildDiscardedTerms();
+    LongObjectHashMap<LongTermsAndValues> discardedTermFreeRows = buildDiscardedTermFreeRows();
+    this.verificationRowNumToTermsAndValuesMap =
+        popularTermDiscardScope == PopularTermDiscardScope.CANDIDATES_ONLY
+            ? rowNumToTermsAndValuesMap
+            : discardedTermFreeRows;
+    this.indexedRowNumToTermsAndValuesMap = buildIndexedRows(discardedTermFreeRows);
+    this.rowNumToUniValue = buildRowNumToUniValue(indexedRowNumToTermsAndValuesMap);
+    this.sparseKeyToInvertedList = buildSparseInvertedIndex(indexedRowNumToTermsAndValuesMap);
     this.metadataFilteredSearchExecutor =
         new MetadataFilteredSearchExecutor(
             metadataFilteringStrategy,
@@ -83,12 +117,101 @@ abstract class BaseSparseIndex extends Index {
 
   protected abstract double getMinPrefixSum(double sparseKeysUniValue, double minSimilarity);
 
+  /**
+   * Returns each sparse key of {@code indexedRecord} with the Uni value it contributes.
+   *
+   * @param indexedRecord a record in indexed form, never in verification form.
+   */
   protected abstract SparseKeyAndUniTransformedValue[] getSparseKeysAndUniTransformedValues(
-      LongTermsAndValues termsAndValues);
+      LongTermsAndValues indexedRecord);
 
-  protected abstract long[] getSparseKeys(LongTermsAndValues termsAndValues);
+  /**
+   * Returns the distinct keys whose inverted lists a record belongs in. Deduplicating is the
+   * implementation's job, because only the implementation knows whether its keys can repeat: terms
+   * cannot, whereas the signatures of one record often collide with each other.
+   *
+   * @param indexedRecord a record in indexed form, never in verification form.
+   */
+  protected abstract long[] getSparseKeys(LongTermsAndValues indexedRecord);
 
-  protected abstract float getValueAtSparseKey(LongTermsAndValues termsAndValues, long sparseKey);
+  /**
+   * Returns what {@code indexedRecord} carries at {@code sparseKey}.
+   *
+   * @param indexedRecord a record in indexed form, never in verification form.
+   */
+  protected abstract float getValueAtSparseKey(LongTermsAndValues indexedRecord, long sparseKey);
+
+  /**
+   * Returns the indexed form of a record: the form whose terms key the inverted lists, and which
+   * every sparse key, Uni value, and shared-key test is derived from. It defaults to the record
+   * itself, so the indexed and verification forms coincide for the comparators whose records are
+   * already sparse. An order-sensitive index overrides it to index something the sparse machinery
+   * can traverse while still scoring the record it was given; see {@link SequenceIndex}.
+   */
+  protected LongTermsAndValues toIndexedRecord(LongTermsAndValues termsAndValues) {
+    return termsAndValues;
+  }
+
+  /**
+   * Validates a row, throwing {@link IllegalArgumentException} when it does not qualify. Only the
+   * requirements every sparse index shares live here: a record has to be present, has to carry
+   * terms for anything to be keyed by, and has to report the Uni value the comparator derives from
+   * it, because length and prefix filtering read that value rather than recomputing it. Which
+   * record type those terms have to form is the subclass's own requirement, asked for through
+   * {@link #validateRecordType}.
+   *
+   * <p>Rows are checked before the indexed form is derived, so this sees the record as the caller
+   * supplied it.
+   */
+  protected final void validateRecord(LongTermsAndValues termsAndValues, String source) {
+    Objects.requireNonNull(termsAndValues, source + " is null.");
+    if (termsAndValues.termsLength() == 0) {
+      throw new IllegalArgumentException(source + " must have non-empty terms.");
+    }
+    validateRecordType(termsAndValues, source);
+    validateUniValue(termsAndValues, source);
+  }
+
+  /**
+   * Validates that a record has the type this index requires of it, throwing {@link
+   * IllegalArgumentException} when it does not. Implementations state their own requirement and
+   * inherit the rest from {@link #validateRecord}. The ones whose records are sparse share
+   * {@link #validateSparseRecordType} rather than each spelling that requirement out.
+   */
+  protected abstract void validateRecordType(LongTermsAndValues termsAndValues, String source);
+
+  /**
+   * Validates a record is sparse: one value per term, and terms in ascending order without repeats.
+   * This is what the comparators that score two records by walking them in step require, and what
+   * lets a record's own terms serve as inverted-list keys.
+   */
+  protected final void validateSparseRecordType(LongTermsAndValues termsAndValues, String source) {
+    if (termsAndValues.termsLength() != termsAndValues.valuesLength()) {
+      throw new IllegalArgumentException(
+          String.format("%s must have equal non-empty terms and values lengths.", source));
+    }
+    for (int i = 1; i < termsAndValues.termsLength(); ++i) {
+      if (termsAndValues.getTerm(i - 1) >= termsAndValues.getTerm(i)) {
+        throw new IllegalArgumentException(
+            String.format("%s terms must be sorted and distinct.", source));
+      }
+    }
+  }
+
+  /** Validates a record carries the Uni value the configured comparator derives from it. */
+  private void validateUniValue(LongTermsAndValues termsAndValues, String source) {
+    double expectedUniValue = comparator.computeUniValue(termsAndValues);
+    double actualUniValue = termsAndValues.getUniValue();
+    double tolerance = MathUtils.EPSILON_12 * Math.max(1.0, Math.abs(expectedUniValue));
+    if (!Double.isFinite(actualUniValue)
+        || actualUniValue < 0.0
+        || Math.abs(expectedUniValue - actualUniValue) > tolerance) {
+      throw new IllegalArgumentException(
+          String.format(
+              "%s has uniValue %s, expected %s for the configured comparator.",
+              source, actualUniValue, expectedUniValue));
+    }
+  }
 
   protected final SignatureComparator getSignatureComparator() {
     return Objects.requireNonNull(
@@ -127,13 +250,13 @@ abstract class BaseSparseIndex extends Index {
     return sparseKeyToInvertedList.size();
   }
 
-  final long[] getFilteredOutTermsForTests() {
-    long[] terms = filteredOutTerms.toArray();
+  final long[] getDiscardedTermsForTests() {
+    long[] terms = discardedTerms.toArray();
     Arrays.sort(terms);
     return terms;
   }
 
-  final boolean hasSparseKeyPopularityFiltering() {
+  final boolean discardsPopularSparseKeys() {
     return maxFractionIdsPerSparseKey < 1.0;
   }
 
@@ -141,9 +264,20 @@ abstract class BaseSparseIndex extends Index {
     return getRawRowNums(sparseKey).clone();
   }
 
-  /** Returns the row as the comparator sees it, with the high-popularity terms already dropped. */
-  final LongTermsAndValues getComparisonTermsAndValues(long rowNum) {
-    return comparisonRowNumToTermsAndValuesMap.get(rowNum);
+  /**
+   * Returns the row in its verification form: the row as the comparator scores it, which is
+   * without its high-popularity terms unless the discard scope is {@code candidates_only}.
+   */
+  final LongTermsAndValues getVerificationRow(long rowNum) {
+    return verificationRowNumToTermsAndValuesMap.get(rowNum);
+  }
+
+  /**
+   * Returns the row in its indexed form: the form its inverted-list keys were derived from, which
+   * is sparse whatever type the row itself had.
+   */
+  final LongTermsAndValues getIndexedRow(long rowNum) {
+    return indexedRowNumToTermsAndValuesMap.get(rowNum);
   }
 
   /** See {@link SparseFilteredSearch#getFirstMatchingUniValue}. */
@@ -189,27 +323,53 @@ abstract class BaseSparseIndex extends Index {
     if (maxResults == 0 || rowNumToTermsAndValuesMap.isEmpty()) {
       return Collections.emptyList();
     }
-    LongTermsAndValues filteredRecord = record.newWithFilteredTerms(filteredOutTerms, comparator);
-    if (filteredRecord.termsLength() == 0) {
+    LongTermsAndValues discardedTermFreeRecord =
+        record.newWithoutTerms(discardedTerms, comparator);
+    if (discardedTermFreeRecord.termsLength() == 0) {
       return Collections.emptyList();
     }
+    /*
+     * The query is scored in whichever form the discard scope says the rows were kept in, so that
+     * both sides of every comparison carry the same terms, and is always probed in the indexed
+     * form, whose terms are the only ones this index has lists for.
+     */
+    LongTermsAndValues verificationRecord =
+        popularTermDiscardScope == PopularTermDiscardScope.CANDIDATES_ONLY
+            ? record
+            : discardedTermFreeRecord;
+    LongTermsAndValues indexedRecord = toIndexedRecord(discardedTermFreeRecord);
     return metadataFilteredSearchExecutor.search(
         metadataFilter,
         maxResults,
         (resolvedMetadataFilter, resolvedMaxResults) ->
             invertedIndexSearch(
-                filteredRecord, resolvedMetadataFilter, minSimilarity, resolvedMaxResults),
+                verificationRecord,
+                indexedRecord,
+                resolvedMetadataFilter,
+                minSimilarity,
+                resolvedMaxResults),
         (candidateRowNums, resolvedMetadataFilter, resolvedMaxResults) ->
             searchCandidateRows(
-                filteredRecord,
+                verificationRecord,
+                indexedRecord,
                 candidateRowNums,
                 resolvedMetadataFilter,
                 minSimilarity,
                 resolvedMaxResults));
   }
 
+  /**
+   * Generates candidates from the inverted lists and scores them.
+   *
+   * @param query the query in verification form, which is the only form the comparator can score.
+   * @param indexedQuery the query in indexed form, which is the only form whose terms are keys of
+   *     this index. It is needed solely to collect the query's keys, and is passed rather than
+   *     those keys because the two generators want them packaged differently and only one of the
+   *     two packagings is ever built.
+   */
   private List<RowNumAndSimilarity> invertedIndexSearch(
       LongTermsAndValues query,
+      LongTermsAndValues indexedQuery,
       @Nullable MetaFilter metadataFilter,
       float minSimilarity,
       int maxResults) {
@@ -217,56 +377,66 @@ abstract class BaseSparseIndex extends Index {
       return SparseMergeSearch.search(
           comparator,
           query,
+          indexedQuery,
           metadataFilter,
           minSimilarity,
           maxResults,
-          collectSparseMergeSearchQueryKeys(query),
+          collectSparseMergeSearchQueryKeys(indexedQuery),
           searchContext,
           this::canScoreRow,
           scoresFromConjunction,
-          this::getComparisonTermsAndValues);
+          this::getVerificationRow);
     }
     return SparseFilteredSearch.search(
         comparator,
         query,
+        indexedQuery,
         metadataFilter,
         minSimilarity,
         maxResults,
-        collectSparseFilteredSearchQueryKeys(query),
+        collectSparseFilteredSearchQueryKeys(indexedQuery),
         searchContext,
         this::canScoreRow,
-        this::getComparisonTermsAndValues);
+        this::getVerificationRow);
   }
 
   /**
-   * Returns the query's indexed sparse keys, shortest inverted list first so that the merge reaches
-   * its pruning bound on the selective keys before paying for the popular ones.
+   * Returns the sparse keys of a query in indexed form, shortest inverted list first so that the
+   * merge reaches its pruning bound on the selective keys before paying for the popular ones.
    */
-  private SparseMergeSearch.QueryKey[] collectSparseMergeSearchQueryKeys(LongTermsAndValues query) {
-    SparseKeyAndUniTransformedValue[] sparseKeys = getSparseKeysAndUniTransformedValues(query);
+  private SparseMergeSearch.QueryKey[] collectSparseMergeSearchQueryKeys(
+      LongTermsAndValues indexedQuery) {
+    SparseKeyAndUniTransformedValue[] sparseKeys =
+        getSparseKeysAndUniTransformedValues(indexedQuery);
     ArrayList<SparseMergeSearch.QueryKey> queryKeys = new ArrayList<>(sparseKeys.length);
     for (SparseKeyAndUniTransformedValue sparseKey : sparseKeys) {
       SparseInvertedList invertedList = sparseKeyToInvertedList.get(sparseKey.getSparseKey());
-      if (invertedList == null || invertedList.size() == 0) {
-        continue;
+      // A key this index has no rows under contributes nothing, so it gets no frontier entry.
+      if (invertedList != null && invertedList.size() != 0) {
+        queryKeys.add(
+            new SparseMergeSearch.QueryKey(
+                invertedList,
+                getValueAtSparseKey(indexedQuery, sparseKey.getSparseKey()),
+                sparseKey.getUniTransformedValue()));
       }
-      queryKeys.add(
-          new SparseMergeSearch.QueryKey(
-              invertedList,
-              getValueAtSparseKey(query, sparseKey.getSparseKey()),
-              sparseKey.getUniTransformedValue()));
     }
     queryKeys.sort(java.util.Comparator.comparingInt(SparseMergeSearch.QueryKey::getNumRows));
     return queryKeys.toArray(new SparseMergeSearch.QueryKey[0]);
   }
 
   /**
-   * Scores the pre-filtered candidate rows sequentially. The shared-term restriction of the
-   * inverted search is applied here as well, so both metadata filtering strategies return the same
-   * rows.
+   * Scores the pre-filtered candidate rows sequentially. These rows arrived from the metadata index
+   * rather than from an inverted list, so nothing has established that any of them shares a key
+   * with the query. The shared-key restriction of the inverted search is therefore applied here by
+   * hand, so that both metadata filtering strategies return the same rows.
+   *
+   * @param query the query in verification form, which is the only form the comparator can score.
+   * @param indexedQuery the query in indexed form, which is the only form whose terms are keys of
+   *     this index, and so the only one the shared-key test can be run on.
    */
   private List<RowNumAndSimilarity> searchCandidateRows(
       LongTermsAndValues query,
+      LongTermsAndValues indexedQuery,
       LongHashSet candidateRowNums,
       @Nullable MetaFilter metadataFilter,
       float minSimilarity,
@@ -279,24 +449,36 @@ abstract class BaseSparseIndex extends Index {
           scoreRowAndUpdateMinSimilarity(
               rows,
               rowNum.value,
-              getComparisonTermsAndValues(rowNum.value),
+              getVerificationRow(rowNum.value),
               query,
+              indexedQuery,
               metadataFilter,
               currentMinSimilarity);
     }
     return rows.toList();
   }
 
+  /**
+   * @param termsAndValues the row in verification form, paired with {@code query}.
+   * @param query the query in verification form, which is the only form the comparator can score.
+   * @param indexedQuery the query in indexed form, paired against the row's indexed form for the
+   *     shared-key test. The verification forms cannot stand in for these: {@code sharesAnyTerm}
+   *     walks two records in step and so needs the sorted, distinct terms that only the indexed
+   *     form is guaranteed to have.
+   */
   private double scoreRowAndUpdateMinSimilarity(
       BoundedSizeMaxHeap<RowNumAndSimilarity> rows,
       long rowNum,
       @Nullable LongTermsAndValues termsAndValues,
       LongTermsAndValues query,
+      LongTermsAndValues indexedQuery,
       @Nullable MetaFilter metadataFilter,
       double minSimilarity) {
+    LongTermsAndValues indexedRow = getIndexedRow(rowNum);
     if (termsAndValues == null
         || termsAndValues.termsLength() == 0
-        || !query.sharesAnyTerm(termsAndValues)
+        || indexedRow == null
+        || !indexedQuery.sharesAnyTerm(indexedRow)
         || !canScoreRow(rowNum, metadataFilter)) {
       return minSimilarity;
     }
@@ -321,10 +503,11 @@ abstract class BaseSparseIndex extends Index {
         && (metadataFilter == null || matchesMetaFilter(rowNum, metadataFilter));
   }
 
+  /** Returns the sparse keys of a query in indexed form, with each one's prefix-filtering data. */
   private SparseKeyAndPrefixFilteringData[] collectSparseFilteredSearchQueryKeys(
-      LongTermsAndValues termsAndValues) {
+      LongTermsAndValues indexedQuery) {
     SparseKeyAndUniTransformedValue[] sparseKeys =
-        getSparseKeysAndUniTransformedValues(termsAndValues);
+        getSparseKeysAndUniTransformedValues(indexedQuery);
     SparseKeyAndPrefixFilteringData[] sparseKeyData =
         new SparseKeyAndPrefixFilteringData[sparseKeys.length];
     for (int i = 0; i < sparseKeys.length; ++i) {
@@ -352,43 +535,66 @@ abstract class BaseSparseIndex extends Index {
    * maxFractionIdsPerSparseKey) rows. Confidence intervals are only used by the sparse cache, which
    * observes an incrementally growing sample.
    */
-  private LongHashSet buildFilteredOutTerms() {
+  private LongHashSet buildDiscardedTerms() {
     LongIntHashMap numRowsByTerm = new LongIntHashMap();
+    // A row counts once per distinct term, so a term repeated within one row stays one row.
+    LongHashSet termsInRow = new LongHashSet();
     for (LongObjectCursor<LongTermsAndValues> entry : rowNumToTermsAndValuesMap) {
+      termsInRow.clear();
       for (int i = 0; i < entry.value.termsLength(); ++i) {
         long term = entry.value.getTerm(i);
+        if (!termsInRow.add(term)) {
+          continue;
+        }
         int numRows = numRowsByTerm.containsKey(term) ? numRowsByTerm.get(term) + 1 : 1;
         numRowsByTerm.put(term, numRows);
       }
     }
     int maxNumRowsPerTerm =
         (int) Math.floor(rowNumToTermsAndValuesMap.size() * maxFractionIdsPerSparseKey);
-    LongHashSet termsToFilter = new LongHashSet();
+    LongHashSet popularTerms = new LongHashSet();
     for (LongIntCursor entry : numRowsByTerm) {
       if (entry.value > maxNumRowsPerTerm) {
-        termsToFilter.add(entry.key);
+        popularTerms.add(entry.key);
       }
     }
-    return termsToFilter;
+    return popularTerms;
   }
 
-  /** Returns the rows with the high-popularity terms dropped, as both search and build see them. */
-  private LongObjectHashMap<LongTermsAndValues> buildComparisonRows() {
-    if (filteredOutTerms.isEmpty()) {
+  /** Returns the rows with the high-popularity terms dropped, which is what gets indexed. */
+  private LongObjectHashMap<LongTermsAndValues> buildDiscardedTermFreeRows() {
+    if (discardedTerms.isEmpty()) {
       return rowNumToTermsAndValuesMap;
     }
-    LongObjectHashMap<LongTermsAndValues> comparisonRows =
+    LongObjectHashMap<LongTermsAndValues> discardedTermFreeRows =
         new LongObjectHashMap<>(rowNumToTermsAndValuesMap.size());
     for (LongObjectCursor<LongTermsAndValues> entry : rowNumToTermsAndValuesMap) {
-      comparisonRows.put(entry.key, entry.value.newWithFilteredTerms(filteredOutTerms, comparator));
+      discardedTermFreeRows.put(entry.key, entry.value.newWithoutTerms(discardedTerms, comparator));
     }
-    return comparisonRows;
+    return discardedTermFreeRows;
+  }
+
+  /**
+   * Returns the rows in the form the inverted lists are keyed by. The comparators whose records are
+   * already sparse derive the identity here, so they share one map rather than holding two.
+   */
+  private LongObjectHashMap<LongTermsAndValues> buildIndexedRows(
+      LongObjectHashMap<LongTermsAndValues> discardedTermFreeRows) {
+    LongObjectHashMap<LongTermsAndValues> indexedRows =
+        new LongObjectHashMap<>(discardedTermFreeRows.size());
+    boolean anyRowDiffers = false;
+    for (LongObjectCursor<LongTermsAndValues> entry : discardedTermFreeRows) {
+      LongTermsAndValues indexedRecord = toIndexedRecord(entry.value);
+      anyRowDiffers |= indexedRecord != entry.value;
+      indexedRows.put(entry.key, indexedRecord);
+    }
+    return anyRowDiffers ? indexedRows : discardedTermFreeRows;
   }
 
   private LongDoubleHashMap buildRowNumToUniValue(
-      LongObjectHashMap<LongTermsAndValues> comparisonRows) {
-    LongDoubleHashMap uniValues = new LongDoubleHashMap(comparisonRows.size());
-    for (LongObjectCursor<LongTermsAndValues> entry : comparisonRows) {
+      LongObjectHashMap<LongTermsAndValues> indexedRows) {
+    LongDoubleHashMap uniValues = new LongDoubleHashMap(indexedRows.size());
+    for (LongObjectCursor<LongTermsAndValues> entry : indexedRows) {
       uniValues.put(entry.key, stableSortedUniValue(entry.value));
     }
     return uniValues;
@@ -408,13 +614,12 @@ abstract class BaseSparseIndex extends Index {
    * inverted-list values when it can, so those are only materialized when they will be read.
    */
   private LongObjectHashMap<SparseInvertedList> buildSparseInvertedIndex(
-      LongObjectHashMap<LongTermsAndValues> comparisonRows) {
+      LongObjectHashMap<LongTermsAndValues> indexedRows) {
     LongObjectHashMap<ArrayList<RowNumAndUniValue>> entriesBySparseKey = new LongObjectHashMap<>();
-    for (LongObjectCursor<LongTermsAndValues> row : comparisonRows) {
+    for (LongObjectCursor<LongTermsAndValues> row : indexedRows) {
       LongTermsAndValues termsAndValues = row.value;
       double uniValue = rowNumToUniValue.get(row.key);
-      for (LongCursor sparseKeyCursor : LongHashSet.from(getSparseKeys(termsAndValues))) {
-        long sparseKey = sparseKeyCursor.value;
+      for (long sparseKey : getSparseKeys(termsAndValues)) {
         ArrayList<RowNumAndUniValue> entries = entriesBySparseKey.get(sparseKey);
         if (entries == null) {
           entries = new ArrayList<>();
@@ -451,40 +656,12 @@ abstract class BaseSparseIndex extends Index {
             String.format("rowNum %s has a null TermsAndValues record.", entry.key));
       }
       try {
-        validateSparseRecord(entry.value, "row " + entry.key);
+        validateRecord(entry.value, "row " + entry.key);
       } catch (IllegalArgumentException e) {
         String message = e.getMessage();
         throw new IndexCreationError(
             message == null ? String.format("row %s is invalid.", entry.key) : message);
       }
-    }
-  }
-
-  private void validateSparseRecord(LongTermsAndValues termsAndValues, String source) {
-    Objects.requireNonNull(termsAndValues, source + " is null.");
-    if (termsAndValues.termsLength() == 0) {
-      throw new IllegalArgumentException(source + " must have non-empty terms.");
-    }
-    if (termsAndValues.termsLength() != termsAndValues.valuesLength()) {
-      throw new IllegalArgumentException(
-          String.format("%s must have equal non-empty terms and values lengths.", source));
-    }
-    for (int i = 1; i < termsAndValues.termsLength(); ++i) {
-      if (termsAndValues.getTerm(i - 1) >= termsAndValues.getTerm(i)) {
-        throw new IllegalArgumentException(
-            String.format("%s terms must be sorted and distinct.", source));
-      }
-    }
-    double expectedUniValue = comparator.computeUniValue(termsAndValues);
-    double actualUniValue = termsAndValues.getUniValue();
-    double tolerance = MathUtils.EPSILON_12 * Math.max(1.0, Math.abs(expectedUniValue));
-    if (!Double.isFinite(actualUniValue)
-        || actualUniValue < 0.0
-        || Math.abs(expectedUniValue - actualUniValue) > tolerance) {
-      throw new IllegalArgumentException(
-          String.format(
-              "%s has uniValue %s, expected %s for the configured comparator.",
-              source, actualUniValue, expectedUniValue));
     }
   }
 
@@ -501,13 +678,21 @@ abstract class BaseSparseIndex extends Index {
 
   /** The index state both candidate generators traverse, shared so it is allocated once. */
   final class SearchContext implements SparseFilteredSearch.Context, SparseMergeSearch.Context {
+    /**
+     * Returns a row's Uni value.
+     *
+     * <p>Length filtering calls this for every row of every inverted list it narrows, which makes
+     * it the most frequently reached read in a search, so it resolves the row to a slot once and
+     * both tests and reads through that slot rather than hashing the row number twice.
+     */
     @Override
     public double getUniValue(long rowNum) {
-      if (!rowNumToUniValue.containsKey(rowNum)) {
+      int slot = rowNumToUniValue.indexOf(rowNum);
+      if (!rowNumToUniValue.indexExists(slot)) {
         throw new IllegalStateException(
             String.format("rowNum %s is absent from the sparse uni-value index.", rowNum));
       }
-      return rowNumToUniValue.get(rowNum);
+      return rowNumToUniValue.indexGet(slot);
     }
 
     @Override

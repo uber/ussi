@@ -10,6 +10,7 @@ public class ComparatorNormalizerFactory {
   private ComparatorNormalizerFactory() {}
 
   public enum COMPARATOR_NORMALIZER_TYPE {
+    COMPLEMENT,
     IDENTITY,
     LP,
     RECIPROCAL
@@ -20,6 +21,9 @@ public class ComparatorNormalizerFactory {
       throws ComparatorNormalizerCreationError {
     String comparatorNormalizerTypeLowerCase = comparatorNormalizerType.toLowerCase(Locale.ROOT);
     if (comparatorNormalizerTypeLowerCase.equals(
+        COMPARATOR_NORMALIZER_TYPE.COMPLEMENT.name().toLowerCase(Locale.ROOT))) {
+      return new ComplementComparatorNormalizer();
+    } else if (comparatorNormalizerTypeLowerCase.equals(
         COMPARATOR_NORMALIZER_TYPE.IDENTITY.name().toLowerCase(Locale.ROOT))) {
       return new IdentityComparatorNormalizer();
     } else if (comparatorNormalizerTypeLowerCase.equals(

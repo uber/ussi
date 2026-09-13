@@ -1,13 +1,14 @@
 package com.uber.ussi.utils;
 
+import static com.uber.ussi.utils.MathUtils.EPSILON_9;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.uber.ussi.utils.MathUtils;
 import org.junit.jupiter.api.Test;
 
 class MathUtilsTest {
-  private static final double DELTA = 1e-9;
 
   @Test
   void stableSumPreservesValuesLostByNaiveSummation() {
@@ -52,8 +53,8 @@ class MathUtilsTest {
     MathUtils.ProportionConfidenceInterval1Sided interval =
         new MathUtils.ProportionConfidenceInterval1Sided(0.5);
 
-    assertEquals(0.75, interval.getConfidenceIntervalLowerBound(4, 3), DELTA);
-    assertEquals(0.75, interval.getConfidenceIntervalUpperBound(4, 3), DELTA);
+    assertEquals(0.75, interval.getConfidenceIntervalLowerBound(4, 3), EPSILON_9);
+    assertEquals(0.75, interval.getConfidenceIntervalUpperBound(4, 3), EPSILON_9);
   }
 
   @Test
@@ -61,10 +62,10 @@ class MathUtilsTest {
     MathUtils.ProportionConfidenceInterval1Sided interval =
         new MathUtils.ProportionConfidenceInterval1Sided(0.95);
 
-    assertEquals(0.8506543911914559, interval.getConfidenceIntervalLowerBound(100, 90), DELTA);
-    assertEquals(0.9493456088085441, interval.getConfidenceIntervalUpperBound(100, 90), DELTA);
-    assertEquals(0.3699629030311107, interval.getConfidenceIntervalLowerBound(40, 20), DELTA);
-    assertEquals(0.6300370969688893, interval.getConfidenceIntervalUpperBound(40, 20), DELTA);
+    assertEquals(0.8506543911914559, interval.getConfidenceIntervalLowerBound(100, 90), EPSILON_9);
+    assertEquals(0.9493456088085441, interval.getConfidenceIntervalUpperBound(100, 90), EPSILON_9);
+    assertEquals(0.3699629030311107, interval.getConfidenceIntervalLowerBound(40, 20), EPSILON_9);
+    assertEquals(0.6300370969688893, interval.getConfidenceIntervalUpperBound(40, 20), EPSILON_9);
   }
 
   @Test
@@ -72,8 +73,8 @@ class MathUtilsTest {
     MathUtils.ProportionConfidenceInterval1Sided interval =
         new MathUtils.ProportionConfidenceInterval1Sided(0.95);
 
-    assertEquals(0.0, interval.getConfidenceIntervalLowerBound(4, 1), DELTA);
-    assertEquals(1.0, interval.getConfidenceIntervalUpperBound(4, 3), DELTA);
+    assertEquals(0.0, interval.getConfidenceIntervalLowerBound(4, 1), EPSILON_9);
+    assertEquals(1.0, interval.getConfidenceIntervalUpperBound(4, 3), EPSILON_9);
   }
 
   @Test
@@ -81,10 +82,10 @@ class MathUtilsTest {
     MathUtils.ProportionConfidenceInterval1Sided interval =
         new MathUtils.ProportionConfidenceInterval1Sided(0.95);
 
-    assertEquals(0.0, interval.getConfidenceIntervalLowerBound(10, 0), DELTA);
-    assertEquals(0.0, interval.getConfidenceIntervalUpperBound(10, 0), DELTA);
-    assertEquals(1.0, interval.getConfidenceIntervalLowerBound(10, 10), DELTA);
-    assertEquals(1.0, interval.getConfidenceIntervalUpperBound(10, 10), DELTA);
+    assertEquals(0.0, interval.getConfidenceIntervalLowerBound(10, 0), EPSILON_9);
+    assertEquals(0.0, interval.getConfidenceIntervalUpperBound(10, 0), EPSILON_9);
+    assertEquals(1.0, interval.getConfidenceIntervalLowerBound(10, 10), EPSILON_9);
+    assertEquals(1.0, interval.getConfidenceIntervalUpperBound(10, 10), EPSILON_9);
   }
 
   @Test
@@ -92,8 +93,8 @@ class MathUtilsTest {
     MathUtils.ProportionConfidenceInterval1Sided interval =
         new MathUtils.ProportionConfidenceInterval1Sided(1.0);
 
-    assertEquals(0.0, interval.getConfidenceIntervalLowerBound(4, 3), DELTA);
-    assertEquals(1.0, interval.getConfidenceIntervalUpperBound(4, 3), DELTA);
+    assertEquals(0.0, interval.getConfidenceIntervalLowerBound(4, 3), EPSILON_9);
+    assertEquals(1.0, interval.getConfidenceIntervalUpperBound(4, 3), EPSILON_9);
   }
 
   @Test

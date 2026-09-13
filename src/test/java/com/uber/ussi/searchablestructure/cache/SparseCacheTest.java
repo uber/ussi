@@ -14,6 +14,7 @@ import com.uber.ussi.comparatornormalizer.IdentityComparatorNormalizer;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
+import com.uber.ussi.entity.termsandvalues.RecordType;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
 import com.uber.ussi.utils.Constants;
@@ -23,11 +24,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.TreeMap;
 import org.junit.jupiter.api.Test;
 
 class SparseCacheTest {
   private static final float DELTA = 1e-6f;
+  private static final String CANDIDATES_ONLY =
+      NamespaceConfig.PopularTermDiscardScope.CANDIDATES_ONLY.getParamValue();
+  private static final String CANDIDATES_AND_VERIFICATION =
+      NamespaceConfig.PopularTermDiscardScope.CANDIDATES_AND_VERIFICATION.getParamValue();
 
   @Test
   void insertedRowsAreSearchableAndRowsSharingNoTermAreOmitted() {
@@ -97,7 +103,7 @@ class SparseCacheTest {
     long first = cache.insert(jaccard(new long[] {1, 101}, 1, 1), Map.of());
     long second = cache.insert(jaccard(new long[] {1, 102}, 1, 1), Map.of());
 
-    assertArrayEquals(new long[] {1}, cache.getFilteredOutTermsForTests());
+    assertArrayEquals(new long[] {1}, cache.getDiscardedTermsForTests());
     assertTrue(
         cache.getNearestNeighborRowNums(2, jaccard(new long[] {1}, 1), MetaFilter.empty()).isEmpty());
     List<RowNumAndSimilarity> filteredQueryResult =
@@ -108,7 +114,7 @@ class SparseCacheTest {
     long third = cache.insert(jaccard(new long[] {103, 104}, 1, 1), Map.of());
     long fourth = cache.insert(jaccard(new long[] {105, 106}, 1, 1), Map.of());
 
-    assertArrayEquals(new long[0], cache.getFilteredOutTermsForTests());
+    assertArrayEquals(new long[0], cache.getDiscardedTermsForTests());
     List<RowNumAndSimilarity> readmittedResult =
         cache.getNearestNeighborRowNums(4, jaccard(new long[] {1}, 1), MetaFilter.empty());
     assertEquals(List.of(first, second), rowNumsNearestFirst(readmittedResult));
@@ -116,12 +122,47 @@ class SparseCacheTest {
 
     assertTrue(cache.delete(third));
     // Term 1 is unaffected by this deletion, but its popularity increases from 2/4 to 2/3.
-    assertArrayEquals(new long[] {1}, cache.getFilteredOutTermsForTests());
+    assertArrayEquals(new long[] {1}, cache.getDiscardedTermsForTests());
     assertTrue(cache.delete(fourth));
 
-    assertArrayEquals(new long[] {1}, cache.getFilteredOutTermsForTests());
+    assertArrayEquals(new long[] {1}, cache.getDiscardedTermsForTests());
     assertTrue(
         cache.getNearestNeighborRowNums(2, jaccard(new long[] {1}, 1), MetaFilter.empty()).isEmpty());
+  }
+
+  @Test
+  void candidatesOnlyScoresTheCachedRowsWithTheirPopularTerms() {
+    SparseCache candidatesOnlyCache = popularTermCache(CANDIDATES_ONLY);
+    SparseCache defaultScopeCache = popularTermCache(CANDIDATES_AND_VERIFICATION);
+    for (SparseCache cache : List.of(candidatesOnlyCache, defaultScopeCache)) {
+      cache.insert(jaccard(new long[] {1, 101}, 1, 1), Map.of());
+      cache.insert(jaccard(new long[] {1, 102}, 1, 1), Map.of());
+      assertArrayEquals(new long[] {1}, cache.getDiscardedTermsForTests());
+    }
+    LongTermsAndValues query = jaccard(new long[] {1, 101, 999}, 1, 1, 1);
+
+    List<RowNumAndSimilarity> candidatesOnlyResult =
+        candidatesOnlyCache.getNearestNeighborRowNums(2, query, MetaFilter.empty());
+    List<RowNumAndSimilarity> defaultScopeResult =
+        defaultScopeCache.getNearestNeighborRowNums(2, query, MetaFilter.empty());
+
+    /*
+     * Both scopes reach the same row, because both generate candidates from the query without its
+     * popular term. They disagree on what the row is worth: as supplied it shares two terms out of
+     * three with the query, and without term 1 it shares one out of two.
+     */
+    assertEquals(1, candidatesOnlyResult.size(), candidatesOnlyResult.toString());
+    assertEquals(2.0f / 3.0f, candidatesOnlyResult.get(0).getSimilarity(), DELTA);
+    assertEquals(1, defaultScopeResult.size(), defaultScopeResult.toString());
+    assertEquals(0.5f, defaultScopeResult.get(0).getSimilarity(), DELTA);
+    /*
+     * Neither scope reaches a row through a popular term, so a query made only of one still
+     * matches nothing. This is the recall candidatesOnly trades for the exact scores above.
+     */
+    assertTrue(
+        candidatesOnlyCache
+            .getNearestNeighborRowNums(2, jaccard(new long[] {1}, 1), MetaFilter.empty())
+            .isEmpty());
   }
 
   @Test
@@ -144,15 +185,15 @@ class SparseCacheTest {
       fillerRows.add(cache.insert(jaccard(new long[] {100 + row}, 1), Map.of()));
     }
 
-    assertArrayEquals(new long[] {1}, cache.getFilteredOutTermsForTests());
+    assertArrayEquals(new long[] {1}, cache.getDiscardedTermsForTests());
 
     assertTrue(cache.delete(termOneOnlyRow1));
     // A 5% decrease uses partial reevaluation and readmits term 1 at 10/19 popularity.
-    assertArrayEquals(new long[0], cache.getFilteredOutTermsForTests());
+    assertArrayEquals(new long[0], cache.getDiscardedTermsForTests());
 
     assertTrue(cache.delete(fillerRows.get(0)));
     // At exactly 10% shrink, the rebuild finds both untouched terms at 10/18 popularity.
-    assertArrayEquals(new long[] {1, 2}, cache.getFilteredOutTermsForTests());
+    assertArrayEquals(new long[] {1, 2}, cache.getDiscardedTermsForTests());
   }
 
   @Test
@@ -174,16 +215,16 @@ class SparseCacheTest {
       unrelatedRows.add(cache.insert(jaccard(new long[] {100 + row}, 1), Map.of()));
     }
 
-    assertArrayEquals(new long[0], cache.getFilteredOutTermsForTests());
+    assertArrayEquals(new long[0], cache.getDiscardedTermsForTests());
     for (int row = 0; row < 9; ++row) {
       assertTrue(cache.delete(unrelatedRows.get(row)));
     }
     // Term 1 is stale at 46/91 because less than 10% of the baseline has been deleted.
-    assertArrayEquals(new long[0], cache.getFilteredOutTermsForTests());
+    assertArrayEquals(new long[0], cache.getDiscardedTermsForTests());
 
     assertTrue(cache.delete(unrelatedRows.get(9)));
 
-    assertArrayEquals(new long[] {1}, cache.getFilteredOutTermsForTests());
+    assertArrayEquals(new long[] {1}, cache.getDiscardedTermsForTests());
   }
 
   @Test
@@ -207,14 +248,14 @@ class SparseCacheTest {
       unrelatedRows.add(cache.insert(jaccard(new long[] {100 + row}, 1), Map.of()));
     }
 
-    assertArrayEquals(new long[0], cache.getFilteredOutTermsForTests());
+    assertArrayEquals(new long[0], cache.getDiscardedTermsForTests());
     assertTrue(cache.delete(unrelatedRows.get(0)));
     // A 10% decrease does not trigger the configured 20% full reevaluation.
-    assertArrayEquals(new long[0], cache.getFilteredOutTermsForTests());
+    assertArrayEquals(new long[0], cache.getDiscardedTermsForTests());
 
     assertTrue(cache.delete(unrelatedRows.get(1)));
 
-    assertArrayEquals(new long[] {1}, cache.getFilteredOutTermsForTests());
+    assertArrayEquals(new long[] {1}, cache.getDiscardedTermsForTests());
   }
 
   @Test
@@ -229,11 +270,11 @@ class SparseCacheTest {
                     Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY_CONFIDENCE,
                     "0.5")));
     long rowNum = cache.insert(jaccard(new long[] {1}, 1), Map.of());
-    assertArrayEquals(new long[] {1}, cache.getFilteredOutTermsForTests());
+    assertArrayEquals(new long[] {1}, cache.getDiscardedTermsForTests());
 
     assertTrue(cache.delete(rowNum));
 
-    assertArrayEquals(new long[0], cache.getFilteredOutTermsForTests());
+    assertArrayEquals(new long[0], cache.getDiscardedTermsForTests());
   }
 
   @Test
@@ -252,7 +293,7 @@ class SparseCacheTest {
     cache.insert(jaccard(new long[] {103}, 1), Map.of());
     cache.insert(jaccard(new long[] {104}, 1), Map.of());
 
-    assertArrayEquals(new long[] {1}, cache.getFilteredOutTermsForTests());
+    assertArrayEquals(new long[] {1}, cache.getDiscardedTermsForTests());
 
     for (long extraRow = 0; extraRow < 18; ++extraRow) {
       cache.insert(jaccard(new long[] {1, 200 + extraRow}, 1, 1), Map.of());
@@ -260,7 +301,7 @@ class SparseCacheTest {
     }
 
     assertEquals(40, cache.size());
-    assertArrayEquals(new long[0], cache.getFilteredOutTermsForTests());
+    assertArrayEquals(new long[0], cache.getDiscardedTermsForTests());
   }
 
   @Test
@@ -400,12 +441,12 @@ class SparseCacheTest {
       throws ReflectiveOperationException {
     SparseCache cache = new SparseCache(config("jaccard"));
 
-    assertFalse(invokeShouldFilterOutTerm(cache, 1));
+    assertFalse(invokeShouldDiscardTerm(cache, 1));
 
     cache.insert(jaccard(new long[] {1}, 1), Map.of());
     invertedLists(cache).get(1).add(99);
 
-    assertTrue(invokeShouldFilterOutTerm(cache, 1));
+    assertTrue(invokeShouldDiscardTerm(cache, 1));
   }
 
   @Test
@@ -483,6 +524,24 @@ class SparseCacheTest {
     }
   }
 
+  /**
+   * Returns an empty cache under {@code discardScope} whose popularity filtering is deterministic:
+   * the degenerate 0.5 confidence makes the upper bound the observed popularity, so a term is
+   * discarded exactly when it occurs in more than half of the cached rows.
+   */
+  private static SparseCache popularTermCache(String discardScope) {
+    return new SparseCache(
+        config(
+            "jaccard",
+            Map.of(
+                Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY,
+                "0.5",
+                Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY_CONFIDENCE,
+                "0.5",
+                Constants.POPULAR_TERM_DISCARD_SCOPE,
+                discardScope)));
+  }
+
   private static NamespaceConfig config(String comparatorType) {
     return config(comparatorType, Map.of());
   }
@@ -543,9 +602,9 @@ class SparseCacheTest {
     return (LongObjectHashMap<LongArrayList>) field.get(cache);
   }
 
-  private static boolean invokeShouldFilterOutTerm(SparseCache cache, long term)
+  private static boolean invokeShouldDiscardTerm(SparseCache cache, long term)
       throws ReflectiveOperationException {
-    Method method = SparseCache.class.getDeclaredMethod("shouldFilterOutTerm", long.class);
+    Method method = SparseCache.class.getDeclaredMethod("shouldDiscardTerm", long.class);
     method.setAccessible(true);
     return (boolean) method.invoke(cache, term);
   }
@@ -560,6 +619,11 @@ class SparseCacheTest {
   private static final class AggressivePrefixComparator extends Comparator {
     private AggressivePrefixComparator() {
       super(new IdentityComparatorNormalizer());
+    }
+
+    @Override
+    public Set<RecordType> getSupportedRecordTypes() {
+      return Set.of(RecordType.SPARSE);
     }
 
     @Override

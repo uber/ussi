@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.uber.ussi.config.NamespaceConfig.PopularTermDiscardScope;
 import com.uber.ussi.config.NamespaceConfig.SparseCandidateGenerator;
 import com.uber.ussi.utils.Constants;
 import java.util.List;
@@ -60,11 +61,51 @@ class NamespaceConfigAccessorsTest {
             .indexParams(
                 Map.of(
                     Constants.SPARSE_CANDIDATE_GENERATOR,
-                    SparseCandidateGenerator.SPARS_MERGE.getIndexParamValue()))
+                    SparseCandidateGenerator.SPARS_MERGE.getParamValue()))
             .build();
 
     assertEquals(SparseCandidateGenerator.SPARS, defaults.getSparseCandidateGenerator());
     assertEquals(SparseCandidateGenerator.SPARS_MERGE, merge.getSparseCandidateGenerator());
+  }
+
+  /** An index reads the scope from the index params and a cache reads it from the cache params. */
+  @Test
+  void getPopularTermDiscardScopeCases() {
+    assertEquals(
+        PopularTermDiscardScope.CANDIDATES_AND_VERIFICATION,
+        withDiscardParams(Map.of()).getIndexPopularTermDiscardScope(),
+        "unset");
+    assertEquals(
+        PopularTermDiscardScope.CANDIDATES_AND_VERIFICATION,
+        withDiscardScope("  ").getIndexPopularTermDiscardScope(),
+        "blank");
+    assertEquals(
+        PopularTermDiscardScope.CANDIDATES_ONLY,
+        withDiscardScope(" Candidates_Only ").getIndexPopularTermDiscardScope(),
+        "trimmed and mixed case");
+    assertEquals(
+        PopularTermDiscardScope.CANDIDATES_AND_VERIFICATION,
+        withDiscardScope(PopularTermDiscardScope.CANDIDATES_AND_VERIFICATION.getParamValue())
+            .getIndexPopularTermDiscardScope(),
+        "stated explicitly");
+    assertEquals(
+        PopularTermDiscardScope.CANDIDATES_ONLY,
+        withDiscardScope(PopularTermDiscardScope.CANDIDATES_ONLY.getParamValue())
+            .getCachePopularTermDiscardScope(),
+        "read from the cache params");
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> withDiscardScope("verification_only").getIndexPopularTermDiscardScope(),
+        "unsupported");
+  }
+
+  /** Returns a config carrying {@code scope} in both its index and its cache params. */
+  private static NamespaceConfig withDiscardScope(String scope) {
+    return withDiscardParams(Map.of(Constants.POPULAR_TERM_DISCARD_SCOPE, scope));
+  }
+
+  private static NamespaceConfig withDiscardParams(Map<String, String> params) {
+    return fullBuilder().indexParams(params).cacheParams(params).build();
   }
 
   @Test

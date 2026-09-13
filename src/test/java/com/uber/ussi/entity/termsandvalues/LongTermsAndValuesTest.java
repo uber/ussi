@@ -1,6 +1,7 @@
 package com.uber.ussi.entity.termsandvalues;
 
 import static com.uber.ussi.TestLongObjectMaps.longHashSet;
+import static com.uber.ussi.utils.MathUtils.EPSILON_9;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -12,15 +13,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.carrotsearch.hppc.LongHashSet;
 import com.uber.ussi.comparator.Comparator;
 import com.uber.ussi.comparator.ComparatorFactory;
+import com.uber.ussi.comparatornormalizer.ComplementComparatorNormalizer;
 import com.uber.ussi.comparatornormalizer.ReciprocalComparatorNormalizer;
 import com.uber.ussi.error.ArraysSizeMismatchError;
+import com.uber.ussi.utils.MathUtils;
 import java.lang.reflect.Modifier;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class LongTermsAndValuesTest {
 
-  private static final double DELTA = 1e-9;
 
   @Test
   void accessorsReturnStoredData() {
@@ -33,7 +35,7 @@ class LongTermsAndValuesTest {
     assertEquals(4f, record.getValue(1));
     assertEquals(2, record.termsLength());
     assertEquals(2, record.valuesLength());
-    assertEquals(5.0, record.getUniValue(), DELTA);
+    assertEquals(5.0, record.getUniValue(), EPSILON_9);
   }
 
   @Test
@@ -45,55 +47,93 @@ class LongTermsAndValuesTest {
   }
 
   @Test
-  void newWithFilteredTermsPreservesAlignmentAndRecomputesUniValue() {
+  void newWithoutTermsPreservesAlignmentAndRecomputesUniValue() {
     Comparator comparator =
         ComparatorFactory.createComparator("l2", Map.of(), new ReciprocalComparatorNormalizer());
     LongTermsAndValues record =
         new LongTermsAndValues(new long[] {1, 2, 3}, new float[] {1, 2, 3}, 14.0);
 
-    LongTermsAndValues filtered = record.newWithFilteredTerms(longHashSet(2), comparator);
+    LongTermsAndValues filtered = record.newWithoutTerms(longHashSet(2), comparator);
 
     assertArrayEquals(new long[] {1, 3}, filtered.getTerms());
     assertArrayEquals(new float[] {1, 3}, filtered.getValues());
-    assertEquals(10.0, filtered.getUniValue(), DELTA);
+    assertEquals(10.0, filtered.getUniValue(), EPSILON_9);
   }
 
   @Test
-  void newWithFilteredTermsReturnsSameRecordWhenNothingIsRemoved() {
+  void newWithoutTermsReturnsSameRecordWhenNothingIsRemoved() {
     Comparator comparator =
         ComparatorFactory.createComparator("l2", Map.of(), new ReciprocalComparatorNormalizer());
     LongTermsAndValues record = new LongTermsAndValues(new long[] {1}, new float[] {2}, 4.0);
 
-    assertSame(record, record.newWithFilteredTerms(new LongHashSet(), comparator));
-    assertSame(record, record.newWithFilteredTerms(longHashSet(2), comparator));
+    assertSame(record, record.newWithoutTerms(new LongHashSet(), comparator));
+    assertSame(record, record.newWithoutTerms(longHashSet(2), comparator));
   }
 
   @Test
-  void newWithFilteredTermsCanRemoveEveryTermAndSupportsSequences() {
+  void newWithoutTermsCanRemoveEveryTermAndSupportsSequences() {
     Comparator comparator =
         ComparatorFactory.createComparator("l2", Map.of(), new ReciprocalComparatorNormalizer());
     LongTermsAndValues sparse = new LongTermsAndValues(new long[] {1}, new float[] {2}, 4.0);
     LongTermsAndValues sequence = new LongTermsAndValues(new long[] {1, 2}, new float[0], 0.0);
 
-    LongTermsAndValues emptySparse = sparse.newWithFilteredTerms(longHashSet(1), comparator);
-    LongTermsAndValues filteredSequence = sequence.newWithFilteredTerms(longHashSet(1), comparator);
+    LongTermsAndValues emptySparse = sparse.newWithoutTerms(longHashSet(1), comparator);
+    LongTermsAndValues filteredSequence = sequence.newWithoutTerms(longHashSet(1), comparator);
 
     assertEquals(0, emptySparse.termsLength());
     assertEquals(0, emptySparse.valuesLength());
-    assertEquals(0.0, emptySparse.getUniValue(), DELTA);
+    assertEquals(0.0, emptySparse.getUniValue(), EPSILON_9);
     assertArrayEquals(new long[] {2}, filteredSequence.getTerms());
     assertEquals(0, filteredSequence.valuesLength());
   }
 
   @Test
-  void newWithFilteredTermsRejectsNullArguments() {
+  void toElementMultisetSortsAndCountsTheElements() {
+    Comparator comparator =
+        ComparatorFactory.createComparator("ngld", Map.of(), new ComplementComparatorNormalizer());
+    LongTermsAndValues sequence =
+        new LongTermsAndValues(new long[] {5, 2, 5, 9, 2, 5}, new float[0], 6.0);
+
+    LongTermsAndValues multiset = sequence.toElementMultiset(comparator);
+
+    assertArrayEquals(new long[] {2, 5, 9}, multiset.getTerms());
+    assertArrayEquals(new float[] {2.0f, 3.0f, 1.0f}, multiset.getValues());
+    // The counts sum to the sequence length, so both forms report one Uni value.
+    assertEquals(sequence.getUniValue(), multiset.getUniValue(), EPSILON_9);
+
+    // One element repeated throughout is the longest a run of equal elements can get.
+    LongTermsAndValues repeated =
+        new LongTermsAndValues(new long[] {4, 4, 4, 4}, new float[0], 4.0)
+            .toElementMultiset(comparator);
+    assertArrayEquals(new long[] {4}, repeated.getTerms());
+    assertArrayEquals(new float[] {4.0f}, repeated.getValues());
+
+    // A lone element is the shortest, and has to land in the arrays just the same.
+    LongTermsAndValues single =
+        new LongTermsAndValues(new long[] {6}, new float[0], 1.0).toElementMultiset(comparator);
+    assertArrayEquals(new long[] {6}, single.getTerms());
+    assertArrayEquals(new float[] {1.0f}, single.getValues());
+  }
+
+  @Test
+  void toElementMultisetRejectsARecordCarryingValues() {
+    Comparator comparator =
+        ComparatorFactory.createComparator("ngld", Map.of(), new ComplementComparatorNormalizer());
+    LongTermsAndValues sparse = new LongTermsAndValues(new long[] {1, 2}, new float[] {1, 1}, 2.0);
+
+    assertThrows(IllegalArgumentException.class, () -> sparse.toElementMultiset(comparator));
+    assertThrows(NullPointerException.class, () -> sparse.toElementMultiset(null));
+  }
+
+  @Test
+  void newWithoutTermsRejectsNullArguments() {
     Comparator comparator =
         ComparatorFactory.createComparator("l2", Map.of(), new ReciprocalComparatorNormalizer());
     LongTermsAndValues record = new LongTermsAndValues(new long[] {1}, new float[] {2}, 4.0);
 
-    assertThrows(NullPointerException.class, () -> record.newWithFilteredTerms(null, comparator));
+    assertThrows(NullPointerException.class, () -> record.newWithoutTerms(null, comparator));
     assertThrows(
-        NullPointerException.class, () -> record.newWithFilteredTerms(new LongHashSet(), null));
+        NullPointerException.class, () -> record.newWithoutTerms(new LongHashSet(), null));
   }
 
   @Test
@@ -150,7 +190,7 @@ class LongTermsAndValuesTest {
 
     assertArrayEquals(new long[] {1L, 2L}, record.getTerms());
     assertArrayEquals(new float[] {1f, 2f}, record.getValues());
-    assertEquals(5.0, record.getUniValue(), DELTA);
+    assertEquals(5.0, record.getUniValue(), EPSILON_9);
   }
 
   @Test
@@ -165,7 +205,7 @@ class LongTermsAndValuesTest {
 
     assertArrayEquals(new long[] {1L, 2L}, record.getTerms());
     assertArrayEquals(new float[] {3f, 3f}, record.getValues());
-    assertEquals(18.0, record.getUniValue(), DELTA);
+    assertEquals(18.0, record.getUniValue(), EPSILON_9);
   }
 
   @Test
@@ -180,30 +220,55 @@ class LongTermsAndValuesTest {
 
     assertArrayEquals(new long[] {1L, 2L}, record.getTerms());
     assertArrayEquals(new float[] {0f, 0f}, record.getValues());
-    assertEquals(0.0, record.getUniValue(), DELTA);
+    assertEquals(0.0, record.getUniValue(), EPSILON_9);
   }
 
   @Test
-  void verifyComparablePairAcceptsDifferentSparseLengths() {
+  void validateComparablePairAcceptsDifferentSparseLengths() {
     LongTermsAndValues first = new LongTermsAndValues(new long[] {1L}, new float[] {1f}, 1.0);
     LongTermsAndValues second =
         new LongTermsAndValues(new long[] {1L, 2L}, new float[] {1f, 1f}, 2.0);
 
-    LongTermsAndValues.verifyComparablePair(first, second);
+    LongTermsAndValues.validateComparablePair(first, second);
   }
 
   @Test
-  void verifyComparablePairRejectsMixedShapesAndSequences() {
+  void validateComparablePairRejectsMixedRecordTypes() {
     LongTermsAndValues dense = new LongTermsAndValues(new long[0], new float[] {1f}, 1.0);
     LongTermsAndValues sparse = new LongTermsAndValues(new long[] {1L}, new float[] {1f}, 1.0);
-    LongTermsAndValues sequence = new LongTermsAndValues(new long[] {1L}, new float[0], 0.0);
+    LongTermsAndValues sequence = new LongTermsAndValues(new long[] {1L}, new float[0], 1.0);
 
     assertThrows(
         ArraysSizeMismatchError.class,
-        () -> LongTermsAndValues.verifyComparablePair(dense, sparse));
+        () -> LongTermsAndValues.validateComparablePair(dense, sparse));
+    assertThrows(
+        ArraysSizeMismatchError.class,
+        () -> LongTermsAndValues.validateComparablePair(sequence, sparse));
+    assertThrows(
+        ArraysSizeMismatchError.class,
+        () -> LongTermsAndValues.validateComparablePair(dense, sequence));
+  }
+
+  @Test
+  void validateComparablePairAcceptsSequencesOfDifferentLengths() {
+    LongTermsAndValues sequence =
+        new LongTermsAndValues(new long[] {1L, 2L, 1L}, new float[0], 3.0);
+    LongTermsAndValues longerSequence =
+        new LongTermsAndValues(new long[] {2L, 1L, 1L, 2L}, new float[0], 4.0);
+    LongTermsAndValues emptySequence = new LongTermsAndValues(new long[0], new float[0], 0.0);
+
+    LongTermsAndValues.validateComparablePair(sequence, longerSequence);
+    // An empty sequence is a legitimate comparand: every element of the other one is an insertion.
+    LongTermsAndValues.validateComparablePair(sequence, emptySequence);
+  }
+
+  @Test
+  void validateComparablePairRejectsRecordsWithNeitherTermsNorValues() {
+    LongTermsAndValues empty = new LongTermsAndValues(new long[0], new float[0], 0.0);
+
     assertThrows(
         IllegalArgumentException.class,
-        () -> LongTermsAndValues.verifyComparablePair(sequence, sequence));
+        () -> LongTermsAndValues.validateComparablePair(empty, empty));
   }
 
   @Test

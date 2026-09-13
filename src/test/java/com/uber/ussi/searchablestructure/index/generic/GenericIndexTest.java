@@ -192,7 +192,7 @@ class GenericIndexTest {
 
     /*
      * k=1: the only matching row (22) is the least similar, so a naive top-k-then-filter would
-     * return nothing. The expansion (size/numMatching = 3) must widen the pool to surface it.
+     * return nothing. The expansion (size/numMatching = 3) must widen the pool to reach it.
      */
     List<RowNumAndSimilarity> result =
         index.getNearestNeighborRowNums(

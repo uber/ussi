@@ -1,21 +1,23 @@
 /* AUTHOR: Shijie Lu (shijie@uber.com), Shalini Kedlaya (skedlaya@uber.com), Ahmed Metwally (ametwally@uber.com) */
 package com.uber.ussi.searchablestructure.index;
 
+import com.uber.ussi.comparator.Comparator;
 import com.uber.ussi.comparator.ComparatorFactory;
 import com.uber.ussi.config.ConfigViolations;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.config.NamespaceConfig.SparseCandidateGenerator;
 import com.uber.ussi.config.NamespaceConfigValidator;
+import com.uber.ussi.entity.termsandvalues.RecordType;
 import com.uber.ussi.searchablestructure.metadata.MetadataFilteringStrategy;
 import com.uber.ussi.utils.Constants;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /** Reports the index params and index/comparator pairings that the index types would reject. */
 public final class IndexConfigValidator implements NamespaceConfigValidator {
   private static final IndexConfigValidator INSTANCE = new IndexConfigValidator();
-  private static final String L2_COMPARATOR_TYPE =
-      ComparatorFactory.COMPARATOR_TYPE.L2.name().toLowerCase(Locale.ROOT);
 
   private IndexConfigValidator() {}
 
@@ -42,13 +44,7 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
           1.0);
     }
     collectSparseCandidateGeneratorViolations(config, indexType, violations);
-    if (IndexFactory.IndexType.DENSE.name().toLowerCase(Locale.ROOT).equals(indexType)
-        && !L2_COMPARATOR_TYPE.equals(config.getComparatorType())) {
-      violations.add(
-          String.format(
-              "indexType %s supports only comparatorType %s, got %s.",
-              indexType, L2_COMPARATOR_TYPE, config.getComparatorType()));
-    }
+    collectRecordTypeViolations(config, indexType, violations);
   }
 
   private static void collectMetadataFilteringStrategyViolations(
@@ -67,8 +63,10 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
 
   /**
    * The merge generator walks whole inverted lists, so it needs an index type that keeps them
-   * uni-sorted. On the approximate index types it also has to verify candidates through the
-   * comparator, which rules out L2 because its signatures are not similarity-preserving.
+   * uni-sorted and a comparator that can score a row from the keys it shares with the query, which
+   * rules out the order-sensitive sequence comparators entirely. On the approximate index types it
+   * also has to verify candidates through the comparator's signatures, which rules out L2 because
+   * it has none that preserve similarity.
    */
   private static void collectSparseCandidateGeneratorViolations(
       NamespaceConfig config, String indexType, List<String> violations) {
@@ -82,22 +80,75 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
     if (sparseCandidateGenerator != SparseCandidateGenerator.SPARS_MERGE) {
       return;
     }
-    String indexParamValue = SparseCandidateGenerator.SPARS_MERGE.getIndexParamValue();
+    if (!ComparatorFactory.isSupportedComparatorType(config.getComparatorType())) {
+      /*
+       * Every rule below asks what a named comparator supports, which has no answer when the name
+       * is not one of them. ComparatorConfigValidator reports the name instead.
+       */
+      return;
+    }
+    String mergeParamValue = SparseCandidateGenerator.SPARS_MERGE.getParamValue();
     if (!IndexFactory.supportsSparseCandidateGenerator(indexType)) {
       violations.add(
           String.format(
-              "%s=%s is supported only for indexType inverted, sparse, or signature, got %s.",
-              Constants.SPARSE_CANDIDATE_GENERATOR, indexParamValue, indexType));
+              "%s=%s is supported only for indexType %s, got %s.",
+              Constants.SPARSE_CANDIDATE_GENERATOR,
+              mergeParamValue,
+              IndexFactory.describeSparseCandidateGeneratorIndexTypes(),
+              indexType));
+    }
+    Comparator comparator = ComparatorFactory.tryCreateComparator(config);
+    if (comparator != null && !comparator.supportsMergeCandidateGeneration()) {
+      violations.add(
+          String.format(
+              "%s=%s is not supported with comparatorType %s.",
+              Constants.SPARSE_CANDIDATE_GENERATOR, mergeParamValue, config.getComparatorType()));
+      return;
     }
     if (IndexFactory.mergeRequiresCandidateVerification(indexType)
-        && L2_COMPARATOR_TYPE.equals(config.getComparatorType())) {
+        && ComparatorFactory.getSupportedSignatureGeneratorTypes(config.getComparatorType())
+            .isEmpty()) {
       violations.add(
           String.format(
               "%s=%s is not supported with comparatorType %s for indexType %s.",
               Constants.SPARSE_CANDIDATE_GENERATOR,
-              indexParamValue,
-              L2_COMPARATOR_TYPE,
+              mergeParamValue,
+              config.getComparatorType(),
               indexType));
     }
+  }
+
+  /**
+   * An index stores one record type and a comparator reads a set of them, so the two can only be
+   * paired when the index's type is one the comparator reads. This is what keeps a sequence
+   * comparator off the index types that key their lists by a record's own terms, which for a
+   * sequence are neither sorted nor distinct, and equally what keeps the term-based comparators off
+   * the dense index. The generic index is exempt: it scans and scores through the comparator, so it
+   * never reads a record's layout itself.
+   */
+  private static void collectRecordTypeViolations(
+      NamespaceConfig config, String indexType, List<String> violations) {
+    RecordType indexRecordType = IndexFactory.getRecordType(indexType);
+    Comparator comparator = ComparatorFactory.tryCreateComparator(config);
+    if (indexRecordType == null || comparator == null) {
+      return;
+    }
+    Set<RecordType> comparatorRecordTypes = comparator.getSupportedRecordTypes();
+    if (!comparatorRecordTypes.contains(indexRecordType)) {
+      violations.add(
+          String.format(
+              "indexType %s stores %s records, which comparatorType %s cannot read; it reads %s.",
+              indexType,
+              indexRecordType.name().toLowerCase(Locale.ROOT),
+              config.getComparatorType(),
+              describeRecordTypes(comparatorRecordTypes)));
+    }
+  }
+
+  private static String describeRecordTypes(Set<RecordType> recordTypes) {
+    return recordTypes.stream()
+        .map(recordType -> recordType.name().toLowerCase(Locale.ROOT))
+        .sorted()
+        .collect(Collectors.joining(", "));
   }
 }

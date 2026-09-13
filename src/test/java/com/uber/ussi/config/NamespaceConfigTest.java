@@ -80,6 +80,23 @@ class NamespaceConfigTest {
   }
 
   @Test
+  void validateRejectsAnUnsupportedPopularTermDiscardScopeInEitherParamMap() {
+    NamespaceConfig indexScope =
+        validBuilder()
+            .indexParams(Map.of(Constants.POPULAR_TERM_DISCARD_SCOPE, "verification_only"))
+            .build();
+    NamespaceConfig cacheScope =
+        validBuilder()
+            .cacheParams(Map.of(Constants.POPULAR_TERM_DISCARD_SCOPE, "verification_only"))
+            .build();
+
+    for (NamespaceConfig config : List.of(indexScope, cacheScope)) {
+      assertFalse(config.collectStructuralViolations().isEmpty());
+      assertThrows(IllegalArgumentException.class, config::validate);
+    }
+  }
+
+  @Test
   void collectViolationsAppendsWhatEachValidatorReports() {
     NamespaceConfig config = validBuilder().build();
 

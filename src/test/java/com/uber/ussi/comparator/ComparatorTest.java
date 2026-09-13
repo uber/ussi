@@ -1,5 +1,6 @@
 package com.uber.ussi.comparator;
 
+import static com.uber.ussi.utils.MathUtils.EPSILON_9;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -11,12 +12,12 @@ import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
 import com.uber.ussi.error.ArraysSizeMismatchError;
 import com.uber.ussi.error.ComparatorCreationError;
 import com.uber.ussi.utils.Constants;
+import com.uber.ussi.utils.MathUtils;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class ComparatorTest {
 
-  private static final double DELTA = 1e-9;
 
   private static Comparator l2Comparator() {
     return ComparatorFactory.createComparator("l2", Map.of(), new ReciprocalComparatorNormalizer());
@@ -28,7 +29,7 @@ class ComparatorTest {
 
   @Test
   void getUniTransformedValueSquaresValue() {
-    assertEquals(9.0, l2Comparator().getUniTransformedValue(3f), DELTA);
+    assertEquals(9.0, l2Comparator().getUniTransformedValue(3f), EPSILON_9);
   }
 
   @Test
@@ -38,21 +39,21 @@ class ComparatorTest {
 
   @Test
   void computeUniValueSumsSquaredValues() {
-    assertEquals(25.0, l2Comparator().computeUniValue(new float[] {3f, 4f}), DELTA);
+    assertEquals(25.0, l2Comparator().computeUniValue(new float[] {3f, 4f}), EPSILON_9);
   }
 
   @Test
   void computeUniValueReadsValuesFromTermsAndValues() {
     LongTermsAndValues vector = denseVector(new float[] {3f, 4f}, 25.0);
 
-    assertEquals(25.0, l2Comparator().computeUniValue(vector), DELTA);
+    assertEquals(25.0, l2Comparator().computeUniValue(vector), EPSILON_9);
   }
 
   @Test
   void getSimilarityIsOneForIdenticalVectors() {
     LongTermsAndValues vector = denseVector(new float[] {1f, 0f}, 1.0);
 
-    assertEquals(1.0, l2Comparator().getSimilarity(vector, vector, 0.0), DELTA);
+    assertEquals(1.0, l2Comparator().getSimilarity(vector, vector, 0.0), EPSILON_9);
   }
 
   @Test
@@ -97,7 +98,7 @@ class ComparatorTest {
     LongTermsAndValues large = denseVector(new float[] {10f}, 100.0);
     LongTermsAndValues small = denseVector(new float[] {1f}, 1.0);
 
-    assertEquals(0.0, l2Comparator().getSimilarity(large, small, 0.9), DELTA);
+    assertEquals(0.0, l2Comparator().getSimilarity(large, small, 0.9), EPSILON_9);
   }
 
   @Test

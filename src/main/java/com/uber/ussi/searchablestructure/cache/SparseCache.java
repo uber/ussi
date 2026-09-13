@@ -7,6 +7,7 @@ import com.carrotsearch.hppc.LongObjectHashMap;
 import com.carrotsearch.hppc.cursors.LongCursor;
 import com.carrotsearch.hppc.cursors.LongObjectCursor;
 import com.uber.ussi.config.NamespaceConfig;
+import com.uber.ussi.config.NamespaceConfig.PopularTermDiscardScope;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
@@ -41,23 +42,25 @@ public final class SparseCache extends Cache {
   private static final double MAX_ROWS_RATIO_TO_BRUTE_FORCE_PRE_FILTERING = 0.01;
 
   private final double maxFractionIdsPerSparseKey;
+  private final PopularTermDiscardScope popularTermDiscardScope;
   private final double fullReevaluationCacheSizeDecreaseFraction;
-  private final MathUtils.ProportionConfidenceInterval1Sided filteringOutTermsConfidenceTester;
+  private final MathUtils.ProportionConfidenceInterval1Sided popularityConfidenceTester;
   private final LongObjectHashMap<LongArrayList> termAndRowNumsIndex;
-  private final LongHashSet filteredOutTerms;
+  private final LongHashSet discardedTerms;
   private int numRowsAtLastExactPopularityEvaluation;
   private boolean lastSearchUsedPreFilteringBruteForce;
 
   public SparseCache(NamespaceConfig namespaceConfig) {
     super(namespaceConfig);
     this.maxFractionIdsPerSparseKey = parseMaxFractionIdsPerSparseKey(namespaceConfig);
+    this.popularTermDiscardScope = namespaceConfig.getCachePopularTermDiscardScope();
     this.fullReevaluationCacheSizeDecreaseFraction =
         parseFullReevaluationCacheSizeDecreaseFraction(namespaceConfig);
-    this.filteringOutTermsConfidenceTester =
+    this.popularityConfidenceTester =
         new MathUtils.ProportionConfidenceInterval1Sided(
             parseMaxFractionIdsPerSparseKeyConfidence(namespaceConfig));
     this.termAndRowNumsIndex = new LongObjectHashMap<>(CACHE_INITIAL_CAPACITY);
-    this.filteredOutTerms = new LongHashSet();
+    this.discardedTerms = new LongHashSet();
   }
 
   @Override
@@ -90,7 +93,7 @@ public final class SparseCache extends Cache {
       }
       invertedList.add(rowNum);
     }
-    updateFilteredOutTermsAfterInsertion(record);
+    updateDiscardedTermsAfterInsertion(record);
     if (size() >= numRowsAtLastExactPopularityEvaluation) {
       numRowsAtLastExactPopularityEvaluation = size();
     }
@@ -109,11 +112,11 @@ public final class SparseCache extends Cache {
         termAndRowNumsIndex.remove(term);
       }
     }
-    updateFilteredOutTermsAfterDeletion(record);
+    updateDiscardedTermsAfterDeletion(record);
   }
 
-  long[] getFilteredOutTermsForTests() {
-    long[] terms = filteredOutTerms.toArray();
+  long[] getDiscardedTermsForTests() {
+    long[] terms = discardedTerms.toArray();
     Arrays.sort(terms);
     return terms;
   }
@@ -133,10 +136,19 @@ public final class SparseCache extends Cache {
     if (maxResults == 0 || rowNumToTermsAndValuesMap.isEmpty()) {
       return Collections.emptyList();
     }
-    LongTermsAndValues filteredQuery = record.newWithFilteredTerms(filteredOutTerms, comparator);
-    if (filteredQuery.termsLength() == 0) {
+    LongTermsAndValues discardedTermFreeQuery = record.newWithoutTerms(discardedTerms, comparator);
+    if (discardedTermFreeQuery.termsLength() == 0) {
       return Collections.emptyList();
     }
+    /*
+     * The query is scored in whichever form the discard scope says the rows are scored in, so that
+     * both sides of every comparison carry the same terms, and candidates are always generated
+     * from the discarded-term-free form so that the popular terms' inverted lists go unvisited.
+     */
+    LongTermsAndValues verificationQuery =
+        popularTermDiscardScope == PopularTermDiscardScope.CANDIDATES_ONLY
+            ? record
+            : discardedTermFreeQuery;
     /*
      * When metadata pre-filtering leaves only a small fraction of the cache, scanning the matching
      * rows directly is cheaper than candidate generation over inverted lists.
@@ -146,20 +158,22 @@ public final class SparseCache extends Cache {
             metadataFilter, (int) (size() * MAX_ROWS_RATIO_TO_BRUTE_FORCE_PRE_FILTERING));
     if (preFiltering.isSuccess()) {
       lastSearchUsedPreFilteringBruteForce = true;
-      return bruteForceSearch(filteredQuery, preFiltering.getRowNums(), minSimilarity, maxResults);
+      return bruteForceSearch(
+          verificationQuery, preFiltering.getRowNums(), minSimilarity, maxResults);
     }
-    return invertedIndexSearch(filteredQuery, metadataFilter, minSimilarity, maxResults);
+    return invertedIndexSearch(
+        verificationQuery, discardedTermFreeQuery, metadataFilter, minSimilarity, maxResults);
   }
 
   private List<RowNumAndSimilarity> bruteForceSearch(
       LongTermsAndValues query, LongHashSet matchingRowNums, float minSimilarity, int maxResults) {
     BoundedSizeMaxHeap<RowNumAndSimilarity> rows = createTopResultsHeap(maxResults);
     for (LongCursor rowNum : matchingRowNums) {
-      LongTermsAndValues comparisonRow = getComparisonRow(rowNum.value);
-      if (comparisonRow == null || !query.sharesAnyTerm(comparisonRow)) {
+      LongTermsAndValues verificationRow = getVerificationRow(rowNum.value);
+      if (verificationRow == null || !query.sharesAnyTerm(verificationRow)) {
         continue;
       }
-      float similarity = (float) comparator.getSimilarity(query, comparisonRow, minSimilarity);
+      float similarity = (float) comparator.getSimilarity(query, verificationRow, minSimilarity);
       if (similarity >= minSimilarity) {
         rows.add(new RowNumAndSimilarity(rowNum.value, similarity));
       }
@@ -171,15 +185,26 @@ public final class SparseCache extends Cache {
    * Generates candidates from the inverted lists of the query terms in nondecreasing
    * unordered-prefix cost, stopping once the accumulated uni-transformed prefix mass exceeds the
    * budget implied by the dynamically tightened similarity threshold.
+   *
+   * @param query the query in verification form, which is the only form the comparator can score.
+   * @param discardedTermFreeQuery the query without its discarded terms, which supplies both the
+   *     inverted lists to visit and the uni value prefix filtering budgets against, since the
+   *     prefix mass accumulates over this form's terms.
    */
   private List<RowNumAndSimilarity> invertedIndexSearch(
-      LongTermsAndValues query, MetaFilter metadataFilter, float minSimilarity, int maxResults) {
-    SparseKeyAndPrefixFilteringData[] termData = getTermAndPrefixFilteringData(query);
+      LongTermsAndValues query,
+      LongTermsAndValues discardedTermFreeQuery,
+      MetaFilter metadataFilter,
+      float minSimilarity,
+      int maxResults) {
+    SparseKeyAndPrefixFilteringData[] termData =
+        getTermAndPrefixFilteringData(discardedTermFreeQuery);
     Arrays.sort(termData);
     BoundedSizeMaxHeap<RowNumAndSimilarity> rows = createTopResultsHeap(maxResults);
     double currentMinSimilarity = minSimilarity;
     double maxPrefixSum =
-        comparator.getMinPrefixSumForTermsAndValues(query.getUniValue(), currentMinSimilarity);
+        comparator.getMinPrefixSumForTermsAndValues(
+            discardedTermFreeQuery.getUniValue(), currentMinSimilarity);
     MathUtils.StableSumAccumulator prefixSumAccumulator = new MathUtils.StableSumAccumulator();
     LongHashSet scannedRowNums = new LongHashSet();
     for (SparseKeyAndPrefixFilteringData term : termData) {
@@ -193,11 +218,11 @@ public final class SparseCache extends Cache {
         if (!scannedRowNums.add(rowNum) || !matchesMetaFilter(rowNum, metadataFilter)) {
           continue;
         }
-        LongTermsAndValues comparisonRow = getComparisonRow(rowNum);
-        if (comparisonRow == null) {
+        LongTermsAndValues verificationRow = getVerificationRow(rowNum);
+        if (verificationRow == null) {
           continue;
         }
-        double similarity = comparator.getSimilarity(query, comparisonRow, currentMinSimilarity);
+        double similarity = comparator.getSimilarity(query, verificationRow, currentMinSimilarity);
         if (similarity < currentMinSimilarity) {
           continue;
         }
@@ -208,7 +233,7 @@ public final class SparseCache extends Cache {
             currentMinSimilarity = tightenedMinSimilarity;
             maxPrefixSum =
                 comparator.getMinPrefixSumForTermsAndValues(
-                    query.getUniValue(), currentMinSimilarity);
+                    discardedTermFreeQuery.getUniValue(), currentMinSimilarity);
             if (prefixSumAccumulator.getSum() > maxPrefixSum) {
               break;
             }
@@ -237,53 +262,53 @@ public final class SparseCache extends Cache {
   }
 
   /**
-   * Returns the row without the currently filtered-out terms, or null when the row does not exist
-   * or has no remaining terms. Unlike the sparse index, comparison rows are derived on the fly
-   * because the filtered-out terms change as the cache mutates.
+   * Returns the row in the form the comparator scores it in, or null when the row does not exist or
+   * the discard leaves it with no terms. Unlike the sparse index, this form is derived on the fly
+   * because which terms are discarded changes as the cache mutates.
    */
   @Nullable
-  private LongTermsAndValues getComparisonRow(long rowNum) {
+  private LongTermsAndValues getVerificationRow(long rowNum) {
     LongTermsAndValues termsAndValues = rowNumToTermsAndValuesMap.get(rowNum);
-    if (termsAndValues == null) {
-      return null;
+    if (termsAndValues == null
+        || popularTermDiscardScope == PopularTermDiscardScope.CANDIDATES_ONLY) {
+      return termsAndValues;
     }
-    LongTermsAndValues comparisonRow =
-        termsAndValues.newWithFilteredTerms(filteredOutTerms, comparator);
-    return comparisonRow.termsLength() == 0 ? null : comparisonRow;
+    LongTermsAndValues verificationRow = termsAndValues.newWithoutTerms(discardedTerms, comparator);
+    return verificationRow.termsLength() == 0 ? null : verificationRow;
   }
 
-  private void updateFilteredOutTermsAfterInsertion(LongTermsAndValues insertedRecord) {
+  private void updateDiscardedTermsAfterInsertion(LongTermsAndValues insertedRecord) {
     if (maxFractionIdsPerSparseKey == 1.0) {
-      filteredOutTerms.clear();
+      discardedTerms.clear();
       return;
     }
 
     /*
      * An insertion cannot make an untouched, unfiltered term more popular. Recheck the inserted
-     * terms for newly-popular terms and the filtered set for terms that the larger sample readmits.
+     * terms for newly-popular terms and the discarded set for those the larger sample readmits.
      */
     LongHashSet termsToReevaluate =
-        new LongHashSet(filteredOutTerms.size() + insertedRecord.termsLength());
-    for (LongCursor term : filteredOutTerms) {
+        new LongHashSet(discardedTerms.size() + insertedRecord.termsLength());
+    for (LongCursor term : discardedTerms) {
       termsToReevaluate.add(term.value);
     }
     for (int i = 0; i < insertedRecord.termsLength(); ++i) {
       termsToReevaluate.add(insertedRecord.getTerm(i));
     }
     for (LongCursor term : termsToReevaluate) {
-      updateFilteredOutTerm(term.value);
+      updateDiscardedTerm(term.value);
     }
   }
 
-  private void updateFilteredOutTermsAfterDeletion(LongTermsAndValues deletedRecord) {
+  private void updateDiscardedTermsAfterDeletion(LongTermsAndValues deletedRecord) {
     if (maxFractionIdsPerSparseKey == 1.0) {
-      filteredOutTerms.clear();
+      discardedTerms.clear();
       return;
     }
     if (size()
         <= numRowsAtLastExactPopularityEvaluation
             * (1.0 - fullReevaluationCacheSizeDecreaseFraction)) {
-      rebuildFilteredOutTerms();
+      rebuildDiscardedTerms();
       return;
     }
 
@@ -293,27 +318,27 @@ public final class SparseCache extends Cache {
      * reevaluation above bounds how long such a decision can remain stale.
      */
     LongHashSet termsToReevaluate =
-        new LongHashSet(filteredOutTerms.size() + deletedRecord.termsLength());
-    for (LongCursor term : filteredOutTerms) {
+        new LongHashSet(discardedTerms.size() + deletedRecord.termsLength());
+    for (LongCursor term : discardedTerms) {
       termsToReevaluate.add(term.value);
     }
     for (int i = 0; i < deletedRecord.termsLength(); ++i) {
       termsToReevaluate.add(deletedRecord.getTerm(i));
     }
     for (LongCursor term : termsToReevaluate) {
-      updateFilteredOutTerm(term.value);
+      updateDiscardedTerm(term.value);
     }
   }
 
-  private void updateFilteredOutTerm(long term) {
-    if (shouldFilterOutTerm(term)) {
-      filteredOutTerms.add(term);
+  private void updateDiscardedTerm(long term) {
+    if (shouldDiscardTerm(term)) {
+      discardedTerms.add(term);
     } else {
-      filteredOutTerms.remove(term);
+      discardedTerms.remove(term);
     }
   }
 
-  private boolean shouldFilterOutTerm(long term) {
+  private boolean shouldDiscardTerm(long term) {
     LongArrayList invertedList = termAndRowNumsIndex.get(term);
     int numRows = size();
     int numRowsWithTerm = invertedList == null ? 0 : invertedList.size();
@@ -323,21 +348,21 @@ public final class SparseCache extends Cache {
     if (numRowsWithTerm > numRows) {
       return true;
     }
-    return filteringOutTermsConfidenceTester.getConfidenceIntervalUpperBound(
+    return popularityConfidenceTester.getConfidenceIntervalUpperBound(
             /* numTrials */ numRows, /* numSuccesses */ numRowsWithTerm)
         > maxFractionIdsPerSparseKey;
   }
 
   /** Rebuilds all popularity decisions and resets the exact-evaluation cache-size baseline. */
-  private void rebuildFilteredOutTerms() {
-    filteredOutTerms.clear();
+  private void rebuildDiscardedTerms() {
+    discardedTerms.clear();
     int numRows = size();
     numRowsAtLastExactPopularityEvaluation = numRows;
     if (numRows == 0 || maxFractionIdsPerSparseKey == 1.0) {
       return;
     }
     for (LongObjectCursor<LongArrayList> entry : termAndRowNumsIndex) {
-      updateFilteredOutTerm(entry.key);
+      updateDiscardedTerm(entry.key);
     }
   }
 

@@ -66,7 +66,7 @@ class SparseFilteredSearchTest {
   }
 
   @Test
-  void searchScoresCandidatesFromTheComparisonLookup() {
+  void searchScoresCandidatesFromTheVerificationLookup() {
     LongTermsAndValues query = jaccard(new long[] {10, 20}, 1, 1);
     LongTermsAndValues row1 = jaccard(new long[] {10, 20}, 1, 1);
     LongTermsAndValues row2 = jaccard(new long[] {10}, 1);
@@ -79,6 +79,7 @@ class SparseFilteredSearchTest {
     List<RowNumAndSimilarity> results =
         SparseFilteredSearch.search(
             COMPARATOR,
+            query,
             query,
             null,
             0.0f,

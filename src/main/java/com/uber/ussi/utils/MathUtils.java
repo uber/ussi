@@ -6,6 +6,13 @@ import org.apache.commons.math3.distribution.NormalDistribution;
 public final class MathUtils {
   /** Tolerance for double-precision numeric comparisons in comparators and uni validation. */
   public static final double EPSILON_12 = 1e-12;
+
+  /**
+   * Tolerance for comparing values that accumulate rounding error over many operations, such as a
+   * similarity reached through a normalizer, and so cannot be held to {@link #EPSILON_12}.
+   */
+  public static final double EPSILON_9 = 1e-9;
+
   private static final long SPLITTABLE_GAMMA = 0x9e3779b97f4a7c15L;
   private static final double DOUBLE_UNIT = 0x1.0p-53;
 

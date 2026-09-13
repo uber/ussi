@@ -1,5 +1,6 @@
 package com.uber.ussi.comparator;
 
+import static com.uber.ussi.utils.MathUtils.EPSILON_9;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -19,7 +20,6 @@ import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
 
 class SparseComparatorTest {
-  private static final double DELTA = 1e-9;
 
   @Test
   void jaccardComputesIntersectionOverUnion() {
@@ -27,7 +27,7 @@ class SparseComparatorTest {
     LongTermsAndValues first = sparse(comparator, new long[] {1L, 2L, 3L}, 1f, 5f, 2f);
     LongTermsAndValues second = sparse(comparator, new long[] {2L, 3L, 4L}, 1f, -4f, 8f);
 
-    assertEquals(1.0 / 5.0, comparator.getSimilarity(first, second, 0.0), DELTA);
+    assertEquals(1.0 / 5.0, comparator.getSimilarity(first, second, 0.0), EPSILON_9);
   }
 
   @Test
@@ -36,7 +36,7 @@ class SparseComparatorTest {
     LongTermsAndValues first = sparse(comparator, new long[] {1L, 2L}, 2f, 3f);
     LongTermsAndValues second = sparse(comparator, new long[] {1L, 2L}, 1f, 5f);
 
-    assertEquals(4.0 / 7.0, comparator.getSimilarity(first, second, 0.0), DELTA);
+    assertEquals(4.0 / 7.0, comparator.getSimilarity(first, second, 0.0), EPSILON_9);
   }
 
   @Test
@@ -45,7 +45,7 @@ class SparseComparatorTest {
     LongTermsAndValues first = sparse(comparator, new long[] {1L}, 2f);
     LongTermsAndValues second = sparse(comparator, new long[] {1L}, -2f);
 
-    assertEquals(0.0, comparator.getSimilarity(first, second, 0.0), DELTA);
+    assertEquals(0.0, comparator.getSimilarity(first, second, 0.0), EPSILON_9);
   }
 
   @Test
@@ -54,7 +54,7 @@ class SparseComparatorTest {
     LongTermsAndValues first = dense(comparator, 2f, 3f);
     LongTermsAndValues second = dense(comparator, 1f, 5f);
 
-    assertEquals(4.0 / 7.0, comparator.getSimilarity(first, second, 0.0), DELTA);
+    assertEquals(4.0 / 7.0, comparator.getSimilarity(first, second, 0.0), EPSILON_9);
   }
 
   @Test
@@ -65,8 +65,8 @@ class SparseComparatorTest {
 
     assertFalse(comparator.mayPassLengthFiltering(2.0, 10.0, 0.5));
     assertTrue(comparator.mayPassLengthFiltering(2.0, 3.0, 0.5));
-    assertEquals(1.0 / 3.0, comparator.getSimilarity(first, second, 1.0 / 3.0), DELTA);
-    assertEquals(0.0, comparator.getSimilarity(first, second, 0.34), DELTA);
+    assertEquals(1.0 / 3.0, comparator.getSimilarity(first, second, 1.0 / 3.0), EPSILON_9);
+    assertEquals(0.0, comparator.getSimilarity(first, second, 0.34), EPSILON_9);
   }
 
   @Test
@@ -243,6 +243,25 @@ class SparseComparatorTest {
         () -> comparator.getMinPrefixSumForTermsAndValuesInternal(1.0, -0.1));
   }
 
+  /**
+   * Two records that between them carry no magnitude have an empty union, which no ratio is
+   * defined over. They differ in nothing, so they are reported as identical.
+   */
+  @Test
+  void twoRecordsWithNothingToUnionAreIdentical() {
+    BaseRuzickaComparator comparator = (BaseRuzickaComparator) comparator("ruzicka");
+
+    assertEquals(
+        1.0,
+        comparator.similarityFromConjunction(
+            /* conjunction */ 0.0,
+            /* partialUniValue1 */ 0.0,
+            /* uniValue1 */ 0.0,
+            /* partialUniValue2 */ 0.0,
+            /* uniValue2 */ 0.0),
+        EPSILON_9);
+  }
+
   @Test
   void randomizedResultsMatchMapBasedOracle() {
     Random random = new Random(8128L);
@@ -253,10 +272,10 @@ class SparseComparatorTest {
         LongTermsAndValues second = randomSparseVector(comparator, random);
         double expected = mapBasedSimilarity(comparator, first, second);
 
-        assertEquals(expected, comparator.getSimilarity(first, second, 0.0), DELTA);
+        assertEquals(expected, comparator.getSimilarity(first, second, 0.0), EPSILON_9);
         double threshold = Math.min(1.0, expected + 0.01);
         double thresholded = comparator.getSimilarity(first, second, threshold);
-        assertEquals(expected >= threshold ? expected : 0.0, thresholded, DELTA);
+        assertEquals(expected >= threshold ? expected : 0.0, thresholded, EPSILON_9);
       }
     }
   }

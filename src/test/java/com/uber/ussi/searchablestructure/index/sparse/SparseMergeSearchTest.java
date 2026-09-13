@@ -18,7 +18,7 @@ class SparseMergeSearchTest {
   private static final Map<Long, Double> UNI_VALUES = Map.of(1L, 1.0, 2L, 2.0, 3L, 3.0);
 
   @Test
-  void searchScoresFromConjunctionWithoutConsultingTheComparisonLookup() {
+  void searchScoresFromConjunctionWithoutConsultingTheVerificationLookup() {
     LongTermsAndValues query = jaccard(new long[] {10, 20}, 1, 1);
     SparseMergeSearch.QueryKey[] queryKeys = {
       new SparseMergeSearch.QueryKey(
@@ -31,6 +31,7 @@ class SparseMergeSearchTest {
         SparseMergeSearch.search(
             COMPARATOR,
             query,
+            query,
             null,
             0.0f,
             5,
@@ -39,7 +40,7 @@ class SparseMergeSearchTest {
             (rowNum, metadataFilter) -> true,
             /* scoresFromConjunction */ true,
             rowNum -> {
-              throw new AssertionError("comparison lookup should not run");
+              throw new AssertionError("verification lookup should not run");
             });
 
     assertEquals(List.of(1L), rowNums(results));
@@ -59,6 +60,7 @@ class SparseMergeSearchTest {
         SparseMergeSearch.search(
             COMPARATOR,
             query,
+            query,
             null,
             0.0f,
             5,
@@ -69,6 +71,35 @@ class SparseMergeSearchTest {
             rows::get);
 
     assertEquals(List.of(1L), rowNums(results));
+  }
+
+  /**
+   * A row deleted between candidate generation and verification has nothing left to score, so it
+   * drops out rather than being reported at whatever similarity its absence would imply.
+   */
+  @Test
+  void searchDropsACandidateThatTheVerificationLookupNoLongerHas() {
+    LongTermsAndValues query = jaccard(new long[] {10}, 1);
+    SparseMergeSearch.QueryKey[] queryKeys = {
+      new SparseMergeSearch.QueryKey(
+          new SparseInvertedList(new long[] {1}, new float[] {1f}), 1f, 1.0)
+    };
+
+    List<RowNumAndSimilarity> results =
+        SparseMergeSearch.search(
+            COMPARATOR,
+            query,
+            query,
+            null,
+            0.0f,
+            5,
+            queryKeys,
+            mergeContext(),
+            (rowNum, metadataFilter) -> true,
+            /* scoresFromConjunction */ false,
+            rowNum -> null);
+
+    assertEquals(List.of(), rowNums(results));
   }
 
   @Test
@@ -85,6 +116,7 @@ class SparseMergeSearchTest {
     List<RowNumAndSimilarity> results =
         SparseMergeSearch.search(
             COMPARATOR,
+            query,
             query,
             null,
             0.0f,

@@ -42,7 +42,7 @@ public final class SparseIndex extends Index {
     }
     this.invertedIndex = new InvertedIndex(namespaceConfig, exactRows, rowNumToMetaMap);
     this.signatureIndex = new SignatureIndex(namespaceConfig, signatureRows, rowNumToMetaMap);
-    this.sparseKeyPopularityFilteringEnabled = invertedIndex.hasSparseKeyPopularityFiltering();
+    this.sparseKeyPopularityFilteringEnabled = invertedIndex.discardsPopularSparseKeys();
   }
 
   @Override

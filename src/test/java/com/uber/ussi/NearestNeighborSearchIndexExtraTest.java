@@ -212,7 +212,7 @@ class NearestNeighborSearchIndexExtraTest {
       // Delete while graduation build is blocked.
       assertTrue(index.delete(rowNum));
 
-      // Let graduation complete — tombstone replay should apply the delete to the new index.
+      // Let graduation complete. Tombstone replay should apply the delete to the new index.
       releaseGraduation.countDown();
       index.awaitBackgroundTasks();
 

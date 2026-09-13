@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.uber.ussi.config.NamespaceConfig.PopularTermDiscardScope;
-import com.uber.ussi.config.NamespaceConfig.SparseCandidateGenerator;
+import com.uber.ussi.config.NamespaceConfig.CandidateGenerator;
 import com.uber.ussi.utils.Constants;
 import java.util.List;
 import java.util.Map;
@@ -27,9 +27,9 @@ class NamespaceConfigAccessorsTest {
         .minTermsAndValuesLength(1)
         .maxTermsAndValuesLength(4)
         .maxCacheSize(10)
-        .cacheType("generic")
+        .cacheType("scan")
         .cacheParams(Map.of("ck", "cv"))
-        .indexType("generic")
+        .indexType("scan")
         .indexParams(Map.of("ik", "iv"))
         .comparatorType("l2")
         .comparatorParams(Map.of("pk", "pv"))
@@ -54,18 +54,18 @@ class NamespaceConfigAccessorsTest {
   }
 
   @Test
-  void getSparseCandidateGeneratorCases() {
+  void getCandidateGeneratorCases() {
     NamespaceConfig defaults = fullBuilder().build();
     NamespaceConfig merge =
         fullBuilder()
             .indexParams(
                 Map.of(
-                    Constants.SPARSE_CANDIDATE_GENERATOR,
-                    SparseCandidateGenerator.SPARS_MERGE.getParamValue()))
+                    Constants.CANDIDATE_GENERATOR,
+                    CandidateGenerator.SPARS_MERGE.getParamValue()))
             .build();
 
-    assertEquals(SparseCandidateGenerator.SPARS, defaults.getSparseCandidateGenerator());
-    assertEquals(SparseCandidateGenerator.SPARS_MERGE, merge.getSparseCandidateGenerator());
+    assertEquals(CandidateGenerator.SPARS, defaults.getCandidateGenerator());
+    assertEquals(CandidateGenerator.SPARS_MERGE, merge.getCandidateGenerator());
   }
 
   /** An index reads the scope from the index params and a cache reads it from the cache params. */
@@ -115,9 +115,9 @@ class NamespaceConfigAccessorsTest {
     assertEquals(1, config.getMinTermsAndValuesLength());
     assertEquals(4, config.getMaxTermsAndValuesLength());
     assertEquals(10, config.getMaxCacheSize());
-    assertEquals("generic", config.getCacheType());
+    assertEquals("scan", config.getCacheType());
     assertEquals(Map.of("ck", "cv"), config.getCacheParams());
-    assertEquals("generic", config.getIndexType());
+    assertEquals("scan", config.getIndexType());
     assertEquals(Map.of("ik", "iv"), config.getIndexParams());
     assertEquals("l2", config.getComparatorType());
     assertEquals(Map.of("pk", "pv"), config.getComparatorParams());

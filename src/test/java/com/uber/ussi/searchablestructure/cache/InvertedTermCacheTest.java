@@ -96,9 +96,9 @@ class InvertedTermCacheTest {
             config(
                 "jaccard",
                 Map.of(
-                    Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY,
+                    Constants.MAX_FRACTION_IDS_PER_KEY,
                     "0.5",
-                    Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY_CONFIDENCE,
+                    Constants.MAX_FRACTION_IDS_PER_KEY_CONFIDENCE,
                     "0.5")));
     long first = cache.insert(jaccard(new long[] {1, 101}, 1, 1), Map.of());
     long second = cache.insert(jaccard(new long[] {1, 102}, 1, 1), Map.of());
@@ -172,9 +172,9 @@ class InvertedTermCacheTest {
             config(
                 "jaccard",
                 Map.of(
-                    Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY,
+                    Constants.MAX_FRACTION_IDS_PER_KEY,
                     "0.54",
-                    Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY_CONFIDENCE,
+                    Constants.MAX_FRACTION_IDS_PER_KEY_CONFIDENCE,
                     "0.5")));
     for (int row = 0; row < 10; ++row) {
       cache.insert(jaccard(new long[] {1, 2}, 1, 1), Map.of());
@@ -203,9 +203,9 @@ class InvertedTermCacheTest {
             config(
                 "jaccard",
                 Map.of(
-                    Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY,
+                    Constants.MAX_FRACTION_IDS_PER_KEY,
                     "0.5",
-                    Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY_CONFIDENCE,
+                    Constants.MAX_FRACTION_IDS_PER_KEY_CONFIDENCE,
                     "0.5")));
     for (int row = 0; row < 46; ++row) {
       cache.insert(jaccard(new long[] {1}, 1), Map.of());
@@ -234,9 +234,9 @@ class InvertedTermCacheTest {
             config(
                 "jaccard",
                 Map.of(
-                    Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY,
+                    Constants.MAX_FRACTION_IDS_PER_KEY,
                     "0.5",
-                    Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY_CONFIDENCE,
+                    Constants.MAX_FRACTION_IDS_PER_KEY_CONFIDENCE,
                     "0.5",
                     Constants.FULL_REEVALUATION_CACHE_SIZE_DECREASE_FRACTION,
                     "0.2")));
@@ -265,9 +265,9 @@ class InvertedTermCacheTest {
             config(
                 "jaccard",
                 Map.of(
-                    Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY,
+                    Constants.MAX_FRACTION_IDS_PER_KEY,
                     "0.5",
-                    Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY_CONFIDENCE,
+                    Constants.MAX_FRACTION_IDS_PER_KEY_CONFIDENCE,
                     "0.5")));
     long rowNum = cache.insert(jaccard(new long[] {1}, 1), Map.of());
     assertArrayEquals(new long[] {1}, cache.getDiscardedTermsForTests());
@@ -287,7 +287,7 @@ class InvertedTermCacheTest {
      */
     InvertedTermCache cache =
         new InvertedTermCache(
-            config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0.7")));
+            config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0.7")));
     cache.insert(jaccard(new long[] {1, 101}, 1, 1), Map.of());
     cache.insert(jaccard(new long[] {1, 102}, 1, 1), Map.of());
     cache.insert(jaccard(new long[] {103}, 1), Map.of());
@@ -350,34 +350,34 @@ class InvertedTermCacheTest {
         IllegalArgumentException.class,
         () ->
             new InvertedTermCache(
-                config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0"))));
+                config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0"))));
     assertThrows(
         IllegalArgumentException.class,
         () ->
             new InvertedTermCache(
                 config(
-                    "jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "not-a-number"))));
-    assertThrows(
-        IllegalArgumentException.class,
-        () ->
-            new InvertedTermCache(
-                config(
-                    "jaccard",
-                    Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY_CONFIDENCE, "0.4"))));
+                    "jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "not-a-number"))));
     assertThrows(
         IllegalArgumentException.class,
         () ->
             new InvertedTermCache(
                 config(
                     "jaccard",
-                    Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY_CONFIDENCE, "1.1"))));
+                    Map.of(Constants.MAX_FRACTION_IDS_PER_KEY_CONFIDENCE, "0.4"))));
     assertThrows(
         IllegalArgumentException.class,
         () ->
             new InvertedTermCache(
                 config(
                     "jaccard",
-                    Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY_CONFIDENCE, "not-a-number"))));
+                    Map.of(Constants.MAX_FRACTION_IDS_PER_KEY_CONFIDENCE, "1.1"))));
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            new InvertedTermCache(
+                config(
+                    "jaccard",
+                    Map.of(Constants.MAX_FRACTION_IDS_PER_KEY_CONFIDENCE, "not-a-number"))));
     assertThrows(
         IllegalArgumentException.class,
         () ->
@@ -467,41 +467,41 @@ class InvertedTermCacheTest {
     for (String comparatorType : List.of("jaccard", "ruzicka", "l2")) {
       Random random = new Random(191_733L + comparatorType.hashCode());
       InvertedTermCache sparseCache = new InvertedTermCache(config(comparatorType));
-      ScanCache genericCache = new ScanCache(genericConfig(comparatorType));
+      ScanCache scanCache = new ScanCache(scanCacheConfig(comparatorType));
       List<Long> liveRowNums = new ArrayList<>();
 
       for (int insertIndex = 0; insertIndex < 120; ++insertIndex) {
         LongTermsAndValues record = randomSparseRecord(random, comparatorType);
         long rowNum = sparseCache.insert(record, Map.of());
-        assertEquals(rowNum, genericCache.insert(record, Map.of()));
+        assertEquals(rowNum, scanCache.insert(record, Map.of()));
         liveRowNums.add(rowNum);
       }
       for (int updateIndex = 0; updateIndex < 40; ++updateIndex) {
         long rowNum = liveRowNums.get(random.nextInt(liveRowNums.size()));
         LongTermsAndValues record = randomSparseRecord(random, comparatorType);
         assertTrue(sparseCache.update(rowNum, record, Map.of()));
-        assertTrue(genericCache.update(rowNum, record, Map.of()));
+        assertTrue(scanCache.update(rowNum, record, Map.of()));
       }
       for (int deleteIndex = 0; deleteIndex < 20; ++deleteIndex) {
         long rowNum = liveRowNums.remove(random.nextInt(liveRowNums.size()));
         assertTrue(sparseCache.delete(rowNum));
-        assertTrue(genericCache.delete(rowNum));
+        assertTrue(scanCache.delete(rowNum));
       }
 
-      LongObjectHashMap<LongTermsAndValues> rows = genericCache.getAll();
+      LongObjectHashMap<LongTermsAndValues> rows = scanCache.getAll();
       for (int queryIndex = 0; queryIndex < 40; ++queryIndex) {
         LongTermsAndValues query = randomSparseRecord(random, comparatorType);
         int k = 1 + random.nextInt(10);
         float minSimilarity = new float[] {0.0f, 0.2f, 0.5f, 0.8f}[random.nextInt(4)];
 
         /*
-         * The generic cache scores every row, so its results are restricted to the rows sharing a
+         * The scan cache scores every row, so its results are restricted to the rows sharing a
          * term with the query before comparing them against the inverted term cache results.
          */
         assertEquivalent(
             comparatorType + " nearest queryIndex=" + queryIndex + " k=" + k + " query=" + query,
             restrictToRowsSharingATerm(
-                genericCache.getNearestNeighborRowNums(rows.size(), query, MetaFilter.empty()),
+                scanCache.getNearestNeighborRowNums(rows.size(), query, MetaFilter.empty()),
                 rows,
                 query,
                 k),
@@ -515,7 +515,7 @@ class InvertedTermCacheTest {
                 + " query="
                 + query,
             restrictToRowsSharingATerm(
-                genericCache.getSimilarRowNums(minSimilarity, query, MetaFilter.empty()),
+                scanCache.getSimilarRowNums(minSimilarity, query, MetaFilter.empty()),
                 rows,
                 query,
                 rows.size()),
@@ -534,9 +534,9 @@ class InvertedTermCacheTest {
         config(
             "jaccard",
             Map.of(
-                Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY,
+                Constants.MAX_FRACTION_IDS_PER_KEY,
                 "0.5",
-                Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY_CONFIDENCE,
+                Constants.MAX_FRACTION_IDS_PER_KEY_CONFIDENCE,
                 "0.5",
                 Constants.POPULAR_TERM_DISCARD_SCOPE,
                 discardScope)));
@@ -547,11 +547,11 @@ class InvertedTermCacheTest {
   }
 
   private static NamespaceConfig config(String comparatorType, Map<String, String> cacheParams) {
-    return namespaceConfig(comparatorType, "sparse", cacheParams);
+    return namespaceConfig(comparatorType, "inverted_term", cacheParams);
   }
 
-  private static NamespaceConfig genericConfig(String comparatorType) {
-    return namespaceConfig(comparatorType, "generic", Map.of());
+  private static NamespaceConfig scanCacheConfig(String comparatorType) {
+    return namespaceConfig(comparatorType, "scan", Map.of());
   }
 
   private static NamespaceConfig namespaceConfig(
@@ -562,7 +562,7 @@ class InvertedTermCacheTest {
         .maxCacheSize(1000)
         .cacheType(cacheType)
         .cacheParams(cacheParams)
-        .indexType("sparse")
+        .indexType("inverted_hybrid")
         .comparatorType(comparatorType)
         .comparatorNormalizerType(comparatorType.equals("l2") ? "reciprocal" : "identity")
         .maxNumSearchableStructures(3)
@@ -623,7 +623,7 @@ class InvertedTermCacheTest {
 
     @Override
     public Set<RecordType> getSupportedRecordTypes() {
-      return Set.of(RecordType.SPARSE);
+      return Set.of(RecordType.ORDER_AGNOSTIC_SPARSE);
     }
 
     @Override

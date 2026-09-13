@@ -4,7 +4,7 @@ package com.uber.ussi.comparator.signaturegenerator;
 import java.util.Locale;
 import java.util.Objects;
 
-/** Creates the signature generators supported by the sparse approximate index. */
+/** Creates the signature generators supported by the signature-keyed index types. */
 public final class SignatureGeneratorFactory {
   public enum SignatureGeneratorType {
     I2CWS,

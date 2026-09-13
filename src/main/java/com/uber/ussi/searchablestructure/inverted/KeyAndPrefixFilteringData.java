@@ -2,22 +2,22 @@
 package com.uber.ussi.searchablestructure.inverted;
 
 /**
- * Query sparse-key data ordered for low-cost unordered-prefix candidate generation. Shared by the
+ * Query key data ordered for low-cost unordered-prefix candidate generation. Shared by the
  * inverted indexes and the inverted term cache.
  */
 public final class KeyAndPrefixFilteringData implements Comparable<KeyAndPrefixFilteringData> {
-  private final long sparseKey;
+  private final long key;
   private final int numRows;
   private final double uniTransformedValue;
 
-  public KeyAndPrefixFilteringData(long sparseKey, int numRows, double uniTransformedValue) {
-    this.sparseKey = sparseKey;
+  public KeyAndPrefixFilteringData(long key, int numRows, double uniTransformedValue) {
+    this.key = key;
     this.numRows = numRows;
     this.uniTransformedValue = uniTransformedValue;
   }
 
-  public long getSparseKey() {
-    return sparseKey;
+  public long getKey() {
+    return key;
   }
 
   public int getNumRows() {
@@ -38,6 +38,6 @@ public final class KeyAndPrefixFilteringData implements Comparable<KeyAndPrefixF
     if (uniValueComparison != 0) {
       return uniValueComparison;
     }
-    return Long.compare(sparseKey, other.sparseKey);
+    return Long.compare(key, other.key);
   }
 }

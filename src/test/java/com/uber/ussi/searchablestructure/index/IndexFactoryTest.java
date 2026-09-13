@@ -1,17 +1,15 @@
 package com.uber.ussi.searchablestructure.index;
 
 import static com.uber.ussi.TestLongObjectMaps.longObjectMap;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.uber.ussi.config.NamespaceConfig;
-import com.uber.ussi.entity.termsandvalues.RecordType;
 import com.uber.ussi.error.IndexCreationError;
-import com.uber.ussi.searchablestructure.index.inverted.unordered.HybridIndex;
-import com.uber.ussi.searchablestructure.index.inverted.unordered.SignatureIndex;
-import com.uber.ussi.searchablestructure.index.inverted.unordered.TermIndex;
+import com.uber.ussi.searchablestructure.index.inverted.HybridIndex;
+import com.uber.ussi.searchablestructure.index.inverted.SignatureIndex;
+import com.uber.ussi.searchablestructure.index.inverted.TermIndex;
 import com.uber.ussi.searchablestructure.index.matrix.MatrixIndex;
 import com.uber.ussi.searchablestructure.index.scan.ScanIndex;
 import com.uber.ussi.utils.Constants;
@@ -24,16 +22,16 @@ class IndexFactoryTest {
   void createIndexCreatesScanIndex() {
     Index index =
         IndexFactory.createIndex(
-            validConfig().indexType("GENERIC").build(), longObjectMap(), longObjectMap());
+            validConfig().indexType("scan").build(), longObjectMap(), longObjectMap());
 
     assertInstanceOf(ScanIndex.class, index);
   }
 
   @Test
-  void createIndexCreatesDenseIndex() {
+  void createIndexCreatesMatrixIndex() {
     Index index =
         IndexFactory.createIndex(
-            validConfig().indexType("DENSE").build(), longObjectMap(), longObjectMap());
+            validConfig().indexType("matrix").build(), longObjectMap(), longObjectMap());
 
     assertInstanceOf(MatrixIndex.class, index);
   }
@@ -42,7 +40,20 @@ class IndexFactoryTest {
   void createIndexCreatesTermIndex() {
     Index index =
         IndexFactory.createIndex(
-            validConfig().indexType("TERM").build(), longObjectMap(), longObjectMap());
+            validConfig().indexType("inverted_term").build(), longObjectMap(), longObjectMap());
+
+    assertInstanceOf(TermIndex.class, index);
+  }
+
+  /**
+   * The structure is the same one the sparse comparators get, because a structure names how an
+   * index is keyed and the record type it stores comes from the comparator.
+   */
+  @Test
+  void createIndexCreatesTermIndexForSequenceComparators() {
+    Index index =
+        IndexFactory.createIndex(
+            sequenceConfig().indexType("inverted_term").build(), longObjectMap(), longObjectMap());
 
     assertInstanceOf(TermIndex.class, index);
   }
@@ -51,7 +62,9 @@ class IndexFactoryTest {
   void createIndexCreatesSignatureIndex() {
     Index index =
         IndexFactory.createIndex(
-            signatureConfig().indexType("SIGNATURE").build(), longObjectMap(), longObjectMap());
+            signatureConfig().indexType("inverted_signature").build(),
+            longObjectMap(),
+            longObjectMap());
 
     assertInstanceOf(SignatureIndex.class, index);
   }
@@ -60,69 +73,20 @@ class IndexFactoryTest {
   void createIndexCreatesHybridIndex() {
     Index index =
         IndexFactory.createIndex(
-            signatureConfig().indexType("SPARSE").build(), longObjectMap(), longObjectMap());
+            signatureConfig().indexType("inverted_hybrid").build(),
+            longObjectMap(),
+            longObjectMap());
 
     assertInstanceOf(HybridIndex.class, index);
   }
 
-  private static final IndexTypePredicateCase[] SPARSE_GENERATOR_CASES = {
-    new IndexTypePredicateCase("term", true),
-    new IndexTypePredicateCase("sparse", true),
-    new IndexTypePredicateCase("signature", true),
-    new IndexTypePredicateCase("generic", false),
-    new IndexTypePredicateCase("dense", false),
-  };
-
-  private static final IndexTypePredicateCase[] MERGE_VERIFICATION_CASES = {
-    new IndexTypePredicateCase("sparse", true),
-    new IndexTypePredicateCase("signature", true),
-    new IndexTypePredicateCase("term", false),
-    new IndexTypePredicateCase("generic", false),
-  };
-
   @Test
-  void supportsSparseCandidateGeneratorCases() {
-    for (IndexTypePredicateCase testCase : SPARSE_GENERATOR_CASES) {
-      assertEquals(
-          testCase.expected,
-          IndexFactory.supportsSparseCandidateGenerator(testCase.indexType),
-          testCase.indexType);
-    }
-  }
-
-  @Test
-  void mergeRequiresCandidateVerificationCases() {
-    for (IndexTypePredicateCase testCase : MERGE_VERIFICATION_CASES) {
-      assertEquals(
-          testCase.expected,
-          IndexFactory.mergeRequiresCandidateVerification(testCase.indexType),
-          testCase.indexType);
-    }
-  }
-
-  private record IndexTypePredicateCase(String indexType, boolean expected) {}
-
-  @Test
-  void createIndexCreatesSequenceTermIndex() {
+  void createIndexAcceptsAnIndexTypeInAnyCase() {
     Index index =
         IndexFactory.createIndex(
-            sequenceConfig().indexType("SEQUENCE").build(), longObjectMap(), longObjectMap());
+            validConfig().indexType("Inverted_Term").build(), longObjectMap(), longObjectMap());
 
-    assertInstanceOf(
-        com.uber.ussi.searchablestructure.index.inverted.sequence.TermIndex.class, index);
-  }
-
-  @Test
-  void getRecordTypeCases() {
-    assertEquals(RecordType.DENSE, IndexFactory.getRecordType("dense"));
-    assertEquals(RecordType.SPARSE, IndexFactory.getRecordType("term"));
-    assertEquals(RecordType.SPARSE, IndexFactory.getRecordType("signature"));
-    assertEquals(RecordType.SPARSE, IndexFactory.getRecordType("SPARSE"));
-    assertEquals(RecordType.SEQUENCE, IndexFactory.getRecordType("sequence"));
-    // The generic index scores through the comparator without reading a record's layout itself.
-    assertNull(IndexFactory.getRecordType("generic"));
-    // An unknown index type has no record type to require, and createIndex reports the name.
-    assertNull(IndexFactory.getRecordType("hnsw"));
+    assertInstanceOf(TermIndex.class, index);
   }
 
   @Test
@@ -134,13 +98,32 @@ class IndexFactoryTest {
         () -> IndexFactory.createIndex(config, longObjectMap(), longObjectMap()));
   }
 
+  /**
+   * An index stores the one record type its structure keeps and its comparator reads, so a
+   * comparator reading none of them is a config an index cannot be built from at all.
+   */
+  @Test
+  void createIndexRejectsAComparatorThatReadsNothingTheStructureStores() {
+    NamespaceConfig config = sequenceConfig().indexType("inverted_signature").build();
+
+    IllegalArgumentException error =
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> IndexFactory.createIndex(config, longObjectMap(), longObjectMap()));
+
+    assertTrue(
+        error.getMessage().contains("stores order_agnostic_sparse records")
+            && error.getMessage().contains("comparatorType ngld reads sequence"),
+        error.getMessage());
+  }
+
   private static NamespaceConfig.Builder validConfig() {
     return NamespaceConfig.builder()
         .minTermsAndValuesLength(0)
         .maxTermsAndValuesLength(2)
         .maxCacheSize(10)
-        .cacheType("generic")
-        .indexType("generic")
+        .cacheType("scan")
+        .indexType("scan")
         .comparatorType("l2")
         .comparatorNormalizerType("reciprocal")
         .maxNumSearchableStructures(3)

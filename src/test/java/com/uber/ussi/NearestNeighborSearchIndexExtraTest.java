@@ -56,8 +56,8 @@ class NearestNeighborSearchIndexExtraTest {
         .minTermsAndValuesLength(0)
         .maxTermsAndValuesLength(2)
         .maxCacheSize(maxCacheSize)
-        .cacheType("generic")
-        .indexType("generic")
+        .cacheType("scan")
+        .indexType("scan")
         .comparatorType("l2")
         .comparatorNormalizerType("reciprocal")
         .maxNumSearchableStructures(maxNumSearchableStructures)
@@ -433,7 +433,7 @@ class NearestNeighborSearchIndexExtraTest {
 
   @Test
   void applyTombstonesIgnoresNullTombstones() throws ReflectiveOperationException {
-    Index builtIndex = genericIndex(1);
+    Index builtIndex = scanIndex(1);
 
     invokeApplyTombstones(builtIndex, null);
 
@@ -458,25 +458,25 @@ class NearestNeighborSearchIndexExtraTest {
   void indexesStartWithSnapshotReturnsFalseWhenLiveListIsShorter()
       throws ReflectiveOperationException {
     NearestNeighborSearchIndex index = NearestNeighborSearchIndex.create(config());
-    Index onlyIndex = genericIndex(1);
+    Index onlyIndex = scanIndex(1);
     indexes(index).add(onlyIndex);
 
-    assertFalse(invokeIndexesStartWithSnapshot(index, List.of(onlyIndex, genericIndex(2))));
+    assertFalse(invokeIndexesStartWithSnapshot(index, List.of(onlyIndex, scanIndex(2))));
   }
 
   @Test
   void indexesStartWithSnapshotReturnsFalseWhenElementDiffers()
       throws ReflectiveOperationException {
     NearestNeighborSearchIndex index = NearestNeighborSearchIndex.create(config());
-    indexes(index).add(genericIndex(1));
+    indexes(index).add(scanIndex(1));
 
-    assertFalse(invokeIndexesStartWithSnapshot(index, List.of(genericIndex(2))));
+    assertFalse(invokeIndexesStartWithSnapshot(index, List.of(scanIndex(2))));
   }
 
   @Test
   void indexesStartWithSnapshotReturnsTrueWhenIdentical() throws ReflectiveOperationException {
     NearestNeighborSearchIndex index = NearestNeighborSearchIndex.create(config());
-    Index onlyIndex = genericIndex(1);
+    Index onlyIndex = scanIndex(1);
     indexes(index).add(onlyIndex);
 
     assertTrue(invokeIndexesStartWithSnapshot(index, List.of(onlyIndex)));
@@ -486,9 +486,9 @@ class NearestNeighborSearchIndexExtraTest {
   void indexesStartWithSnapshotReturnsTrueWhenNewerIndexWasAppended()
       throws ReflectiveOperationException {
     NearestNeighborSearchIndex index = NearestNeighborSearchIndex.create(config());
-    Index oldIndex = genericIndex(1);
+    Index oldIndex = scanIndex(1);
     indexes(index).add(oldIndex);
-    indexes(index).add(genericIndex(2));
+    indexes(index).add(scanIndex(2));
 
     assertTrue(invokeIndexesStartWithSnapshot(index, List.of(oldIndex)));
   }
@@ -531,8 +531,8 @@ class NearestNeighborSearchIndexExtraTest {
   @Test
   void deleteFromIndexRecordsConsolidationTombstone() throws ReflectiveOperationException {
     NearestNeighborSearchIndex index = NearestNeighborSearchIndex.create(config());
-    addIndexForTest(index, genericIndex(9), 0);
-    addIndexForTest(index, genericIndex(1), 1);
+    addIndexForTest(index, scanIndex(9), 0);
+    addIndexForTest(index, scanIndex(1), 1);
     LongHashSet consolidationDeletes = longHashSet();
     setField(index, "consolidationDeletes", consolidationDeletes);
 
@@ -582,8 +582,8 @@ class NearestNeighborSearchIndexExtraTest {
   @Test
   void consolidateMergesNonEmptyIndexes() throws ReflectiveOperationException {
     NearestNeighborSearchIndex index = NearestNeighborSearchIndex.create(config());
-    addIndexForTest(index, genericIndex(1), 0);
-    addIndexForTest(index, genericIndex(2), 1);
+    addIndexForTest(index, scanIndex(1), 0);
+    addIndexForTest(index, scanIndex(2), 1);
 
     invokeConsolidate(index);
 
@@ -595,8 +595,8 @@ class NearestNeighborSearchIndexExtraTest {
   void consolidatableIndexPrefixStopsAtOldestGraduatingCacheGeneration()
       throws ReflectiveOperationException {
     NearestNeighborSearchIndex index = NearestNeighborSearchIndex.create(config());
-    Index olderIndex = genericIndex(1);
-    Index sameGenerationAsGraduatingCache = genericIndex(2);
+    Index olderIndex = scanIndex(1);
+    Index sameGenerationAsGraduatingCache = scanIndex(2);
     Cache graduatingCache = CacheFactory.createCache(config());
     indexes(index).add(olderIndex);
     indexes(index).add(sameGenerationAsGraduatingCache);
@@ -614,8 +614,8 @@ class NearestNeighborSearchIndexExtraTest {
   void orderedSearchableStructuresUsesAscendingTieBreakerForOldestFirstEqualGenerations()
       throws ReflectiveOperationException {
     NearestNeighborSearchIndex index = NearestNeighborSearchIndex.create(config());
-    Index firstIndex = genericIndex(1);
-    Index secondIndex = genericIndex(2);
+    Index firstIndex = scanIndex(1);
+    Index secondIndex = scanIndex(2);
     indexes(index).add(firstIndex);
     indexes(index).add(secondIndex);
     indexGenerations(index).put(firstIndex, 5);
@@ -633,7 +633,7 @@ class NearestNeighborSearchIndexExtraTest {
   void orderedSearchableStructuresThrowsWhenIndexGenerationIsMissing()
       throws ReflectiveOperationException {
     NearestNeighborSearchIndex index = NearestNeighborSearchIndex.create(config());
-    indexes(index).add(genericIndex(1));
+    indexes(index).add(scanIndex(1));
 
     ReflectiveOperationException error =
         assertThrows(
@@ -672,11 +672,11 @@ class NearestNeighborSearchIndexExtraTest {
   void consolidatePreservesIndexAppendedByConcurrentGraduation()
       throws ReflectiveOperationException {
     NearestNeighborSearchIndex index = NearestNeighborSearchIndex.create(config());
-    Index concurrentlyGraduatedIndex = genericIndex(7);
+    Index concurrentlyGraduatedIndex = scanIndex(7);
     AppendAfterSnapshotIndexList indexList =
         new AppendAfterSnapshotIndexList(concurrentlyGraduatedIndex);
-    Index firstIndex = genericIndex(7);
-    Index secondIndex = genericIndex(2);
+    Index firstIndex = scanIndex(7);
+    Index secondIndex = scanIndex(2);
     indexList.add(firstIndex);
     indexList.add(secondIndex);
     setField(index, "indexes", indexList);
@@ -695,11 +695,11 @@ class NearestNeighborSearchIndexExtraTest {
   void updateScansConcurrentlyGraduatedIndexBeforeConsolidatedIndex()
       throws ReflectiveOperationException {
     NearestNeighborSearchIndex index = NearestNeighborSearchIndex.create(config());
-    Index concurrentlyGraduatedIndex = genericIndex(7);
+    Index concurrentlyGraduatedIndex = scanIndex(7);
     AppendAfterSnapshotIndexList indexList =
         new AppendAfterSnapshotIndexList(concurrentlyGraduatedIndex);
-    Index firstIndex = genericIndex(7);
-    Index secondIndex = genericIndex(2);
+    Index firstIndex = scanIndex(7);
+    Index secondIndex = scanIndex(2);
     indexList.add(firstIndex);
     indexList.add(secondIndex);
     setField(index, "indexes", indexList);
@@ -743,7 +743,7 @@ class NearestNeighborSearchIndexExtraTest {
     NearestNeighborSearchIndex index = NearestNeighborSearchIndex.create(config());
     addGraduatingCacheForTest(index, CacheFactory.createCache(config()), 0);
     addGraduatingCacheForTest(index, CacheFactory.createCache(config()), 1);
-    addIndexForTest(index, genericIndex(1), 2);
+    addIndexForTest(index, scanIndex(1), 2);
 
     invokeConsolidate(index);
 
@@ -754,8 +754,8 @@ class NearestNeighborSearchIndexExtraTest {
   void consolidateRetriesWhileGraduatingCachesKeepStructureCountAboveLimit()
       throws ReflectiveOperationException {
     NearestNeighborSearchIndex index = NearestNeighborSearchIndex.create(config());
-    addIndexForTest(index, genericIndex(1), 0);
-    addIndexForTest(index, genericIndex(2), 1);
+    addIndexForTest(index, scanIndex(1), 0);
+    addIndexForTest(index, scanIndex(2), 1);
     addGraduatingCacheForTest(index, CacheFactory.createCache(config()), 2);
     addGraduatingCacheForTest(index, CacheFactory.createCache(config()), 3);
 
@@ -770,8 +770,8 @@ class NearestNeighborSearchIndexExtraTest {
       throws ReflectiveOperationException {
     NearestNeighborSearchIndex index = NearestNeighborSearchIndex.create(config());
     ShrinkAfterSnapshotIndexList indexList = new ShrinkAfterSnapshotIndexList();
-    Index firstIndex = genericIndex(1);
-    Index secondIndex = genericIndex(2);
+    Index firstIndex = scanIndex(1);
+    Index secondIndex = scanIndex(2);
     indexList.add(firstIndex);
     indexList.add(secondIndex);
     setField(index, "indexes", indexList);
@@ -1075,7 +1075,7 @@ class NearestNeighborSearchIndexExtraTest {
     }
   }
 
-  private static ScanIndex genericIndex(long rowNum) {
+  private static ScanIndex scanIndex(long rowNum) {
     return new ScanIndex(
         config(),
         longObjectMap(rowNum, denseInternal(1f, 0f)),

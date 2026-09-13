@@ -1,5 +1,5 @@
 /* AUTHOR: Shijie Lu (shijie@uber.com), Shalini Kedlaya (skedlaya@uber.com), Ahmed Metwally (ametwally@uber.com) */
-package com.uber.ussi.searchablestructure.index.inverted.unordered;
+package com.uber.ussi.searchablestructure.index.inverted;
 
 import com.carrotsearch.hppc.LongObjectHashMap;
 import com.carrotsearch.hppc.cursors.LongObjectCursor;
@@ -19,7 +19,7 @@ import java.util.List;
 public final class HybridIndex extends Index {
   private final TermIndex termIndex;
   private final SignatureIndex signatureIndex;
-  private final boolean sparseKeyPopularityFilteringEnabled;
+  private final boolean keyPopularityFilteringEnabled;
 
   public HybridIndex(
       NamespaceConfig namespaceConfig,
@@ -42,7 +42,7 @@ public final class HybridIndex extends Index {
     }
     this.termIndex = new TermIndex(namespaceConfig, exactRows, rowNumToMetaMap);
     this.signatureIndex = new SignatureIndex(namespaceConfig, signatureRows, rowNumToMetaMap);
-    this.sparseKeyPopularityFilteringEnabled = termIndex.discardsPopularSparseKeys();
+    this.keyPopularityFilteringEnabled = termIndex.discardsPopularKeys();
   }
 
   @Override
@@ -119,7 +119,7 @@ public final class HybridIndex extends Index {
     if (index.size() == 0) {
       return false;
     }
-    if (sparseKeyPopularityFilteringEnabled) {
+    if (keyPopularityFilteringEnabled) {
       return true;
     }
     int minNumTerms = exactIndex ? 0 : Constants.NUM_SIGNATURES_PER_ID + 1;

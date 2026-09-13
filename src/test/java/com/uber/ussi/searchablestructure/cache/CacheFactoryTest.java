@@ -11,14 +11,14 @@ class CacheFactoryTest {
 
   @Test
   void createCacheCreatesScanCache() {
-    Cache cache = CacheFactory.createCache(validConfig().cacheType("GENERIC").build());
+    Cache cache = CacheFactory.createCache(validConfig().cacheType("SCAN").build());
 
     assertInstanceOf(ScanCache.class, cache);
   }
 
   @Test
   void createCacheCreatesInvertedTermCache() {
-    Cache cache = CacheFactory.createCache(validConfig().cacheType("SPARSE").build());
+    Cache cache = CacheFactory.createCache(validConfig().cacheType("INVERTED_TERM").build());
 
     assertInstanceOf(InvertedTermCache.class, cache);
   }
@@ -35,8 +35,8 @@ class CacheFactoryTest {
         .minTermsAndValuesLength(0)
         .maxTermsAndValuesLength(2)
         .maxCacheSize(10)
-        .cacheType("generic")
-        .indexType("dense")
+        .cacheType("scan")
+        .indexType("matrix")
         .comparatorType("l2")
         .comparatorNormalizerType("reciprocal")
         .maxNumSearchableStructures(3)

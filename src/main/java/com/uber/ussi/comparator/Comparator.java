@@ -159,14 +159,15 @@ public abstract class Comparator implements Serializable {
    * much by the layout it reads as by the similarity it computes, so each one states its own set
    * rather than inheriting one record type as the norm and overriding for the rest.
    *
-   * <p>A comparator may read more than one record type. A structure that stores a single record
-   * type is compatible with a comparator when that type is in this set.
+   * <p>A comparator may read more than one record type, and so may a structure store more than
+   * one. An index holds the type both sets contain, which makes a pairing whose sets are disjoint
+   * a config violation rather than a silent choice; see {@code IndexType.resolveRecordTypes}.
    */
   public abstract Set<RecordType> getSupportedRecordTypes();
 
   /*
    * Merge candidate generation accumulates a conjunction: the part of the similarity that the query
-   * and an indexed row derive from the sparse keys they share. What that means is up to each
+   * and an indexed row derive from the keys they share. What that means is up to each
    * comparator. For Jaccard and Ruzicka the conjunction is the intersection of the two rows, and
    * for L2 it is the squared distance over the shared keys. Comparators that leave these
    * unimplemented cannot be paired with the merge generator.
@@ -184,7 +185,7 @@ public abstract class Comparator implements Serializable {
     return false;
   }
 
-  /** Returns what one sparse key the query and an indexed row share adds to the conjunction. */
+  /** Returns what one key the query and an indexed row share adds to the conjunction. */
   public double conjunctionContribution(float value1, float value2) {
     throw new UnsupportedOperationException(
         "conjunctionContribution is not supported by " + getClass().getSimpleName() + ".");
@@ -203,7 +204,7 @@ public abstract class Comparator implements Serializable {
 
   /**
    * Returns the highest normalized similarity still reachable from a partial conjunction, where
-   * {@code unscannedKeysUniValue} bounds what the query's not-yet-merged sparse keys can add.
+   * {@code unscannedKeysUniValue} bounds what the query's not-yet-merged keys can add.
    */
   public double maxSimilarityFromPartialConjunction(
       double conjunction,

@@ -1,4 +1,4 @@
-package com.uber.ussi.searchablestructure.index.inverted.unordered;
+package com.uber.ussi.searchablestructure.index.inverted;
 
 import static com.uber.ussi.TestLongObjectMaps.longObjectMap;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -16,7 +16,6 @@ import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
 import com.uber.ussi.error.IndexCreationError;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
-import com.uber.ussi.searchablestructure.index.inverted.BaseInvertedIndex;
 import com.uber.ussi.searchablestructure.index.inverted.generator.InvertedList;
 import com.uber.ussi.utils.Constants;
 import java.lang.reflect.Field;
@@ -37,17 +36,17 @@ class SignatureIndexTest {
             longObjectMap(7, jaccard(new long[] {11}, 1f)),
             longObjectMap());
 
-    assertEquals(1, index.getNumIndexedSparseKeysForTests());
+    assertEquals(1, index.getNumIndexedKeysForTests());
     assertEquals(
-        1, index.getSparseKeysAndUniTransformedValues(jaccard(new long[] {11}, 1f)).length);
+        1, index.getKeysAndUniTransformedValues(jaccard(new long[] {11}, 1f)).length);
     /*
      * A single-term record hashes to the same signature all NUM_SIGNATURES_PER_ID times, and
-     * getSparseKeys owes its caller distinct keys, so it reports the one key rather than the
+     * getKeys owes its caller distinct keys, so it reports the one key rather than the
      * repeats behind it.
      */
-    long[] signatures = index.getSparseKeys(jaccard(new long[] {11}, 1f));
+    long[] signatures = index.getKeys(jaccard(new long[] {11}, 1f));
     assertEquals(1, signatures.length);
-    assertArrayEquals(new long[] {7}, index.getRowNumsForSparseKeyForTests(signatures[0]));
+    assertArrayEquals(new long[] {7}, index.getRowNumsForKeyForTests(signatures[0]));
   }
 
   @Test
@@ -99,12 +98,12 @@ class SignatureIndexTest {
     LongTermsAndValues record = jaccard(new long[] {11}, 1f);
     SignatureIndex index =
         new SignatureIndex(
-            config("jaccard", "minhash", Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0.5")),
+            config("jaccard", "minhash", Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0.5")),
             longObjectMap(1, record, 2, record),
             longObjectMap());
 
     assertArrayEquals(new long[] {11}, index.getDiscardedTermsForTests());
-    assertEquals(0, index.getNumIndexedSparseKeysForTests());
+    assertEquals(0, index.getNumIndexedKeysForTests());
     assertEquals(2, index.size());
     assertTrue(index.getNearestNeighborRowNums(2, record, MetaFilter.empty()).isEmpty());
   }
@@ -180,7 +179,7 @@ class SignatureIndexTest {
    * filtered scan always does, so neither materializes the values.
    */
   @Test
-  void mergeMaterializesInvertedListValuesOnlyForExactSparseKeys()
+  void mergeMaterializesInvertedListValuesOnlyForExactKeys()
       throws ReflectiveOperationException {
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap(1, jaccard(new long[] {1, 2}, 1, 1));
 
@@ -202,7 +201,7 @@ class SignatureIndexTest {
   @SuppressWarnings("unchecked")
   private static boolean hasInvertedListValues(BaseInvertedIndex index)
       throws ReflectiveOperationException {
-    Field field = BaseInvertedIndex.class.getDeclaredField("sparseKeyToInvertedList");
+    Field field = BaseInvertedIndex.class.getDeclaredField("keyToInvertedList");
     field.setAccessible(true);
     LongObjectHashMap<InvertedList> invertedLists =
         (LongObjectHashMap<InvertedList>) field.get(index);
@@ -217,8 +216,8 @@ class SignatureIndexTest {
 
   private static Map<String, String> mergeIndexParams() {
     return Map.of(
-        Constants.SPARSE_CANDIDATE_GENERATOR,
-        NamespaceConfig.SparseCandidateGenerator.SPARS_MERGE.getParamValue());
+        Constants.CANDIDATE_GENERATOR,
+        NamespaceConfig.CandidateGenerator.SPARS_MERGE.getParamValue());
   }
 
   private static NamespaceConfig termConfig(
@@ -227,8 +226,8 @@ class SignatureIndexTest {
         .minTermsAndValuesLength(0)
         .maxTermsAndValuesLength(1000)
         .maxCacheSize(100)
-        .cacheType("generic")
-        .indexType("term")
+        .cacheType("scan")
+        .indexType("inverted_term")
         .indexParams(indexParams)
         .comparatorType(comparatorType)
         .comparatorNormalizerType("identity")
@@ -275,8 +274,8 @@ class SignatureIndexTest {
         .minTermsAndValuesLength(0)
         .maxTermsAndValuesLength(1000)
         .maxCacheSize(100)
-        .cacheType("generic")
-        .indexType("signature")
+        .cacheType("scan")
+        .indexType("inverted_signature")
         .indexParams(indexParams)
         .comparatorType(comparatorType)
         .comparatorParams(comparatorParams)

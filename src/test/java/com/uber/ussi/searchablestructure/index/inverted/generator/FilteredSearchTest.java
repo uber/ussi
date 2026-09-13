@@ -174,23 +174,23 @@ class FilteredSearchTest {
   }
 
 
-  private static FilteredSearch.Context stubContext(Map<Long, long[]> rowNumsBySparseKey) {
-    return stubContext(rowNumsBySparseKey, UNI_VALUES, minSimilarity -> Double.POSITIVE_INFINITY);
+  private static FilteredSearch.Context stubContext(Map<Long, long[]> rowNumsByKey) {
+    return stubContext(rowNumsByKey, UNI_VALUES, minSimilarity -> Double.POSITIVE_INFINITY);
   }
 
   private static FilteredSearch.Context stubContext(
-      Map<Long, long[]> rowNumsBySparseKey,
+      Map<Long, long[]> rowNumsByKey,
       Map<Long, Double> uniValuesByRowNum,
       DoubleUnaryOperator minPrefixSum) {
     return new FilteredSearch.Context() {
       @Override
-      public double getMinPrefixSum(double sparseKeysUniValue, double minSimilarity) {
+      public double getMinPrefixSum(double keysUniValue, double minSimilarity) {
         return minPrefixSum.applyAsDouble(minSimilarity);
       }
 
       @Override
-      public long[] getRowNums(long sparseKey) {
-        return rowNumsBySparseKey.getOrDefault(sparseKey, new long[0]);
+      public long[] getRowNums(long key) {
+        return rowNumsByKey.getOrDefault(key, new long[0]);
       }
 
       @Override
@@ -217,8 +217,8 @@ class FilteredSearchTest {
         .minTermsAndValuesLength(0)
         .maxTermsAndValuesLength(10)
         .maxCacheSize(10)
-        .cacheType("generic")
-        .indexType("term")
+        .cacheType("scan")
+        .indexType("inverted_term")
         .comparatorType("jaccard")
         .comparatorNormalizerType("identity")
         .maxNumSearchableStructures(3)

@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.uber.ussi.comparator.ComparatorFactory;
 import com.uber.ussi.config.NamespaceConfig;
-import com.uber.ussi.config.NamespaceConfig.SparseCandidateGenerator;
+import com.uber.ussi.config.NamespaceConfig.CandidateGenerator;
 import com.uber.ussi.utils.Constants;
 import java.util.List;
 import java.util.Locale;
@@ -18,11 +18,11 @@ class IndexConfigValidatorTest {
     new ValidationCase("defaults", builder -> builder, true),
     new ValidationCase(
         "unparseable max fraction",
-        builder -> builder.indexParams(Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "bad")),
+        builder -> builder.indexParams(Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "bad")),
         false),
     new ValidationCase(
         "max fraction at zero",
-        builder -> builder.indexParams(Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0")),
+        builder -> builder.indexParams(Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0")),
         false),
     new ValidationCase(
         "pre-filtering ratio above one",
@@ -33,128 +33,122 @@ class IndexConfigValidatorTest {
         builder -> builder.indexParams(Map.of(Index.METADATA_FILTERING_STRATEGY, "guesswork")),
         false),
     new ValidationCase(
-        "spars merge on generic index",
+        "spars merge on the scan structure",
         builder ->
             builder
-                .indexType(lowerCase(IndexFactory.IndexType.GENERIC))
-                .indexParams(Map.of(Constants.SPARSE_CANDIDATE_GENERATOR, sparsMerge())),
+                .indexType(lowerCase(IndexType.SCAN))
+                .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, sparsMerge())),
         false),
     new ValidationCase(
-        "spars merge with l2 on signature index",
+        "spars merge with l2 on the signature structure",
         builder ->
             builder
-                .indexType(lowerCase(IndexFactory.IndexType.SIGNATURE))
+                .indexType(lowerCase(IndexType.INVERTED_SIGNATURE))
                 .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.L2))
-                .indexParams(Map.of(Constants.SPARSE_CANDIDATE_GENERATOR, sparsMerge())),
+                .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, sparsMerge())),
         false),
     new ValidationCase(
-        "spars merge with l2 on term index",
+        "spars merge with l2 on the term structure",
         builder ->
             builder
-                .indexType(lowerCase(IndexFactory.IndexType.TERM))
+                .indexType(lowerCase(IndexType.INVERTED_TERM))
                 .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.L2))
-                .indexParams(Map.of(Constants.SPARSE_CANDIDATE_GENERATOR, sparsMerge())),
+                .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, sparsMerge())),
         true),
     /*
      * The sequence comparators score a pair by running a dynamic program over the ordered
-     * sequences, which the shared keys only bound, so merge is unsupported on every index type
+     * sequences, which the shared keys only bound, so merge is unsupported on every structure
      * rather than only on the ones that verify candidates through signatures.
      */
     new ValidationCase(
-        "spars merge with ngld on term index",
+        "spars merge with ngld on the term structure",
         builder ->
             builder
-                .indexType(lowerCase(IndexFactory.IndexType.TERM))
+                .indexType(lowerCase(IndexType.INVERTED_TERM))
                 .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.NGLD))
-                .indexParams(Map.of(Constants.SPARSE_CANDIDATE_GENERATOR, sparsMerge())),
+                .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, sparsMerge())),
         false),
     new ValidationCase(
-        "spars merge with gld on sparse index",
+        "spars merge with gld on the hybrid structure",
         builder ->
             builder
-                .indexType(lowerCase(IndexFactory.IndexType.SPARSE))
+                .indexType(lowerCase(IndexType.INVERTED_HYBRID))
                 .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.GLD))
-                .indexParams(Map.of(Constants.SPARSE_CANDIDATE_GENERATOR, sparsMerge())),
+                .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, sparsMerge())),
         false),
     // Ruzicka scores a row from the keys it shares with the query, so merge stays available.
     new ValidationCase(
-        "spars merge with ruzicka on term index",
+        "spars merge with ruzicka on the term structure",
         builder ->
             builder
-                .indexType(lowerCase(IndexFactory.IndexType.TERM))
+                .indexType(lowerCase(IndexType.INVERTED_TERM))
                 .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.RUZICKA))
-                .indexParams(Map.of(Constants.SPARSE_CANDIDATE_GENERATOR, sparsMerge())),
+                .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, sparsMerge())),
         true),
     /*
-      * A sequence record has no values and its terms are neither sorted nor distinct, so only the
-      * sequence index, which indexes the element multiset instead, and the generic index, which
-      * never reads terms itself, can hold one.
-      */
+     * A sequence has no values and its terms are neither sorted nor distinct, so the structures
+     * that can hold one are the term-keyed structure, which keys the element multiset instead, and
+     * the scan structure, which never reads a record's terms itself. The signature structures
+     * cannot, because a signature generator reads a record as a set of terms and values.
+     */
     new ValidationCase(
-        "ngld on sequence index",
+        "ngld on the term structure",
         builder ->
             builder
-                .indexType(lowerCase(IndexFactory.IndexType.SEQUENCE))
+                .indexType(lowerCase(IndexType.INVERTED_TERM))
                 .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.NGLD)),
         true),
     new ValidationCase(
-        "gld on generic index",
+        "gld on the scan structure",
         builder ->
             builder
-                .indexType(lowerCase(IndexFactory.IndexType.GENERIC))
+                .indexType(lowerCase(IndexType.SCAN))
                 .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.GLD)),
         true),
     new ValidationCase(
-        "ngld on term index",
+        "ngld on the signature structure",
         builder ->
             builder
-                .indexType(lowerCase(IndexFactory.IndexType.TERM))
+                .indexType(lowerCase(IndexType.INVERTED_SIGNATURE))
                 .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.NGLD)),
-        false),
-    new ValidationCase(
-        "sequence index with a value comparator",
-        builder ->
-            builder
-                .indexType(lowerCase(IndexFactory.IndexType.SEQUENCE))
-                .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.JACCARD)),
         false),
     // Discarding a popular element drops it from the sequences too, so the pairing stays valid.
     new ValidationCase(
-        "sequence index discarding popular elements",
+        "the term structure discarding popular elements",
         builder ->
             builder
-                .indexType(lowerCase(IndexFactory.IndexType.SEQUENCE))
+                .indexType(lowerCase(IndexType.INVERTED_TERM))
                 .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.NGLD))
-                .indexParams(Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0.05")),
+                .indexParams(Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0.05")),
         true),
     new ValidationCase(
-        "sequence index keeping every element",
+        "the term structure keeping every element",
         builder ->
             builder
-                .indexType(lowerCase(IndexFactory.IndexType.SEQUENCE))
+                .indexType(lowerCase(IndexType.INVERTED_TERM))
                 .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.NGLD))
-                .indexParams(Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "1.0")),
+                .indexParams(Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "1.0")),
         true),
-    // L2 reads both dense and sparse records, so neither index type can turn it away.
+    // L2 reads both dense and sparse records, so no structure here can turn it away.
     new ValidationCase(
-        "l2 on term index",
+        "l2 on the term structure",
         builder ->
             builder
-                .indexType(lowerCase(IndexFactory.IndexType.TERM))
+                .indexType(lowerCase(IndexType.INVERTED_TERM))
                 .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.L2)),
         true),
     new ValidationCase(
-        "dense index with a comparator that cannot read dense records",
+        "the matrix structure with a comparator that cannot read dense records",
         builder ->
             builder
-                .indexType(lowerCase(IndexFactory.IndexType.DENSE))
+                .indexType(lowerCase(IndexType.MATRIX))
                 .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.JACCARD)),
         false),
     new ValidationCase(
-        "dense index with a comparator that can",
+        "the matrix structure with a comparator that can",
         builder ->
             builder
-                .indexType(lowerCase(IndexFactory.IndexType.DENSE))
+                .indexType(lowerCase(IndexType.MATRIX))
                 .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.L2)),
         true),
   };
@@ -170,15 +164,15 @@ class IndexConfigValidatorTest {
   /**
    * The tabular cases only check that something was reported, so pin the reason too: a sequence
    * comparator must be rejected for being unable to merge at all, not for the signature rule that
-   * applies only to the approximate index types.
+   * applies only to the approximate structures.
    */
   @Test
   void mergeWithASequenceComparatorIsRejectedForBeingUnsupported() {
     NamespaceConfig config =
         validBuilder()
-            .indexType(lowerCase(IndexFactory.IndexType.SEQUENCE))
+            .indexType(lowerCase(IndexType.INVERTED_TERM))
             .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.NGLD))
-            .indexParams(Map.of(Constants.SPARSE_CANDIDATE_GENERATOR, sparsMerge()))
+            .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, sparsMerge()))
             .build();
 
     List<String> violations = violations(config);
@@ -187,15 +181,15 @@ class IndexConfigValidatorTest {
     assertEquals(
         String.format(
             "%s=%s is not supported with comparatorType ngld.",
-            Constants.SPARSE_CANDIDATE_GENERATOR, sparsMerge()),
+            Constants.CANDIDATE_GENERATOR, sparsMerge()),
         violations.get(0));
   }
 
   @Test
-  void validateThrowsForDenseIndexWithAComparatorThatCannotReadDenseRecords() {
+  void validateThrowsForTheMatrixStructureWithAComparatorThatCannotReadDenseRecords() {
     NamespaceConfig config =
         validBuilder()
-            .indexType(lowerCase(IndexFactory.IndexType.DENSE))
+            .indexType(lowerCase(IndexType.MATRIX))
             .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.JACCARD))
             .build();
     assertThrows(
@@ -207,10 +201,10 @@ class IndexConfigValidatorTest {
    * skips the rules that would need to know which generator was asked for.
    */
   @Test
-  void anUnparseableSparseCandidateGeneratorIsLeftToTheStructuralChecks() {
+  void anUnparseableCandidateGeneratorIsLeftToTheStructuralChecks() {
     NamespaceConfig config =
         validBuilder()
-            .indexParams(Map.of(Constants.SPARSE_CANDIDATE_GENERATOR, "uni_outward"))
+            .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, "uni_outward"))
             .build();
 
     List<String> structuralViolations = config.collectStructuralViolations();
@@ -228,29 +222,29 @@ class IndexConfigValidatorTest {
   void aComparatorThatCannotBeCreatedIsLeftToTheComparatorValidator() {
     NamespaceConfig unknownType =
         validBuilder()
-            .indexType(lowerCase(IndexFactory.IndexType.SIGNATURE))
+            .indexType(lowerCase(IndexType.INVERTED_SIGNATURE))
             .comparatorType("cosine")
-            .indexParams(Map.of(Constants.SPARSE_CANDIDATE_GENERATOR, sparsMerge()))
+            .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, sparsMerge()))
             .build();
     /*
      * Dense records and merging are both things jaccard would be reported for, so this pins that
      * the unbuildable params, not the pairing, are what the violation list is left pointed at.
      */
     Map<String, String> unbuildableParams = Map.of(Constants.SIGNATURE_GENERATOR_TYPE, "superhash");
-    NamespaceConfig unbuildableOnDenseIndex =
+    NamespaceConfig unbuildableOnMatrixStructure =
         validBuilder()
-            .indexType(lowerCase(IndexFactory.IndexType.DENSE))
+            .indexType(lowerCase(IndexType.MATRIX))
             .comparatorParams(unbuildableParams)
             .build();
     NamespaceConfig unbuildableWithMerge =
         validBuilder()
-            .indexType(lowerCase(IndexFactory.IndexType.SIGNATURE))
+            .indexType(lowerCase(IndexType.INVERTED_SIGNATURE))
             .comparatorParams(unbuildableParams)
-            .indexParams(Map.of(Constants.SPARSE_CANDIDATE_GENERATOR, sparsMerge()))
+            .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, sparsMerge()))
             .build();
 
     assertEquals(List.of(), violations(unknownType), "unknown type");
-    assertEquals(List.of(), violations(unbuildableOnDenseIndex), "unbuildable on dense index");
+    assertEquals(List.of(), violations(unbuildableOnMatrixStructure), "unbuildable on the matrix structure");
     assertEquals(List.of(), violations(unbuildableWithMerge), "unbuildable with merge");
   }
 
@@ -259,8 +253,8 @@ class IndexConfigValidatorTest {
         .minTermsAndValuesLength(0)
         .maxTermsAndValuesLength(4)
         .maxCacheSize(10)
-        .cacheType("generic")
-        .indexType("term")
+        .cacheType("scan")
+        .indexType("inverted_term")
         .comparatorType("jaccard")
         .comparatorNormalizerType("identity")
         .maxNumSearchableStructures(3)
@@ -272,7 +266,7 @@ class IndexConfigValidatorTest {
   }
 
   private static String sparsMerge() {
-    return SparseCandidateGenerator.SPARS_MERGE.getParamValue();
+    return CandidateGenerator.SPARS_MERGE.getParamValue();
   }
 
   private static String lowerCase(Enum<?> value) {

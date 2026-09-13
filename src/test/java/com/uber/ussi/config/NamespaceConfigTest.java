@@ -17,8 +17,8 @@ class NamespaceConfigTest {
         .minTermsAndValuesLength(0)
         .maxTermsAndValuesLength(4)
         .maxCacheSize(10)
-        .cacheType("generic")
-        .indexType("sparse")
+        .cacheType("scan")
+        .indexType("inverted_hybrid")
         .comparatorType("l2")
         .comparatorNormalizerType("identity")
         .maxNumSearchableStructures(3)
@@ -69,10 +69,10 @@ class NamespaceConfigTest {
   }
 
   @Test
-  void validateRejectsUnsupportedSparseCandidateGenerator() {
+  void validateRejectsUnsupportedCandidateGenerator() {
     NamespaceConfig config =
         validBuilder()
-            .indexParams(Map.of(Constants.SPARSE_CANDIDATE_GENERATOR, "uni_outward"))
+            .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, "uni_outward"))
             .build();
 
     assertFalse(config.collectStructuralViolations().isEmpty());

@@ -16,13 +16,13 @@ class CacheConfigValidatorTest {
     new ValidationCase(
         "max fraction at zero",
         builder ->
-            builder.cacheParams(Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0")),
+            builder.cacheParams(Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0")),
         false),
     new ValidationCase(
         "confidence below one half",
         builder ->
             builder.cacheParams(
-                Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY_CONFIDENCE, "0.4")),
+                Map.of(Constants.MAX_FRACTION_IDS_PER_KEY_CONFIDENCE, "0.4")),
         false),
     new ValidationCase(
         "unparseable reevaluation fraction",
@@ -31,15 +31,15 @@ class CacheConfigValidatorTest {
                 Map.of(Constants.FULL_REEVALUATION_CACHE_SIZE_DECREASE_FRACTION, "not-a-number")),
         false),
     new ValidationCase(
-        "generic cache ignores sparse params",
+        "the scan cache ignores inverted-term params",
         builder ->
             builder
-                .cacheType("generic")
-                .cacheParams(Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0")),
+                .cacheType("scan")
+                .cacheParams(Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0")),
         true),
     /*
      * The sparse cache keys its inverted lists by the record's own terms and reads a value per
-     * term, neither of which an ordered sequence supplies, so such a namespace caches generically.
+     * term, neither of which an ordered sequence supplies, so such a namespace caches through the scan cache.
      */
     new ValidationCase(
         "sparse cache with a sequence comparator",
@@ -54,11 +54,11 @@ class CacheConfigValidatorTest {
         builder -> builder.comparatorType("cosine"),
         true),
     new ValidationCase(
-        "generic cache with a sequence comparator",
+        "the scan cache with a sequence comparator",
         builder ->
             builder
-                .cacheType("generic")
-                .indexType("sequence")
+                .cacheType("scan")
+                .indexType("inverted_term")
                 .comparatorType("ngld")
                 .comparatorNormalizerType("complement"),
         true),
@@ -77,8 +77,8 @@ class CacheConfigValidatorTest {
         .minTermsAndValuesLength(0)
         .maxTermsAndValuesLength(4)
         .maxCacheSize(10)
-        .cacheType(CacheFactory.CacheType.SPARSE.name().toLowerCase(Locale.ROOT))
-        .indexType("term")
+        .cacheType(CacheFactory.CacheType.INVERTED_TERM.name().toLowerCase(Locale.ROOT))
+        .indexType("inverted_term")
         .comparatorType("jaccard")
         .comparatorNormalizerType("identity")
         .maxNumSearchableStructures(3)

@@ -19,9 +19,9 @@ import java.util.function.LongFunction;
 import javax.annotation.Nullable;
 
 /**
- * Sparse-key-major filtered-scan candidate generation over uni-sorted sparse inverted lists.
+ * Key-major filtered-scan candidate generation over uni-sorted inverted lists.
  *
- * <p>The query's sparse keys are visited cheapest first, and each one's inverted list is narrowed
+ * <p>The query's keys are visited cheapest first, and each one's inverted list is narrowed
  * to the rows that length filtering admits. Every candidate is then scored through the comparator,
  * so this generator works for every inverted index type.
  *
@@ -87,11 +87,11 @@ public final class FilteredSearch {
   }
 
   /**
-   * Returns the inclusive lower bound of a sparse key's matching row range within
+   * Returns the inclusive lower bound of a key's matching row range within
    * [searchFromIndex, searchToIndex) of rowNums for the given comparatorUniValue and minSimilarity.
-   * Called with (0, rowNums.length) for a sparse key's first window, and with the key's previous
+   * Called with (0, rowNums.length) for a key's first window, and with the key's previous
    * [first, last) range on later calls as minSimilarity rises in {@link CandidateIterator}. This is
-   * sound because a sparse key's matching range only shrinks as minSimilarity rises, never grows.
+   * sound because a key's matching range only shrinks as minSimilarity rises, never grows.
    * Tries these tiers, cheapest first.
    *
    * <p>Tier 1, O(1). One of the range's endpoints already resolves the search.
@@ -152,7 +152,7 @@ public final class FilteredSearch {
   }
 
   /**
-   * Returns the exclusive upper bound of a sparse key's matching row range, the mirror of {@link
+   * Returns the exclusive upper bound of a key's matching row range, the mirror of {@link
    * #getFirstMatchingUniValue} and narrowed by the same tiers.
    */
   public static int getLastMatchingUniValue(
@@ -203,29 +203,29 @@ public final class FilteredSearch {
   }
 
   public interface Context extends SearchContext {
-    /** Returns the highest prefix cost a sparse key may carry and still admit candidates. */
-    double getMinPrefixSum(double sparseKeysUniValue, double minSimilarity);
+    /** Returns the highest prefix cost a key may carry and still admit candidates. */
+    double getMinPrefixSum(double keysUniValue, double minSimilarity);
 
-    /** Returns the uni-sorted inverted list of a sparse key, empty when the key is unindexed. */
-    long[] getRowNums(long sparseKey);
+    /** Returns the uni-sorted inverted list of a key, empty when the key is unindexed. */
+    long[] getRowNums(long key);
   }
 
   /**
    * Iterates deduplicated candidates in nondecreasing unordered-prefix cost. Takes ownership of the
-   * {@code sparseKeyData} it is handed and sorts it in place.
+   * {@code keyData} it is handed and sorts it in place.
    */
   static final class CandidateIterator implements Iterator<Long> {
     private final Comparator comparator;
     private final Context context;
-    private final KeyAndPrefixFilteringData[] sparseKeyData;
-    private final double sparseKeysUniValue;
+    private final KeyAndPrefixFilteringData[] keyData;
+    private final double keysUniValue;
     private final double comparatorUniValue;
     private final LongHashSet generatedRowNums;
     private double minSimilarity;
     private double maxPrefixSum;
     private final MathUtils.StableSumAccumulator prefixSumAccumulator;
-    private double currentSparseKeyPrefixSum;
-    private int sparseKeyIndex;
+    private double currentKeyPrefixSum;
+    private int keyIndex;
     private long[] currentRowNums;
     private int currentRowStartIndex;
     private int currentRowEndIndex;
@@ -235,26 +235,26 @@ public final class FilteredSearch {
     CandidateIterator(
         Comparator comparator,
         Context context,
-        KeyAndPrefixFilteringData[] sparseKeyData,
+        KeyAndPrefixFilteringData[] keyData,
         double comparatorUniValue,
         double minSimilarity) {
       this.comparator = comparator;
       this.context = context;
-      this.sparseKeyData = sparseKeyData;
-      Arrays.sort(this.sparseKeyData);
-      MathUtils.StableSumAccumulator sparseKeysUniValueAccumulator =
+      this.keyData = keyData;
+      Arrays.sort(this.keyData);
+      MathUtils.StableSumAccumulator keysUniValueAccumulator =
           new MathUtils.StableSumAccumulator();
-      for (KeyAndPrefixFilteringData sparseKey : this.sparseKeyData) {
-        sparseKeysUniValueAccumulator.add(sparseKey.getUniTransformedValue());
+      for (KeyAndPrefixFilteringData key : this.keyData) {
+        keysUniValueAccumulator.add(key.getUniTransformedValue());
       }
-      this.sparseKeysUniValue = sparseKeysUniValueAccumulator.getSum();
+      this.keysUniValue = keysUniValueAccumulator.getSum();
       this.comparatorUniValue = comparatorUniValue;
       this.generatedRowNums = new LongHashSet();
       this.minSimilarity = minSimilarity;
-      this.maxPrefixSum = context.getMinPrefixSum(sparseKeysUniValue, minSimilarity);
+      this.maxPrefixSum = context.getMinPrefixSum(keysUniValue, minSimilarity);
       this.prefixSumAccumulator = new MathUtils.StableSumAccumulator();
-      this.currentSparseKeyPrefixSum = 0.0;
-      this.sparseKeyIndex = -1;
+      this.currentKeyPrefixSum = 0.0;
+      this.keyIndex = -1;
       this.currentRowNums = new long[0];
       this.currentRowStartIndex = 0;
       this.currentRowEndIndex = 0;
@@ -271,11 +271,11 @@ public final class FilteredSearch {
         return;
       }
       this.minSimilarity = minSimilarity;
-      this.maxPrefixSum = context.getMinPrefixSum(sparseKeysUniValue, minSimilarity);
-      if (sparseKeyIndex < 0 || currentRowStartIndex >= currentRowEndIndex) {
+      this.maxPrefixSum = context.getMinPrefixSum(keysUniValue, minSimilarity);
+      if (keyIndex < 0 || currentRowStartIndex >= currentRowEndIndex) {
         return;
       }
-      if (currentSparseKeyPrefixSum > maxPrefixSum) {
+      if (currentKeyPrefixSum > maxPrefixSum) {
         currentRowStartIndex = currentRowEndIndex;
         return;
       }
@@ -314,19 +314,19 @@ public final class FilteredSearch {
             return true;
           }
         }
-        if (sparseKeyIndex >= sparseKeyData.length - 1
+        if (keyIndex >= keyData.length - 1
             || prefixSumAccumulator.getSum() > maxPrefixSum) {
           return false;
         }
-        ++sparseKeyIndex;
-        KeyAndPrefixFilteringData currentSparseKey = sparseKeyData[sparseKeyIndex];
-        currentSparseKeyPrefixSum = prefixSumAccumulator.getSum();
-        currentRowNums = context.getRowNums(currentSparseKey.getSparseKey());
-        if (currentRowNums.length != currentSparseKey.getNumRows()) {
+        ++keyIndex;
+        KeyAndPrefixFilteringData currentKey = keyData[keyIndex];
+        currentKeyPrefixSum = prefixSumAccumulator.getSum();
+        currentRowNums = context.getRowNums(currentKey.getKey());
+        if (currentRowNums.length != currentKey.getNumRows()) {
           throw new IllegalStateException(
               String.format(
-                  "Inconsistent inverted-list length for sparse key %s.",
-                  currentSparseKey.getSparseKey()));
+                  "Inconsistent inverted-list length for key %s.",
+                  currentKey.getKey()));
         }
         currentRowStartIndex =
             getFirstMatchingUniValue(
@@ -346,7 +346,7 @@ public final class FilteredSearch {
                 minSimilarity,
                 currentRowStartIndex,
                 currentRowNums.length);
-        prefixSumAccumulator.add(currentSparseKey.getUniTransformedValue());
+        prefixSumAccumulator.add(currentKey.getUniTransformedValue());
       }
     }
 

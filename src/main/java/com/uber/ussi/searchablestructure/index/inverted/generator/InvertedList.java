@@ -4,7 +4,7 @@ package com.uber.ussi.searchablestructure.index.inverted.generator;
 import java.util.Arrays;
 
 /**
- * The uni-sorted rows of one sparse key, with the rows' values at that key alongside.
+ * The uni-sorted rows of one key, with the rows' values at that key alongside.
  *
  * <p>The arrays are owned by the index and must not be mutated. Values are only populated when a
  * candidate generator scores from them, so callers that need them must know they were requested.

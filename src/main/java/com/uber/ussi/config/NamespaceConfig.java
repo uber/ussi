@@ -131,8 +131,8 @@ public final class NamespaceConfig {
     return NamespaceConfigParams.readDoubleParam(cacheParams, key, defaultValue);
   }
 
-  public SparseCandidateGenerator getSparseCandidateGenerator() {
-    return parseSparseCandidateGenerator(indexParams);
+  public CandidateGenerator getCandidateGenerator() {
+    return parseCandidateGenerator(indexParams);
   }
 
   /** Returns the discard scope an index reads, which it takes from the index params. */
@@ -188,7 +188,7 @@ public final class NamespaceConfig {
               + maxTermsAndValuesLength
               + ".");
     }
-    collectSparseCandidateGeneratorViolations(violations);
+    collectCandidateGeneratorViolations(violations);
     collectPopularTermDiscardScopeViolations(violations);
     return violations;
   }
@@ -203,9 +203,9 @@ public final class NamespaceConfig {
     }
   }
 
-  private void collectSparseCandidateGeneratorViolations(List<String> violations) {
+  private void collectCandidateGeneratorViolations(List<String> violations) {
     try {
-      parseSparseCandidateGenerator(indexParams);
+      parseCandidateGenerator(indexParams);
     } catch (IllegalArgumentException e) {
       violations.add(e.getMessage());
     }
@@ -231,15 +231,15 @@ public final class NamespaceConfig {
             PopularTermDiscardScope.CANDIDATES_ONLY.getParamValue()));
   }
 
-  private static SparseCandidateGenerator parseSparseCandidateGenerator(
+  private static CandidateGenerator parseCandidateGenerator(
       Map<String, String> indexParams) {
     String rawValue =
-        NamespaceConfigParams.getParam(indexParams, Constants.SPARSE_CANDIDATE_GENERATOR);
+        NamespaceConfigParams.getParam(indexParams, Constants.CANDIDATE_GENERATOR);
     if (NamespaceConfigParams.isBlank(rawValue)) {
-      return SparseCandidateGenerator.SPARS;
+      return CandidateGenerator.SPARS;
     }
     String normalizedValue = rawValue.trim().toLowerCase(Locale.ROOT);
-    for (SparseCandidateGenerator generator : SparseCandidateGenerator.values()) {
+    for (CandidateGenerator generator : CandidateGenerator.values()) {
       if (generator.paramValue.equals(normalizedValue)) {
         return generator;
       }
@@ -247,16 +247,16 @@ public final class NamespaceConfig {
     throw new IllegalArgumentException(
         String.format(
             "Unsupported %s (%s). Supported values: %s, %s.",
-            Constants.SPARSE_CANDIDATE_GENERATOR,
+            Constants.CANDIDATE_GENERATOR,
             rawValue,
-            SparseCandidateGenerator.SPARS.getParamValue(),
-            SparseCandidateGenerator.SPARS_MERGE.getParamValue()));
+            CandidateGenerator.SPARS.getParamValue(),
+            CandidateGenerator.SPARS_MERGE.getParamValue()));
   }
 
   /**
    * Which phases of a search a discarded high-popularity term is absent from.
    *
-   * <p>Discarding is governed by {@link Constants#MAX_FRACTION_IDS_PER_SPARSE_KEY}, and this
+   * <p>Discarding is governed by {@link Constants#MAX_FRACTION_IDS_PER_KEY}, and this
    * decides what the discard means once a term qualifies. The two settings differ in which half of
    * the answer stays exact, so neither is the safe one: the default keeps recall exact with respect
    * to records the discarded terms have been removed from, while {@link #CANDIDATES_ONLY} keeps the
@@ -291,14 +291,14 @@ public final class NamespaceConfig {
     }
   }
 
-  /** Candidate-generation strategy for immutable sparse indexes. */
-  public enum SparseCandidateGenerator {
+  /** Candidate-generation algorithm for the immutable inverted indexes. */
+  public enum CandidateGenerator {
     SPARS("spars"),
     SPARS_MERGE("spars_merge");
 
     private final String paramValue;
 
-    SparseCandidateGenerator(String paramValue) {
+    CandidateGenerator(String paramValue) {
       this.paramValue = paramValue;
     }
 

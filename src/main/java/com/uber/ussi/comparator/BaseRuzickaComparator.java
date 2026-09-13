@@ -162,7 +162,7 @@ abstract class BaseRuzickaComparator extends SignatureComparator {
   /** Both measures walk two records term by term, which needs the terms aligned and distinct. */
   @Override
   public Set<RecordType> getSupportedRecordTypes() {
-    return Set.of(RecordType.SPARSE);
+    return Set.of(RecordType.ORDER_AGNOSTIC_SPARSE);
   }
 
   @Override

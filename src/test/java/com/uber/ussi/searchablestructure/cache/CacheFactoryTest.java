@@ -10,17 +10,17 @@ import org.junit.jupiter.api.Test;
 class CacheFactoryTest {
 
   @Test
-  void createCacheCreatesGenericCache() {
+  void createCacheCreatesScanCache() {
     Cache cache = CacheFactory.createCache(validConfig().cacheType("GENERIC").build());
 
-    assertInstanceOf(GenericCache.class, cache);
+    assertInstanceOf(ScanCache.class, cache);
   }
 
   @Test
-  void createCacheCreatesSparseCache() {
+  void createCacheCreatesInvertedTermCache() {
     Cache cache = CacheFactory.createCache(validConfig().cacheType("SPARSE").build());
 
-    assertInstanceOf(SparseCache.class, cache);
+    assertInstanceOf(InvertedTermCache.class, cache);
   }
 
   @Test

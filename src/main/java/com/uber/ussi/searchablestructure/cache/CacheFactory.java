@@ -21,10 +21,10 @@ public final class CacheFactory {
 
     String cacheType = namespaceConfig.getCacheType().toLowerCase(Locale.ROOT);
     if (cacheType.equals(CacheType.GENERIC.name().toLowerCase(Locale.ROOT))) {
-      return new GenericCache(namespaceConfig);
+      return new ScanCache(namespaceConfig);
     }
     if (cacheType.equals(CacheType.SPARSE.name().toLowerCase(Locale.ROOT))) {
-      return new SparseCache(namespaceConfig);
+      return new InvertedTermCache(namespaceConfig);
     }
 
     throw new CacheCreationError(String.format("Unsupported cache type (%s).", cacheType));

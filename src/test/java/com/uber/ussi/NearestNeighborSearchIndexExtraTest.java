@@ -23,7 +23,7 @@ import com.uber.ussi.entity.termsandvalues.TermsAndValues;
 import com.uber.ussi.searchablestructure.cache.Cache;
 import com.uber.ussi.searchablestructure.cache.CacheFactory;
 import com.uber.ussi.searchablestructure.index.Index;
-import com.uber.ussi.searchablestructure.index.generic.GenericIndex;
+import com.uber.ussi.searchablestructure.index.scan.ScanIndex;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -144,7 +144,7 @@ class NearestNeighborSearchIndexExtraTest {
     rowsField.set(activeCache, new RowSevenConflictsAfterFirstContainsMap());
     addIndexForTest(
         index,
-        new GenericIndex(
+        new ScanIndex(
             config(),
             longObjectMap(7, denseInternal(1f, 0f)),
             longObjectMap(7, longMeta("city", "sf"))),
@@ -443,7 +443,7 @@ class NearestNeighborSearchIndexExtraTest {
   @Test
   void applyTombstonesDeletesEachRow() throws ReflectiveOperationException {
     Index builtIndex =
-        new GenericIndex(
+        new ScanIndex(
             config(),
             longObjectMap(1, denseInternal(1f, 0f), 2, denseInternal(0f, 1f)),
             longObjectMap(1, longMeta("city", "sf"), 2, longMeta("city", "la")));
@@ -660,8 +660,8 @@ class NearestNeighborSearchIndexExtraTest {
   @Test
   void consolidateClearsIndexesWhenAllEmpty() throws ReflectiveOperationException {
     NearestNeighborSearchIndex index = NearestNeighborSearchIndex.create(config());
-    addIndexForTest(index, new GenericIndex(config(), longObjectMap(), longObjectMap()), 0);
-    addIndexForTest(index, new GenericIndex(config(), longObjectMap(), longObjectMap()), 1);
+    addIndexForTest(index, new ScanIndex(config(), longObjectMap(), longObjectMap()), 0);
+    addIndexForTest(index, new ScanIndex(config(), longObjectMap(), longObjectMap()), 1);
 
     invokeConsolidate(index);
 
@@ -792,8 +792,8 @@ class NearestNeighborSearchIndexExtraTest {
       throws ReflectiveOperationException {
     NearestNeighborSearchIndex index = NearestNeighborSearchIndex.create(config());
     ShrinkAfterSnapshotIndexList indexList = new ShrinkAfterSnapshotIndexList();
-    Index firstIndex = new GenericIndex(config(), longObjectMap(), longObjectMap());
-    Index secondIndex = new GenericIndex(config(), longObjectMap(), longObjectMap());
+    Index firstIndex = new ScanIndex(config(), longObjectMap(), longObjectMap());
+    Index secondIndex = new ScanIndex(config(), longObjectMap(), longObjectMap());
     indexList.add(firstIndex);
     indexList.add(secondIndex);
     setField(index, "indexes", indexList);
@@ -1075,8 +1075,8 @@ class NearestNeighborSearchIndexExtraTest {
     }
   }
 
-  private static GenericIndex genericIndex(long rowNum) {
-    return new GenericIndex(
+  private static ScanIndex genericIndex(long rowNum) {
+    return new ScanIndex(
         config(),
         longObjectMap(rowNum, denseInternal(1f, 0f)),
         longObjectMap(rowNum, longMeta("city", "sf")));

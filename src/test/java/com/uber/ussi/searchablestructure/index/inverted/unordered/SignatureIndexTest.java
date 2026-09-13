@@ -1,0 +1,337 @@
+package com.uber.ussi.searchablestructure.index.inverted.unordered;
+
+import static com.uber.ussi.TestLongObjectMaps.longObjectMap;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.carrotsearch.hppc.LongObjectHashMap;
+import com.carrotsearch.hppc.cursors.LongObjectCursor;
+import com.uber.ussi.config.NamespaceConfig;
+import com.uber.ussi.entity.meta.LongMeta;
+import com.uber.ussi.entity.meta.MetaFilter;
+import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
+import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
+import com.uber.ussi.error.IndexCreationError;
+import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
+import com.uber.ussi.searchablestructure.index.inverted.BaseInvertedIndex;
+import com.uber.ussi.searchablestructure.index.inverted.generator.InvertedList;
+import com.uber.ussi.utils.Constants;
+import java.lang.reflect.Field;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.TreeMap;
+import org.junit.jupiter.api.Test;
+
+class SignatureIndexTest {
+  private static final float DELTA = 1e-6f;
+
+  @Test
+  void theCollidingSignaturesOfOneRecordCollapseToASingleKey() {
+    SignatureIndex index =
+        new SignatureIndex(
+            config("jaccard", "minhash"),
+            longObjectMap(7, jaccard(new long[] {11}, 1f)),
+            longObjectMap());
+
+    assertEquals(1, index.getNumIndexedSparseKeysForTests());
+    assertEquals(
+        1, index.getSparseKeysAndUniTransformedValues(jaccard(new long[] {11}, 1f)).length);
+    /*
+     * A single-term record hashes to the same signature all NUM_SIGNATURES_PER_ID times, and
+     * getSparseKeys owes its caller distinct keys, so it reports the one key rather than the
+     * repeats behind it.
+     */
+    long[] signatures = index.getSparseKeys(jaccard(new long[] {11}, 1f));
+    assertEquals(1, signatures.length);
+    assertArrayEquals(new long[] {7}, index.getRowNumsForSparseKeyForTests(signatures[0]));
+  }
+
+  @Test
+  void identicalRecordsAreRetrievedAndScoredUsingOriginalTermsAndValues() {
+    LongTermsAndValues matching = jaccard(sequentialTerms(300, 1), repeatedValue(1f, 300));
+    LongTermsAndValues disjoint = jaccard(sequentialTerms(300, 1001), repeatedValue(1f, 300));
+    SignatureIndex index =
+        new SignatureIndex(
+            config("jaccard", "minhash"), longObjectMap(1, matching, 2, disjoint), longObjectMap());
+
+    List<RowNumAndSimilarity> results = index.getNearestNeighborRowNums(2, matching, MetaFilter.empty());
+
+    assertEquals(List.of(1L), rowNumsNearestFirst(results));
+    assertEquals(1.0f, results.get(0).getSimilarity(), DELTA);
+    assertEquals(
+        List.of(1L),
+        rowNumsNearestFirst(index.getSimilarRowNums(1.0f, matching, MetaFilter.empty())));
+  }
+
+  @Test
+  void metadataFilteringAndDeletionApplyToSignatureCandidates() {
+    LongTermsAndValues record = jaccard(sequentialTerms(300, 1), repeatedValue(1f, 300));
+    LongObjectHashMap<LongMeta> metadata = longObjectMap();
+    metadata.put(1, new LongMeta(Map.of("city", "sf"), false));
+    SignatureIndex index =
+        new SignatureIndex(config("jaccard", "minhash"), longObjectMap(1, record), metadata);
+    MetaFilter sf = new MetaFilter(Map.of("city", List.of("sf")));
+
+    assertEquals(List.of(1L), rowNumsNearestFirst(index.getNearestNeighborRowNums(1, record, sf)));
+    assertTrue(index.delete(1));
+    assertFalse(index.delete(1));
+    assertTrue(index.getNearestNeighborRowNums(1, record, sf).isEmpty());
+  }
+
+  @Test
+  void weightedSignatureIndexSupportsRuzicka() {
+    LongTermsAndValues record = ruzicka(sequentialTerms(300, 1), repeatedIncreasingValues(300));
+    SignatureIndex index =
+        new SignatureIndex(config("ruzicka", "icws"), longObjectMap(1, record), longObjectMap());
+
+    List<RowNumAndSimilarity> results = index.getNearestNeighborRowNums(1, record, MetaFilter.empty());
+
+    assertEquals(List.of(1L), rowNumsNearestFirst(results));
+    assertEquals(1.0f, results.get(0).getSimilarity(), DELTA);
+  }
+
+  @Test
+  void rowsWithOnlyFilteredTermsHaveNoSignatureInvertedLists() {
+    LongTermsAndValues record = jaccard(new long[] {11}, 1f);
+    SignatureIndex index =
+        new SignatureIndex(
+            config("jaccard", "minhash", Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0.5")),
+            longObjectMap(1, record, 2, record),
+            longObjectMap());
+
+    assertArrayEquals(new long[] {11}, index.getDiscardedTermsForTests());
+    assertEquals(0, index.getNumIndexedSparseKeysForTests());
+    assertEquals(2, index.size());
+    assertTrue(index.getNearestNeighborRowNums(2, record, MetaFilter.empty()).isEmpty());
+  }
+
+  @Test
+  void constructorRequiresSignatureSupportBeforeBuildingRows() {
+    NamespaceConfig exactJaccardConfig = config("jaccard", null);
+
+    assertThrows(
+        IndexCreationError.class,
+        () -> new SignatureIndex(exactJaccardConfig, longObjectMap(), longObjectMap()));
+    assertThrows(
+        IndexCreationError.class,
+        () ->
+            new SignatureIndex(
+                exactJaccardConfig,
+                longObjectMap(1, jaccard(new long[] {1}, 1f)),
+                longObjectMap()));
+    assertThrows(
+        IndexCreationError.class,
+        () ->
+            new SignatureIndex(
+                config("l2", null), longObjectMap(1, l2(new long[] {1}, 1f)), longObjectMap()));
+  }
+
+  /**
+   * Signature keys say nothing about the values behind them, so the merge generator has to verify
+   * every candidate through the comparator. Its results must still match the filtered scan.
+   */
+  @Test
+  void mergeResultsMatchFilteredScanForSignatureKeys() {
+    for (String[] comparatorAndGenerator :
+        new String[][] {{"jaccard", "minhash"}, {"ruzicka", "icws"}}) {
+      String comparatorType = comparatorAndGenerator[0];
+      String signatureGeneratorType = comparatorAndGenerator[1];
+      Random random = new Random(41_957L + comparatorType.hashCode());
+      LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
+      for (long rowNum = 1; rowNum <= 40; ++rowNum) {
+        rows.put(rowNum, randomRow(random, comparatorType));
+      }
+      SignatureIndex filteredScanIndex =
+          new SignatureIndex(config(comparatorType, signatureGeneratorType), rows, longObjectMap());
+      SignatureIndex mergeIndex =
+          new SignatureIndex(
+              config(comparatorType, signatureGeneratorType, mergeIndexParams()),
+              rows,
+              longObjectMap());
+
+      for (int queryIndex = 0; queryIndex < 20; ++queryIndex) {
+        LongTermsAndValues query = randomRow(random, comparatorType);
+        int k = 1 + random.nextInt(8);
+        float minSimilarity = new float[] {0.0f, 0.2f, 0.5f}[random.nextInt(3)];
+
+        assertEquals(
+            rowNumsAndSimilarities(
+                filteredScanIndex.getNearestNeighborRowNums(k, query, MetaFilter.empty())),
+            rowNumsAndSimilarities(
+                mergeIndex.getNearestNeighborRowNums(k, query, MetaFilter.empty())),
+            comparatorType + " nearest queryIndex=" + queryIndex + " k=" + k);
+        assertEquals(
+            rowNumsAndSimilarities(
+                filteredScanIndex.getSimilarRowNums(minSimilarity, query, MetaFilter.empty())),
+            rowNumsAndSimilarities(
+                mergeIndex.getSimilarRowNums(minSimilarity, query, MetaFilter.empty())),
+            comparatorType + " threshold queryIndex=" + queryIndex + " min=" + minSimilarity);
+      }
+    }
+  }
+
+  /**
+   * Only exact sparse keys let the merge score from the conjunction, so only they carry the
+   * inverted-list values. Signature keys verify candidates through the comparator instead, and the
+   * filtered scan always does, so neither materializes the values.
+   */
+  @Test
+  void mergeMaterializesInvertedListValuesOnlyForExactSparseKeys()
+      throws ReflectiveOperationException {
+    LongObjectHashMap<LongTermsAndValues> rows = longObjectMap(1, jaccard(new long[] {1, 2}, 1, 1));
+
+    assertTrue(
+        hasInvertedListValues(
+            new TermIndex(termConfig("jaccard", mergeIndexParams()), rows, longObjectMap())),
+        "merge over exact terms");
+    assertFalse(
+        hasInvertedListValues(
+            new SignatureIndex(
+                config("jaccard", "minhash", mergeIndexParams()), rows, longObjectMap())),
+        "merge over signatures");
+    assertFalse(
+        hasInvertedListValues(
+            new TermIndex(termConfig("jaccard", Map.of()), rows, longObjectMap())),
+        "filtered scan");
+  }
+
+  @SuppressWarnings("unchecked")
+  private static boolean hasInvertedListValues(BaseInvertedIndex index)
+      throws ReflectiveOperationException {
+    Field field = BaseInvertedIndex.class.getDeclaredField("sparseKeyToInvertedList");
+    field.setAccessible(true);
+    LongObjectHashMap<InvertedList> invertedLists =
+        (LongObjectHashMap<InvertedList>) field.get(index);
+    assertFalse(invertedLists.isEmpty(), "the index should have at least one sparse key");
+    for (LongObjectCursor<InvertedList> entry : invertedLists) {
+      if (entry.value.getValues().length != entry.value.size()) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private static Map<String, String> mergeIndexParams() {
+    return Map.of(
+        Constants.SPARSE_CANDIDATE_GENERATOR,
+        NamespaceConfig.SparseCandidateGenerator.SPARS_MERGE.getParamValue());
+  }
+
+  private static NamespaceConfig termConfig(
+      String comparatorType, Map<String, String> indexParams) {
+    return NamespaceConfig.builder()
+        .minTermsAndValuesLength(0)
+        .maxTermsAndValuesLength(1000)
+        .maxCacheSize(100)
+        .cacheType("generic")
+        .indexType("term")
+        .indexParams(indexParams)
+        .comparatorType(comparatorType)
+        .comparatorNormalizerType("identity")
+        .maxNumSearchableStructures(3)
+        .maxNumSimilarities(100)
+        .build();
+  }
+
+  private static LongTermsAndValues randomRow(Random random, String comparatorType) {
+    int numTerms = 1 + random.nextInt(6);
+    TreeMap<Long, Float> valuesByTerm = new TreeMap<>();
+    while (valuesByTerm.size() < numTerms) {
+      valuesByTerm.put((long) random.nextInt(20), 0.5f * (1 + random.nextInt(6)));
+    }
+    long[] terms = new long[valuesByTerm.size()];
+    float[] values = new float[valuesByTerm.size()];
+    int index = 0;
+    for (Map.Entry<Long, Float> entry : valuesByTerm.entrySet()) {
+      terms[index] = entry.getKey();
+      values[index] = entry.getValue();
+      ++index;
+    }
+    return "jaccard".equals(comparatorType) ? jaccard(terms, values) : ruzicka(terms, values);
+  }
+
+  private static List<String> rowNumsAndSimilarities(List<RowNumAndSimilarity> results) {
+    return results.stream()
+        .sorted(RowNumAndSimilarity.NEAREST_FIRST)
+        .map(result -> result.getRowNum() + "=" + String.format("%.5f", result.getSimilarity()))
+        .toList();
+  }
+
+  private static NamespaceConfig config(String comparatorType, String signatureGeneratorType) {
+    return config(comparatorType, signatureGeneratorType, Map.of());
+  }
+
+  private static NamespaceConfig config(
+      String comparatorType, String signatureGeneratorType, Map<String, String> indexParams) {
+    Map<String, String> comparatorParams =
+        signatureGeneratorType == null
+            ? Map.of()
+            : Map.of(Constants.SIGNATURE_GENERATOR_TYPE, signatureGeneratorType);
+    return NamespaceConfig.builder()
+        .minTermsAndValuesLength(0)
+        .maxTermsAndValuesLength(1000)
+        .maxCacheSize(100)
+        .cacheType("generic")
+        .indexType("signature")
+        .indexParams(indexParams)
+        .comparatorType(comparatorType)
+        .comparatorParams(comparatorParams)
+        .comparatorNormalizerType(comparatorType.equals("l2") ? "reciprocal" : "identity")
+        .maxNumSearchableStructures(3)
+        .maxNumSimilarities(100)
+        .build();
+  }
+
+  private static LongTermsAndValues jaccard(long[] terms, float... values) {
+    return LongTermsAndValuesTestFactory.create(terms, values, terms.length);
+  }
+
+  private static LongTermsAndValues ruzicka(long[] terms, float... values) {
+    double uniValue = 0.0;
+    for (float value : values) {
+      uniValue += Math.abs(value);
+    }
+    return LongTermsAndValuesTestFactory.create(terms, values, uniValue);
+  }
+
+  private static LongTermsAndValues l2(long[] terms, float... values) {
+    double uniValue = 0.0;
+    for (float value : values) {
+      uniValue += (double) value * value;
+    }
+    return LongTermsAndValuesTestFactory.create(terms, values, uniValue);
+  }
+
+  private static long[] sequentialTerms(int size, long firstTerm) {
+    long[] terms = new long[size];
+    for (int i = 0; i < size; ++i) {
+      terms[i] = firstTerm + i;
+    }
+    return terms;
+  }
+
+  private static float[] repeatedValue(float value, int size) {
+    float[] values = new float[size];
+    java.util.Arrays.fill(values, value);
+    return values;
+  }
+
+  private static float[] repeatedIncreasingValues(int size) {
+    float[] values = new float[size];
+    for (int i = 0; i < size; ++i) {
+      values[i] = i + 1;
+    }
+    return values;
+  }
+
+  private static List<Long> rowNumsNearestFirst(List<RowNumAndSimilarity> results) {
+    return results.stream()
+        .sorted(RowNumAndSimilarity.NEAREST_FIRST)
+        .map(RowNumAndSimilarity::getRowNum)
+        .toList();
+  }
+}

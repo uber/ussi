@@ -28,8 +28,8 @@ public final class CacheConfigValidator implements NamespaceConfigValidator {
       return;
     }
     /*
-     * The sparse cache keys its inverted lists by the record's own terms and reads a value per
-     * term, so it stores sparse records. A comparator that cannot read that type caches through
+     * The inverted term cache keys its inverted lists by the record's own terms and reads a value
+     * per term, so it stores sparse records. A comparator that cannot read that type caches through
      * the generic cache instead, which scans and scores through the comparator.
      */
     Comparator comparator = ComparatorFactory.tryCreateComparator(config);

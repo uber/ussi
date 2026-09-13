@@ -9,12 +9,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.termsandvalues.RecordType;
 import com.uber.ussi.error.IndexCreationError;
-import com.uber.ussi.searchablestructure.index.dense.DenseMatrixIndex;
-import com.uber.ussi.searchablestructure.index.generic.GenericIndex;
-import com.uber.ussi.searchablestructure.index.sparse.TermIndex;
-import com.uber.ussi.searchablestructure.index.sparse.SequenceIndex;
-import com.uber.ussi.searchablestructure.index.sparse.SignatureIndex;
-import com.uber.ussi.searchablestructure.index.sparse.SparseIndex;
+import com.uber.ussi.searchablestructure.index.inverted.unordered.HybridIndex;
+import com.uber.ussi.searchablestructure.index.inverted.unordered.SignatureIndex;
+import com.uber.ussi.searchablestructure.index.inverted.unordered.TermIndex;
+import com.uber.ussi.searchablestructure.index.matrix.MatrixIndex;
+import com.uber.ussi.searchablestructure.index.scan.ScanIndex;
 import com.uber.ussi.utils.Constants;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -22,12 +21,12 @@ import org.junit.jupiter.api.Test;
 class IndexFactoryTest {
 
   @Test
-  void createIndexCreatesGenericIndex() {
+  void createIndexCreatesScanIndex() {
     Index index =
         IndexFactory.createIndex(
             validConfig().indexType("GENERIC").build(), longObjectMap(), longObjectMap());
 
-    assertInstanceOf(GenericIndex.class, index);
+    assertInstanceOf(ScanIndex.class, index);
   }
 
   @Test
@@ -36,7 +35,7 @@ class IndexFactoryTest {
         IndexFactory.createIndex(
             validConfig().indexType("DENSE").build(), longObjectMap(), longObjectMap());
 
-    assertInstanceOf(DenseMatrixIndex.class, index);
+    assertInstanceOf(MatrixIndex.class, index);
   }
 
   @Test
@@ -58,12 +57,12 @@ class IndexFactoryTest {
   }
 
   @Test
-  void createIndexCreatesHybridSparseIndex() {
+  void createIndexCreatesHybridIndex() {
     Index index =
         IndexFactory.createIndex(
             signatureConfig().indexType("SPARSE").build(), longObjectMap(), longObjectMap());
 
-    assertInstanceOf(SparseIndex.class, index);
+    assertInstanceOf(HybridIndex.class, index);
   }
 
   private static final IndexTypePredicateCase[] SPARSE_GENERATOR_CASES = {
@@ -104,12 +103,13 @@ class IndexFactoryTest {
   private record IndexTypePredicateCase(String indexType, boolean expected) {}
 
   @Test
-  void createIndexCreatesSequenceIndex() {
+  void createIndexCreatesSequenceTermIndex() {
     Index index =
         IndexFactory.createIndex(
             sequenceConfig().indexType("SEQUENCE").build(), longObjectMap(), longObjectMap());
 
-    assertInstanceOf(SequenceIndex.class, index);
+    assertInstanceOf(
+        com.uber.ussi.searchablestructure.index.inverted.sequence.TermIndex.class, index);
   }
 
   @Test

@@ -44,7 +44,7 @@ class SparseEndToEndTest {
           new FilterCase(new MetaFilter(Map.of("city", List.of("Alexandria"))), List.of(3L, 4L)));
 
   @Test
-  void portedNearestNeighborMatrixPassesThroughSparseIndex() {
+  void portedNearestNeighborMatrixPassesThroughHybridIndex() {
     for (double maxFraction : List.of(1.0, 0.5)) {
       for (String metadataStrategy : List.of("in_filtering", "pre_filtering", "auto")) {
         try (NearestNeighborSearchIndex index =
@@ -65,7 +65,7 @@ class SparseEndToEndTest {
   }
 
   @Test
-  void portedSimilarityThresholdMatrixPassesThroughSparseIndex() {
+  void portedSimilarityThresholdMatrixPassesThroughHybridIndex() {
     for (double maxFraction : List.of(1.0, 0.5)) {
       for (String metadataStrategy : List.of("in_filtering", "pre_filtering", "auto")) {
         try (NearestNeighborSearchIndex index =

@@ -78,7 +78,7 @@ class CacheConfigValidatorTest {
         .maxTermsAndValuesLength(4)
         .maxCacheSize(10)
         .cacheType(CacheFactory.CacheType.SPARSE.name().toLowerCase(Locale.ROOT))
-        .indexType("inverted")
+        .indexType("term")
         .comparatorType("jaccard")
         .comparatorNormalizerType("identity")
         .maxNumSearchableStructures(3)

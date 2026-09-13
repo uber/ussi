@@ -413,7 +413,7 @@ class SparseCacheTest {
   }
 
   @Test
-  void invertedSearchSkipsRowsThatDoNotMatchMetadata() {
+  void invertedListSearchSkipsRowsThatDoNotMatchMetadata() {
     SparseCache cache = new SparseCache(config("jaccard"));
     long matching = cache.insert(jaccard(new long[] {1}, 1), Map.of("city", "sf"));
     cache.insert(jaccard(new long[] {1}, 1), Map.of("city", "la"));
@@ -426,7 +426,7 @@ class SparseCacheTest {
   }
 
   @Test
-  void invertedSearchToleratesAStaleInvertedList() {
+  void invertedListSearchToleratesAStaleInvertedList() {
     SparseCache cache = new SparseCache(config("jaccard"));
     long staleRow = cache.insert(jaccard(new long[] {1}, 1), Map.of());
     cache.insert(jaccard(new long[] {2}, 1), Map.of());
@@ -450,7 +450,7 @@ class SparseCacheTest {
   }
 
   @Test
-  void invertedSearchStopsCurrentInvertedListAfterThresholdTightening()
+  void invertedListSearchStopsCurrentInvertedListAfterThresholdTightening()
       throws ReflectiveOperationException {
     SparseCache cache = new SparseCache(config("jaccard"));
     long rowNum = cache.insert(jaccard(new long[] {1}, 1), Map.of());

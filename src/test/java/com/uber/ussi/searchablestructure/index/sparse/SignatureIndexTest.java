@@ -186,8 +186,8 @@ class SignatureIndexTest {
 
     assertTrue(
         hasInvertedListValues(
-            new InvertedIndex(
-                invertedConfig("jaccard", mergeIndexParams()), rows, longObjectMap())),
+            new TermIndex(
+                termConfig("jaccard", mergeIndexParams()), rows, longObjectMap())),
         "merge over exact terms");
     assertFalse(
         hasInvertedListValues(
@@ -196,7 +196,7 @@ class SignatureIndexTest {
         "merge over signatures");
     assertFalse(
         hasInvertedListValues(
-            new InvertedIndex(invertedConfig("jaccard", Map.of()), rows, longObjectMap())),
+            new TermIndex(termConfig("jaccard", Map.of()), rows, longObjectMap())),
         "filtered scan");
   }
 
@@ -205,10 +205,10 @@ class SignatureIndexTest {
       throws ReflectiveOperationException {
     Field field = BaseSparseIndex.class.getDeclaredField("sparseKeyToInvertedList");
     field.setAccessible(true);
-    LongObjectHashMap<SparseInvertedList> invertedIndex =
+    LongObjectHashMap<SparseInvertedList> invertedLists =
         (LongObjectHashMap<SparseInvertedList>) field.get(index);
-    assertFalse(invertedIndex.isEmpty(), "the index should have at least one sparse key");
-    for (LongObjectCursor<SparseInvertedList> entry : invertedIndex) {
+    assertFalse(invertedLists.isEmpty(), "the index should have at least one sparse key");
+    for (LongObjectCursor<SparseInvertedList> entry : invertedLists) {
       if (entry.value.getValues().length != entry.value.size()) {
         return false;
       }
@@ -222,14 +222,14 @@ class SignatureIndexTest {
         NamespaceConfig.SparseCandidateGenerator.SPARS_MERGE.getParamValue());
   }
 
-  private static NamespaceConfig invertedConfig(
+  private static NamespaceConfig termConfig(
       String comparatorType, Map<String, String> indexParams) {
     return NamespaceConfig.builder()
         .minTermsAndValuesLength(0)
         .maxTermsAndValuesLength(1000)
         .maxCacheSize(100)
         .cacheType("generic")
-        .indexType("inverted")
+        .indexType("term")
         .indexParams(indexParams)
         .comparatorType(comparatorType)
         .comparatorNormalizerType("identity")

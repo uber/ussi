@@ -48,10 +48,10 @@ class IndexConfigValidatorTest {
                 .indexParams(Map.of(Constants.SPARSE_CANDIDATE_GENERATOR, sparsMerge())),
         false),
     new ValidationCase(
-        "spars merge with l2 on inverted index",
+        "spars merge with l2 on term index",
         builder ->
             builder
-                .indexType(lowerCase(IndexFactory.IndexType.INVERTED))
+                .indexType(lowerCase(IndexFactory.IndexType.TERM))
                 .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.L2))
                 .indexParams(Map.of(Constants.SPARSE_CANDIDATE_GENERATOR, sparsMerge())),
         true),
@@ -61,10 +61,10 @@ class IndexConfigValidatorTest {
      * rather than only on the ones that verify candidates through signatures.
      */
     new ValidationCase(
-        "spars merge with ngld on inverted index",
+        "spars merge with ngld on term index",
         builder ->
             builder
-                .indexType(lowerCase(IndexFactory.IndexType.INVERTED))
+                .indexType(lowerCase(IndexFactory.IndexType.TERM))
                 .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.NGLD))
                 .indexParams(Map.of(Constants.SPARSE_CANDIDATE_GENERATOR, sparsMerge())),
         false),
@@ -78,10 +78,10 @@ class IndexConfigValidatorTest {
         false),
     // Ruzicka scores a row from the keys it shares with the query, so merge stays available.
     new ValidationCase(
-        "spars merge with ruzicka on inverted index",
+        "spars merge with ruzicka on term index",
         builder ->
             builder
-                .indexType(lowerCase(IndexFactory.IndexType.INVERTED))
+                .indexType(lowerCase(IndexFactory.IndexType.TERM))
                 .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.RUZICKA))
                 .indexParams(Map.of(Constants.SPARSE_CANDIDATE_GENERATOR, sparsMerge())),
         true),
@@ -105,10 +105,10 @@ class IndexConfigValidatorTest {
                 .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.GLD)),
         true),
     new ValidationCase(
-        "ngld on inverted index",
+        "ngld on term index",
         builder ->
             builder
-                .indexType(lowerCase(IndexFactory.IndexType.INVERTED))
+                .indexType(lowerCase(IndexFactory.IndexType.TERM))
                 .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.NGLD)),
         false),
     new ValidationCase(
@@ -137,10 +137,10 @@ class IndexConfigValidatorTest {
         true),
     // L2 reads both dense and sparse records, so neither index type can turn it away.
     new ValidationCase(
-        "l2 on inverted index",
+        "l2 on term index",
         builder ->
             builder
-                .indexType(lowerCase(IndexFactory.IndexType.INVERTED))
+                .indexType(lowerCase(IndexFactory.IndexType.TERM))
                 .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.L2)),
         true),
     new ValidationCase(
@@ -260,7 +260,7 @@ class IndexConfigValidatorTest {
         .maxTermsAndValuesLength(4)
         .maxCacheSize(10)
         .cacheType("generic")
-        .indexType("inverted")
+        .indexType("term")
         .comparatorType("jaccard")
         .comparatorNormalizerType("identity")
         .maxNumSearchableStructures(3)

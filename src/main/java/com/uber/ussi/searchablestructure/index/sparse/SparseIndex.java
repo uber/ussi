@@ -17,7 +17,7 @@ import java.util.List;
 
 /** Hybrid sparse index using exact keys for short rows and signatures for long rows. */
 public final class SparseIndex extends Index {
-  private final InvertedIndex invertedIndex;
+  private final TermIndex termIndex;
   private final SignatureIndex signatureIndex;
   private final boolean sparseKeyPopularityFilteringEnabled;
 
@@ -40,9 +40,9 @@ public final class SparseIndex extends Index {
         signatureRows.put(entry.key, entry.value);
       }
     }
-    this.invertedIndex = new InvertedIndex(namespaceConfig, exactRows, rowNumToMetaMap);
+    this.termIndex = new TermIndex(namespaceConfig, exactRows, rowNumToMetaMap);
     this.signatureIndex = new SignatureIndex(namespaceConfig, signatureRows, rowNumToMetaMap);
-    this.sparseKeyPopularityFilteringEnabled = invertedIndex.discardsPopularSparseKeys();
+    this.sparseKeyPopularityFilteringEnabled = termIndex.discardsPopularSparseKeys();
   }
 
   @Override
@@ -53,8 +53,8 @@ public final class SparseIndex extends Index {
     }
     int maxResults = Math.min(k, namespaceConfig.getMaxNumSimilarities());
     boolean queryUsesExactIndex = record.termsLength() <= Constants.NUM_SIGNATURES_PER_ID;
-    Index firstIndex = queryUsesExactIndex ? invertedIndex : signatureIndex;
-    Index secondIndex = queryUsesExactIndex ? signatureIndex : invertedIndex;
+    Index firstIndex = queryUsesExactIndex ? termIndex : signatureIndex;
+    Index secondIndex = queryUsesExactIndex ? signatureIndex : termIndex;
     boolean secondIndexIsExact = !queryUsesExactIndex;
 
     List<RowNumAndSimilarity> firstResults =
@@ -83,7 +83,7 @@ public final class SparseIndex extends Index {
     }
     List<RowNumAndSimilarity> exactResults =
         maySearchIndex(/* exactIndex */ true, record, minSimilarity)
-            ? invertedIndex.getSimilarRowNums(minSimilarity, record, metadataFilter)
+            ? termIndex.getSimilarRowNums(minSimilarity, record, metadataFilter)
             : List.of();
     List<RowNumAndSimilarity> signatureResults =
         maySearchIndex(/* exactIndex */ false, record, minSimilarity)
@@ -94,19 +94,19 @@ public final class SparseIndex extends Index {
 
   @Override
   protected void onRowDeleted(long rowNum) {
-    if (!invertedIndex.delete(rowNum)) {
+    if (!termIndex.delete(rowNum)) {
       signatureIndex.delete(rowNum);
     }
   }
 
   @Override
   public void close() {
-    invertedIndex.close();
+    termIndex.close();
     signatureIndex.close();
   }
 
   int getNumExactRowsForTests() {
-    return invertedIndex.size();
+    return termIndex.size();
   }
 
   int getNumSignatureRowsForTests() {
@@ -115,7 +115,7 @@ public final class SparseIndex extends Index {
 
   private boolean maySearchIndex(
       boolean exactIndex, LongTermsAndValues query, double minSimilarity) {
-    Index index = exactIndex ? invertedIndex : signatureIndex;
+    Index index = exactIndex ? termIndex : signatureIndex;
     if (index.size() == 0) {
       return false;
     }

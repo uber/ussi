@@ -18,7 +18,7 @@ memory-only index structure:
 
 - Mutable `generic` and `sparse` caches for inserts, updates, deletes, and
   search.
-- Delete-only `generic`, `dense`, `inverted`, `sequence`, `signature`, and
+- Delete-only `generic`, `dense`, `term`, `sequence`, `signature`, and
   hybrid `sparse` indexes built from graduated cache contents.
 - L2, signed Jaccard, and signed weighted-Jaccard (Ruzicka) comparators with
   configurable normalization into a `[0.0, 1.0]` similarity score.
@@ -30,7 +30,7 @@ memory-only index structure:
 - Approximate sparse candidate generation using MinHash for Jaccard and I2CWS,
   ICWS, PCWS, or SCWS for Ruzicka.
 - A hybrid sparse index that sends rows with at most 270 terms to the exact
-  inverted index and longer rows to the signature index.
+  term index and longer rows to the signature index.
 - A sequence index that generates candidates from element multisets and has the
   configured edit distance verify each candidate against the ordered sequences.
 - Metadata filtering with in-filtering, pre-filtering, post-filtering, and
@@ -241,7 +241,7 @@ Search behavior:
 | `maxCacheSize` | Number of active-cache rows that triggers cache graduation to an index. Must be positive. |
 | `cacheType` | Supported values: `generic`, `sparse`. |
 | `cacheParams` | Cache-specific options, including sparse-term popularity filtering. |
-| `indexType` | Supported values: `generic`, `dense`, `inverted`, `sequence`, `signature`, `sparse`. |
+| `indexType` | Supported values: `generic`, `dense`, `term`, `sequence`, `signature`, `sparse`. |
 | `indexParams` | Index-specific options such as metadata filtering strategy. |
 | `comparatorType` | Supported values: `l2`, `jaccard`, `ruzicka`, `gld`, `ngld`. |
 | `comparatorParams` | Comparator-specific options, including signature generation and sequence distance. |
@@ -259,7 +259,7 @@ Supported index combinations:
 | --- | --- | --- | --- |
 | `generic` | Dense, sparse numeric, or sequence | `l2`, `jaccard`, `ruzicka`, `gld`, `ngld` | Exact sequential scan. |
 | `dense` | Fixed-dimension dense | `l2` | Exact matrix scan with Java or OpenBLAS dot products. |
-| `inverted` | Sparse numeric | `l2`, `jaccard`, `ruzicka` | Exact inverted term lists. |
+| `term` | Sparse numeric | `l2`, `jaccard`, `ruzicka` | Exact inverted term lists. |
 | `sequence` | Sequence | `gld`, `ngld` | Element-multiset inverted lists; retained candidates are scored against the ordered sequences. |
 | `signature` | Sparse numeric | `jaccard` or `ruzicka` with a signature generator | Approximate signature inverted lists; retained candidates are scored with the original comparator. |
 | `sparse` | Sparse numeric | `jaccard` or `ruzicka` with a signature generator | Hybrid exact/signature routing at 270 terms. |
@@ -267,7 +267,7 @@ Supported index combinations:
 The `generic` cache is a sequential scan and works with dense or sparse numeric
 records. The `sparse` cache maintains mutable inverted term lists and is
 intended for sparse numeric records. A sparse cache should normally graduate to
-an `inverted`, `signature`, or hybrid `sparse` index. A sequence namespace
+a `term`, `signature`, or hybrid `sparse` index. A sequence namespace
 caches generically, because the sparse cache reads one value per distinct term
 and a sequence supplies neither.
 
@@ -312,7 +312,7 @@ Comparator parameters:
 | `sequence_distance_type` | `gld`, `ngld` | `levenshtein`, `damerau_levenshtein`, `lcs` | `levenshtein` |
 
 Without `signature_generator_type`, Jaccard and Ruzicka still work in generic,
-sparse-cache, and exact inverted paths. The `signature` and hybrid `sparse`
+sparse-cache, and exact term paths. The `signature` and hybrid `sparse`
 indexes require it. L2 does not support signature generation.
 
 Both sequence comparators are named for the distance they report. `gld` is the
@@ -339,7 +339,7 @@ The distances differ only in the edits they permit:
 When `metadata_filtering_strategy` is `auto`, `GenericIndex` resolves metadata
 filtering to in-filtering. `DenseMatrixIndex` tries pre-filtering when the
 metadata filter is selective enough according to `max_pre_filtering_rows_ratio`;
-otherwise it falls back to post-filtering. Inverted and signature indexes also
+otherwise it falls back to post-filtering. Term and signature indexes also
 try selective pre-filtering, then fall back to in-filtering.
 
 Normalizer behavior:
@@ -430,9 +430,9 @@ sub-packages by index type:
 - `index.generic`: `GenericIndex`, the generic sequential-scan index.
 - `index.dense`: `DenseMatrixIndex` and its matrix-vector dot-product scorers
   (`DenseMatrixDotProductScorers` and the Java and OpenBLAS scorers).
-- `index.sparse`: `InvertedIndex`, `SequenceIndex`, `SignatureIndex`, and the
+- `index.sparse`: `TermIndex`, `SequenceIndex`, `SignatureIndex`, and the
   hybrid `SparseIndex`. All four share `BaseSparseIndex`, which owns the
-  uni-sorted inverted lists and drives the candidate generators. `InvertedIndex`
+  uni-sorted inverted lists and drives the candidate generators. `TermIndex`
   and `SequenceIndex` further share `BaseTermKeyedIndex`, which covers the
   indexes whose list keys are the terms of the record being indexed rather than
   a signature derived from it.
@@ -510,13 +510,18 @@ The dense scorer tries to use OpenBLAS on supported Linux and macOS platforms.
 If OpenBLAS cannot be loaded, it falls back to the Java scorer.
 `NearestNeighborSearchIndex.close()` releases any native dense-matrix memory.
 
-#### Exact Inverted Index
+#### Term Index
 
-`InvertedIndex` is a delete-only sparse index whose keys are the canonicalized
-terms. Inverted lists are sorted by each row's comparator-specific unilateral
-value, enabling length filtering. Candidate traversal combines length,
-position, and unordered-prefix filtering while tightening the similarity
-threshold as the top-k heap fills. Either candidate generator can traverse
+`TermIndex` is a delete-only sparse index whose keys are the terms themselves,
+canonicalized. Every sparse index keeps inverted lists, so what sets this one
+apart is the source of its keys: a row's own terms, with nothing derived from
+them, which is why the terms a query and a candidate share determine their
+similarity exactly rather than bounding it.
+
+Inverted lists are sorted by each row's comparator-specific unilateral value,
+enabling length filtering. Candidate traversal combines length, position, and
+unordered-prefix filtering while tightening the similarity threshold as the
+top-k heap fills. Either candidate generator can traverse
 these lists; see [Sparse Candidate Generation](#sparse-candidate-generation).
 
 Each row and each query must have non-empty terms and values arrays of equal
@@ -524,7 +529,7 @@ length after canonicalization; a query and a row do not need to have the same
 number of terms as each other. Search only considers rows sharing at least one
 non-discarded term with the query. This is important for sparse L2: two
 disjoint sparse vectors can have a non-zero normalized L2 similarity, but
-`inverted` deliberately does not return such rows. Use `generic` when
+`term` deliberately does not return such rows. Use `generic` when
 exhaustive scoring across disjoint sparse L2 records is required.
 
 At build time, terms occurring in more than
@@ -571,8 +576,8 @@ margins broaden candidate generation but do not make the signature index exact.
 
 #### Hybrid Sparse Index
 
-`SparseIndex` combines an `InvertedIndex` and a `SignatureIndex`. During each
-index build, rows with at most 270 terms go to the exact inverted child and rows
+`SparseIndex` combines a `TermIndex` and a `SignatureIndex`. During each
+index build, rows with at most 270 terms go to the term child and rows
 with more than 270 terms go to the signature child. The configured length range
 may be entirely below, entirely above, or span this internal boundary.
 
@@ -617,7 +622,7 @@ the comparator under this scope.
 
 #### Sparse Candidate Generation
 
-The three sparse index types (`inverted`, `signature`, and hybrid `sparse`)
+The three sparse index types (`term`, `signature`, and hybrid `sparse`)
 build the same uni-sorted inverted lists but can traverse them with either of
 two candidate generators, selected per namespace with the
 `sparse_candidate_generator` index parameter. Both return identical results and
@@ -644,7 +649,7 @@ value at that key, so the accumulated conjunction is the row's exact similarity
 and no further comparison is needed. Signature keys carry no usable value, so
 over a `signature` index the merge generator scores each retained candidate with
 the comparator, exactly as the filtered scan does. The hybrid `sparse` index
-applies the generator independently to each child, so its inverted child scores
+applies the generator independently to each child, so its term child scores
 from the conjunction while its signature child verifies.
 
 A comparator opts into the merge generator by implementing its conjunction

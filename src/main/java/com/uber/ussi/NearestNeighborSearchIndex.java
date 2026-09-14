@@ -5,6 +5,7 @@ import com.carrotsearch.hppc.LongHashSet;
 import com.carrotsearch.hppc.LongObjectHashMap;
 import com.carrotsearch.hppc.cursors.LongCursor;
 import com.uber.ussi.comparator.Comparator;
+import com.uber.ussi.comparator.ComparatorConfigValidator;
 import com.uber.ussi.comparator.ComparatorFactory;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.LongMeta;
@@ -13,8 +14,10 @@ import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.TermsAndValues;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.cache.Cache;
+import com.uber.ussi.searchablestructure.cache.CacheConfigValidator;
 import com.uber.ussi.searchablestructure.cache.CacheFactory;
 import com.uber.ussi.searchablestructure.index.Index;
+import com.uber.ussi.searchablestructure.index.IndexConfigValidator;
 import com.uber.ussi.searchablestructure.index.IndexFactory;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
 import java.util.ArrayList;
@@ -67,6 +70,16 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
 
   NearestNeighborSearchIndex(NamespaceConfig namespaceConfig, ExecutorService backgroundExecutor) {
     this.namespaceConfig = Objects.requireNonNull(namespaceConfig, "namespaceConfig");
+    /*
+     * A namespace holds a cache and the indexes that cache graduates into, so every layer's rules
+     * have to hold before any of them is built. Validating here reports all of them at once,
+     * rather than letting whichever layer is constructed first raise a creation error for the one
+     * it happened to reach.
+     */
+    this.namespaceConfig.validate(
+        CacheConfigValidator.getInstance(),
+        IndexConfigValidator.getInstance(),
+        ComparatorConfigValidator.getInstance());
     this.comparator = ComparatorFactory.createComparator(namespaceConfig);
     this.cache = CacheFactory.createCache(namespaceConfig);
     this.indexes = new ArrayList<>();

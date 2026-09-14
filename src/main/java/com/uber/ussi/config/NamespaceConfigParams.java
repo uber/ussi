@@ -4,13 +4,18 @@ package com.uber.ussi.config;
 import java.util.Map;
 import javax.annotation.Nullable;
 
-/** Param-map lookup shared by {@link NamespaceConfig} and {@link ConfigViolations}. */
-final class NamespaceConfigParams {
+/**
+ * Param-map lookup shared by {@link NamespaceConfig}, {@link ConfigViolations}, and the factories
+ * that read a param map they were handed rather than the config it came from. A param has to be
+ * found the same way wherever it is read, or a config can be validated on a value that the layer
+ * building from it never sees.
+ */
+public final class NamespaceConfigParams {
   private NamespaceConfigParams() {}
 
   /** Returns the value for {@code key}, matching case-insensitively and ignoring padding. */
   @Nullable
-  static String getParam(Map<String, String> params, String key) {
+  public static String getParam(Map<String, String> params, String key) {
     String value = params.get(key);
     if (value != null) {
       return value;

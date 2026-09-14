@@ -2,9 +2,14 @@ package com.uber.ussi.comparator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.uber.ussi.comparator.sequencedistance.SequenceDistance;
 import com.uber.ussi.config.NamespaceConfig;
+import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
+import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
+import com.uber.ussi.error.ComparatorCreationError;
 import com.uber.ussi.utils.Constants;
 import java.util.List;
 import java.util.Map;
@@ -89,6 +94,21 @@ class ComparatorConfigValidatorTest {
                 .comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR_TYPE, "minhash")),
         false,
         null),
+    new ValidationCase(
+        "unsupported comparator normalizer type",
+        builder -> builder.comparatorNormalizerType("softmax"),
+        false,
+        "Unsupported comparatorNormalizerType (softmax). Supported values: "
+            + "complement, identity, lp, reciprocal."),
+    /*
+     * A comparator scores through its normalizer, so an unsupported normalizer is reported even
+     * though nothing else here could be answered for it either.
+     */
+    new ValidationCase(
+        "unsupported comparator normalizer type on an unknown comparator",
+        builder -> builder.comparatorType("cosine").comparatorNormalizerType("softmax"),
+        false,
+        "Unsupported comparator type (cosine)."),
   };
 
   @Test
@@ -100,6 +120,36 @@ class ComparatorConfigValidatorTest {
         assertTrue(violations.contains(testCase.expectedMessage), testCase.name);
       }
     }
+  }
+
+  /**
+   * A param is found the same way wherever it is read, so a key validation resolved is one
+   * construction resolves too. Reading the map two ways let a config be validated on a value that
+   * construction never saw: this signature param was reported against L2 and then ignored by it.
+   */
+  @Test
+  void aParamUnderADifferentlyCasedKeyIsReadByValidationAndConstructionAlike() {
+    NamespaceConfig config =
+        validBuilder()
+            .comparatorType("l2")
+            .comparatorParams(Map.of("Signature_Generator_Type", "minhash"))
+            .build();
+
+    assertEquals(List.of("L2 does not support signature generation."), violations(config));
+    assertThrows(ComparatorCreationError.class, () -> ComparatorFactory.createComparator(config));
+  }
+
+  /**
+   * The same key on the sequence comparators, where being missed is silent rather than loud: an
+   * absent sequence distance type means Levenshtein.
+   */
+  @Test
+  void aSequenceDistanceUnderADifferentlyCasedKeyIsNotTheDefault() {
+    SequenceDistance distance =
+        ComparatorFactory.createSequenceDistance(Map.of("Sequence_Distance_Type", "lcs"));
+
+    // Rewriting an element costs a deletion and an insertion under LCS, one substitution under LD.
+    assertEquals(2L, distance.getDistance(sequence("ab"), sequence("ac"), 4L));
   }
 
   /** A config carries whatever string the caller set, including none at all. */
@@ -125,6 +175,15 @@ class ComparatorConfigValidatorTest {
 
   private static List<String> violations(NamespaceConfig config) {
     return config.collectViolations(ComparatorConfigValidator.getInstance());
+  }
+
+  private static LongTermsAndValues sequence(String elements) {
+    long[] terms = new long[elements.length()];
+    for (int index = 0; index < terms.length; ++index) {
+      terms[index] = elements.charAt(index);
+    }
+    // A sequence's Uni value is its length, and it carries no values.
+    return LongTermsAndValuesTestFactory.create(terms, new float[0], terms.length);
   }
 
   @FunctionalInterface

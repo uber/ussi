@@ -44,11 +44,13 @@ memory-only index structure:
 Dense, sparse numeric, and sequence records all use the same public
 `TermsAndValues` API. Which of the three a comparator can read is what decides
 the searchable structures it can be paired with. Four rules are checked up
-front, before a namespace holds any rows: a `cacheType` or `indexType` naming
-no structure, a structure and a comparator with no record layout in common, a
-structure whose keys the comparator cannot generate, and a candidate generator
-the comparator cannot support are each reported as a config violation rather
-than surfacing when the first index is built.
+front, when a namespace is created and before it holds any rows: a config value
+naming no structure, comparator, or normalizer, a structure and a comparator
+with no record layout in common, a structure whose keys the comparator cannot
+generate, and a candidate generator the comparator cannot support are each
+reported as a config violation rather than surfacing when a layer is built.
+Every layer's rules are checked together, so one violation list covers the
+cache, the indexes, and the comparator.
 
 The library does not provide persistence, sharding, external document-id
 mapping, TTL enforcement, authorization, or platform-specific plugin/adapter

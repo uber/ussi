@@ -10,6 +10,7 @@ import com.uber.ussi.comparator.signaturegenerator.SignatureGeneratorFactory.Sig
 import com.uber.ussi.comparatornormalizer.ComparatorNormalizer;
 import com.uber.ussi.comparatornormalizer.ComparatorNormalizerFactory;
 import com.uber.ussi.config.NamespaceConfig;
+import com.uber.ussi.config.NamespaceConfigParams;
 import com.uber.ussi.error.ComparatorCreationError;
 import com.uber.ussi.utils.Constants;
 import java.util.Locale;
@@ -76,7 +77,7 @@ public class ComparatorFactory {
       throws ComparatorCreationError {
     String comparatorTypeLowerCase = comparatorType.toLowerCase(Locale.ROOT);
     if (comparatorTypeLowerCase.equals(COMPARATOR_TYPE.L2.name().toLowerCase(Locale.ROOT))) {
-      if (comparatorParams.containsKey(Constants.SIGNATURE_GENERATOR_TYPE)) {
+      if (hasSignatureGeneratorType(comparatorParams)) {
         throw new ComparatorCreationError("L2 does not support signature generation.");
       }
       return new L2Comparator(comparatorNormalizer);
@@ -92,7 +93,7 @@ public class ComparatorFactory {
           createSignatureGenerator(comparatorParams, comparatorTypeLowerCase));
     }
     if (isSequenceComparatorType(comparatorTypeLowerCase)) {
-      if (comparatorParams.containsKey(Constants.SIGNATURE_GENERATOR_TYPE)) {
+      if (hasSignatureGeneratorType(comparatorParams)) {
         throw new ComparatorCreationError(
             String.format(
                 "%s does not support signature generation.",
@@ -139,7 +140,8 @@ public class ComparatorFactory {
    */
   static SequenceDistance createSequenceDistance(Map<String, String> comparatorParams)
       throws ComparatorCreationError {
-    String configuredType = comparatorParams.get(Constants.SEQUENCE_DISTANCE_TYPE);
+    String configuredType =
+        NamespaceConfigParams.getParam(comparatorParams, Constants.SEQUENCE_DISTANCE_TYPE);
     if (configuredType == null || configuredType.trim().isEmpty()) {
       return SequenceDistanceFactory.createSequenceDistance(SequenceDistanceType.LEVENSHTEIN);
     }
@@ -150,10 +152,16 @@ public class ComparatorFactory {
     }
   }
 
+  private static boolean hasSignatureGeneratorType(Map<String, String> comparatorParams) {
+    return NamespaceConfigParams.getParam(comparatorParams, Constants.SIGNATURE_GENERATOR_TYPE)
+        != null;
+  }
+
   @Nullable
   private static SignatureGenerator createSignatureGenerator(
       Map<String, String> comparatorParams, String comparatorType) {
-    String configuredType = comparatorParams.get(Constants.SIGNATURE_GENERATOR_TYPE);
+    String configuredType =
+        NamespaceConfigParams.getParam(comparatorParams, Constants.SIGNATURE_GENERATOR_TYPE);
     if (configuredType == null || configuredType.trim().isEmpty()) {
       return null;
     }

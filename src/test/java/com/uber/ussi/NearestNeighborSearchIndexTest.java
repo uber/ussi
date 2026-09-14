@@ -3,6 +3,7 @@ package com.uber.ussi;
 import static com.uber.ussi.TestLongObjectMaps.rowNums;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.carrotsearch.hppc.LongObjectHashMap;
@@ -27,6 +28,34 @@ class NearestNeighborSearchIndexTest {
 
     assertEquals(0, index.size());
     assertEquals(0, index.getAllRowNums().length);
+  }
+
+  /**
+   * A namespace is checked against every layer's rules before any of them is built, so a config
+   * that no layer could be built from is reported as the violation it is rather than as whichever
+   * creation error the first layer constructed happened to raise.
+   */
+  @Test
+  void createReportsViolationsBeforeBuildingAnyLayer() {
+    NamespaceConfig config =
+        NamespaceConfig.builder()
+            .minTermsAndValuesLength(0)
+            .maxTermsAndValuesLength(2)
+            .maxCacheSize(10)
+            .cacheType("scan")
+            .indexType("scan")
+            .comparatorType("l2")
+            .comparatorNormalizerType("softmax")
+            .maxNumSearchableStructures(3)
+            .maxNumSimilarities(10)
+            .build();
+
+    IllegalArgumentException error =
+        assertThrows(
+            IllegalArgumentException.class, () -> NearestNeighborSearchIndex.create(config));
+    assertTrue(
+        error.getMessage().contains("Unsupported comparatorNormalizerType (softmax)"),
+        error.getMessage());
   }
 
   @Test

@@ -177,7 +177,8 @@ class FilteredSearchTest {
       DoubleUnaryOperator minPrefixSum) {
     return new FilteredSearch.Context() {
       @Override
-      public double getMinPrefixSum(double keysUniValue, double minSimilarity) {
+      public double getMinPrefixSum(
+          double keysUniValue, double recordUniValue, double minSimilarity) {
         return minPrefixSum.applyAsDouble(minSimilarity);
       }
 

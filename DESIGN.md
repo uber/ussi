@@ -149,7 +149,7 @@ pieces that only a comparator composes in sub-packages of their own:
   comparators measure with, sharing the banded dynamic program in
   `SequenceDistance`.
 - `comparator.signaturegenerator`: the MinHash and consistent weighted sampling
-  generators the `jaccard` and `ruzicka` comparators draw signatures from.
+  generators every comparator but `l2` draws signatures from.
 
 Normalizers are separate, under `com.uber.ussi.comparatornormalizer`, because a
 namespace configures one independently of its comparator.
@@ -262,21 +262,39 @@ considers rows sharing at least one non-discarded element with the query.
 
 `SignatureIndex` replaces original terms as inverted-list keys with 270
 deterministic, similarity-preserving signatures per row. Jaccard uses MinHash;
-Ruzicka uses the configured CWS variant. Signature collisions generate
-candidates approximately, but candidates are scored using canonical terms and
-values, in whichever form the configured discard scope leaves them, rather than
-by comparing signatures.
+Ruzicka and the two sequence comparators use the configured CWS variant.
+Signature collisions generate candidates approximately, but candidates are
+scored using canonical terms and values, in whichever form the configured
+discard scope leaves them, rather than by comparing signatures.
+
+A sequence's signatures are drawn from its element multiset, the same form
+`TermIndex` keys it by, so its counts are what the weighted samplers read and
+MinHash is not among the generators it accepts.
+
+Prefix filtering over signature keys needs the smallest share of the query's
+signatures that a qualifying candidate can collide on. Signatures collide at a
+rate tracking the multiset similarity of the records behind them, so for
+Jaccard and Ruzicka that share is the threshold itself. An edit distance
+measures something else, and the share follows from the same L1 bound the
+term-keyed lists use: multisets within L1 distance `u` of their combined length
+share at least `(1 - u) / (1 + u)` of it, and the lengths cancel, so one share
+covers every candidate the threshold admits. A normalized distance is already a
+share of the combined length; a raw edit count becomes one against the shortest
+candidate length filtering admits.
 
 Signature prefix filtering applies a generator-specific approximation safety
-margin: `0.1` for MinHash, I2CWS, ICWS, and SCWS, and `0.15` for PCWS. These
-margins broaden candidate generation but do not make the signature index exact.
+margin: `0.1` for MinHash, I2CWS, ICWS, and SCWS, and `0.15` for PCWS. The
+margin relaxes that share rather than the comparator's own threshold, because a
+generator's concentration bound is stated on the similarity it estimates. These
+margins broaden candidate generation but do not make the signature index
+exact.
 
 ### Hybrid Index
 
 `HybridIndex` combines a `TermIndex` and a `SignatureIndex`. During each build,
-rows with at most 270 terms go to the term child and longer rows to the
-signature child. The configured length range may fall entirely below, entirely
-above, or across this internal boundary.
+rows with at most 270 terms, or 270 elements for a sequence, go to the term
+child and longer rows to the signature child. The configured length range may
+fall entirely below, entirely above, or across this internal boundary.
 
 Queries search the child matching the query length first. Jaccard's cardinality
 bounds can skip the other child when no row on that side can reach the active
@@ -285,7 +303,8 @@ search both children, because term count alone cannot prove one side
 irrelevant. Results from the searched children are merged and limited by
 `maxNumSimilarities`.
 
-The hybrid requires a signature-capable Jaccard or Ruzicka comparator.
+The hybrid requires a comparator with a configured signature generator, which
+rules out `l2` and any other comparator left without one.
 
 ## Discarding Popular Terms
 

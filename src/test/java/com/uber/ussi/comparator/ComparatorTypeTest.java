@@ -26,25 +26,34 @@ class ComparatorTypeTest {
     assertNull(ConfigVocabulary.fromParamValue(ComparatorType.class, "cosine"));
   }
 
+  /**
+   * A generator has to collide at the similarity the comparator's own threshold bounds. Jaccard
+   * reads a record's distinct terms, so an unweighted generator serves it; the rest read counts,
+   * whether a sparse record's values or how often a sequence repeats an element.
+   */
   @Test
   void supportedSignatureGeneratorTypesAreTheOnesTheComparatorAccepts() {
     assertEquals(
         Set.of(SignatureGeneratorType.MINHASH),
         ComparatorType.JACCARD.getSupportedSignatureGeneratorTypes());
-    assertEquals(
+    Set<SignatureGeneratorType> consistentWeightedSampling =
         Set.of(
             SignatureGeneratorType.I2CWS,
             SignatureGeneratorType.ICWS,
             SignatureGeneratorType.PCWS,
-            SignatureGeneratorType.SCWS),
-        ComparatorType.RUZICKA.getSupportedSignatureGeneratorTypes());
+            SignatureGeneratorType.SCWS);
+    assertEquals(
+        consistentWeightedSampling, ComparatorType.RUZICKA.getSupportedSignatureGeneratorTypes());
+    assertEquals(
+        consistentWeightedSampling, ComparatorType.GLD.getSupportedSignatureGeneratorTypes());
+    assertEquals(
+        consistentWeightedSampling, ComparatorType.NGLD.getSupportedSignatureGeneratorTypes());
   }
 
+  /** L2 is a distance over positions, which no signature collision rate tracks. */
   @Test
   void aComparatorThatGeneratesNoSignaturesAcceptsNoGenerator() {
     assertTrue(ComparatorType.L2.getSupportedSignatureGeneratorTypes().isEmpty());
-    assertTrue(ComparatorType.GLD.getSupportedSignatureGeneratorTypes().isEmpty());
-    assertTrue(ComparatorType.NGLD.getSupportedSignatureGeneratorTypes().isEmpty());
   }
 
   @Test

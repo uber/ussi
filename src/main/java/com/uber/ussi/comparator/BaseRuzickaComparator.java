@@ -129,20 +129,16 @@ abstract class BaseRuzickaComparator extends SignatureComparator {
     return uniValue * (1.0 - comparatorValue);
   }
 
+  /**
+   * These measures are themselves the multiset similarity the signatures collide at, so the
+   * threshold needs no conversion and the record's own Uni value says nothing extra.
+   */
   @Override
-  protected double getMinPrefixSumForSignaturesInternal(int numSignatures, double comparatorValue) {
-    if (numSignatures < 0) {
-      throw new IllegalArgumentException("numSignatures must be at least 0.");
-    }
+  protected double getMinSharedSignatureFraction(double recordUniValue, double comparatorValue) {
     if (comparatorValue < 0.0) {
       throw new IllegalArgumentException("comparatorValue must be at least 0.0.");
     }
-    return Math.min(numSignatures, Math.ceil((1.0 - comparatorValue) * numSignatures));
-  }
-
-  @Override
-  public double getSignatureUniTransformedValue() {
-    return 1.0;
+    return comparatorValue;
   }
 
   @Override

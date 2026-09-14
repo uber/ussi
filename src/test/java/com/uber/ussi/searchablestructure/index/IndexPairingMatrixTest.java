@@ -21,29 +21,49 @@ import org.junit.jupiter.api.Test;
  */
 class IndexPairingMatrixTest {
 
-  /** Why a cell is invalid, or {@link #VALID} when it is not. */
+  /**
+   * Why a cell is invalid, or {@link #VALID} when it is not. Every inverted structure stores both
+   * record types that have terms, so no cell here fails for want of a shared record type; only the
+   * matrix structure leaves that gap, and it keeps no lists for a generator to walk.
+   */
   private enum Expectation {
     VALID,
-    /** The structure stores no record type the comparator reads. */
-    NO_SHARED_RECORD_TYPE,
     /** The structure keys its lists by signatures the comparator does not generate. */
     NO_SIGNATURES,
     /** The comparator cannot score a row from the keys it shares with the query. */
     NO_MERGE
   }
 
-  /** A comparator named by what it reads and what it can generate. */
+  /**
+   * A comparator named by what it reads and the generator it is configured with, or null for none.
+   * The generator has to be one the comparator accepts: MinHash collides at a similarity over
+   * distinct terms, and the weighted samplers at one over counts.
+   */
   private record ComparatorCase(
-      String name, String comparatorType, String normalizerType, boolean signatureGenerator) {}
+      String name,
+      String comparatorType,
+      String normalizerType,
+      String signatureGenerator) {
+
+    boolean generatesSignatures() {
+      return signatureGenerator != null;
+    }
+
+    boolean readsSequences() {
+      return comparatorType.equals("ngld");
+    }
+  }
 
   private static final ComparatorCase SPARSE_WITH_SIGNATURES =
-      new ComparatorCase("jaccard with a generator", "jaccard", "identity", true);
+      new ComparatorCase("jaccard with a generator", "jaccard", "identity", "minhash");
   private static final ComparatorCase SPARSE_WITHOUT_SIGNATURES =
-      new ComparatorCase("jaccard without a generator", "jaccard", "identity", false);
+      new ComparatorCase("jaccard without a generator", "jaccard", "identity", null);
   private static final ComparatorCase SPARSE_NEVER_SIGNATURES =
-      new ComparatorCase("l2", "l2", "reciprocal", false);
-  private static final ComparatorCase SEQUENCE =
-      new ComparatorCase("ngld", "ngld", "complement", false);
+      new ComparatorCase("l2", "l2", "reciprocal", null);
+  private static final ComparatorCase SEQUENCE_WITH_SIGNATURES =
+      new ComparatorCase("ngld with a generator", "ngld", "complement", "icws");
+  private static final ComparatorCase SEQUENCE_WITHOUT_SIGNATURES =
+      new ComparatorCase("ngld without a generator", "ngld", "complement", null);
 
   private static final IndexType[] INVERTED_STRUCTURES = {
     IndexType.INVERTED_TERM, IndexType.INVERTED_SIGNATURE, IndexType.INVERTED_HYBRID
@@ -68,7 +88,8 @@ class IndexPairingMatrixTest {
             SPARSE_WITH_SIGNATURES,
             SPARSE_WITHOUT_SIGNATURES,
             SPARSE_NEVER_SIGNATURES,
-            SEQUENCE)) {
+            SEQUENCE_WITH_SIGNATURES,
+            SEQUENCE_WITHOUT_SIGNATURES)) {
       for (IndexType indexType : INVERTED_STRUCTURES) {
         for (CandidateGeneratorType candidateGeneratorType : CandidateGeneratorType.values()) {
           cells.add(
@@ -87,14 +108,11 @@ class IndexPairingMatrixTest {
       ComparatorCase comparator,
       IndexType indexType,
       CandidateGeneratorType candidateGeneratorType) {
-    boolean readsSequences = comparator == SEQUENCE;
-    if (readsSequences && indexType != IndexType.INVERTED_TERM) {
-      return Expectation.NO_SHARED_RECORD_TYPE;
-    }
-    if (indexType.requiresSignatureSupport() && !comparator.signatureGenerator()) {
+    if (indexType.requiresSignatureSupport() && !comparator.generatesSignatures()) {
       return Expectation.NO_SIGNATURES;
     }
-    if (candidateGeneratorType == CandidateGeneratorType.SPARS_MERGE && readsSequences) {
+    if (candidateGeneratorType == CandidateGeneratorType.SPARS_MERGE
+        && comparator.readsSequences()) {
       return Expectation.NO_MERGE;
     }
     return Expectation.VALID;
@@ -156,8 +174,9 @@ class IndexPairingMatrixTest {
             .comparatorNormalizerType(cell.comparator().normalizerType())
             .maxNumSearchableStructures(3)
             .maxNumSimilarities(10);
-    if (cell.comparator().signatureGenerator()) {
-      builder.comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR, "minhash"));
+    if (cell.comparator().generatesSignatures()) {
+      builder.comparatorParams(
+          Map.of(Constants.SIGNATURE_GENERATOR, cell.comparator().signatureGenerator()));
     }
     return builder.build();
   }

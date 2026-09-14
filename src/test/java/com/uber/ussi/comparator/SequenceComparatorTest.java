@@ -192,9 +192,35 @@ class SequenceComparatorTest {
     assertEquals('n', sequence.getTerm(2));
   }
 
+  /**
+   * A sequence's signatures come from its element multiset, whose values are occurrence counts, so
+   * only a generator colliding at a weighted similarity says anything about them. MinHash reads
+   * distinct terms and would collide at the same rate however often an element repeats.
+   */
   @Test
-  void sequenceComparatorsRejectSignatureGeneration() {
+  void sequenceComparatorsGenerateSignaturesFromWeightedGeneratorsOnly() {
     for (String comparatorType : List.of("gld", "ngld")) {
+      SignatureComparator comparator =
+          (SignatureComparator)
+              ComparatorFactory.createComparator(
+                  comparatorType,
+                  Map.of(Constants.SIGNATURE_GENERATOR, "icws"),
+                  normalizer("complement"));
+      assertTrue(comparator.supportsSignatures(), comparatorType);
+      assertEquals(1.0, comparator.getSignatureUniTransformedValue(), 0.0);
+
+      // The multiset is what carries counts, so it is the form a weighted generator can read. A
+      // sequence keeps its elements in its terms and has no values at all.
+      LongTermsAndValues sequence = sequence(comparator, "banana");
+      assertEquals(
+          16,
+          comparator.getSignatures(sequence.toElementMultiset(comparator), 16).length,
+          comparatorType);
+      assertThrows(
+          IllegalArgumentException.class,
+          () -> comparator.getSignatures(sequence, 16),
+          comparatorType);
+
       ComparatorCreationError error =
           assertThrows(
               ComparatorCreationError.class,
@@ -204,11 +230,70 @@ class SequenceComparatorTest {
                       Map.of(Constants.SIGNATURE_GENERATOR, "minhash"),
                       normalizer("complement")),
               comparatorType);
-
       assertTrue(
-          error.getMessage().contains("does not support signature generation"),
-          error.getMessage());
+          error.getMessage().contains("is not supported by this comparator"), comparatorType);
+
+      assertFalse(
+          ((SignatureComparator) ComparatorFactory.createComparator(comparatorType, Map.of(),
+                  normalizer("complement")))
+              .supportsSignatures(),
+          comparatorType);
     }
+  }
+
+  /**
+   * Two sequences within {@code d} edits have element multisets within {@code l1BoundFactor * d}
+   * of each other. Writing that as a share {@code u} of their combined length leaves the multiset
+   * similarity at {@code (1 - u) / (1 + u)}, which is the rate the signatures collide at.
+   */
+  @Test
+  void theSharedSignatureBoundFollowsFromTheMultisetBound() {
+    // A normalized distance is already a share, so the budget gives u without any length: under
+    // levenshtein u = 2 * 0.2 / (2 - 0.2) = 2/9, leaving (1 - 2/9) / (1 + 2/9) = 7/11.
+    BaseSequenceComparator ngld =
+        (BaseSequenceComparator) createComparator("ngld", "complement", "levenshtein");
+    assertEquals(7.0 / 11.0, ngld.getMinSharedSignatureFraction(6.0, 0.2), EPSILON_9);
+
+    // An LCS edit moves one element rather than two, so the bound collapses to 1 - the budget,
+    // the same shape Ruzicka's threshold already has.
+    BaseSequenceComparator lcs =
+        (BaseSequenceComparator) createComparator("ngld", "complement", "lcs");
+    assertEquals(0.8, lcs.getMinSharedSignatureFraction(6.0, 0.2), EPSILON_9);
+
+    // An edit count is not a share, so it takes the shortest candidate length filtering admits:
+    // a 10-element query within 1 edit pairs with 9 elements at least, so u = 2 * 1 / 19.
+    BaseSequenceComparator gld =
+        (BaseSequenceComparator) createComparator("gld", "reciprocal", "levenshtein");
+    assertEquals(17.0 / 21.0, gld.getMinSharedSignatureFraction(10.0, 1.0), EPSILON_9);
+
+    // A budget that outruns the query guarantees no overlap at all.
+    assertEquals(0.0, gld.getMinSharedSignatureFraction(10.0, 40.0), EPSILON_9);
+    assertEquals(0.0, ngld.getMinSharedSignatureFraction(6.0, 1.0), EPSILON_9);
+  }
+
+  /**
+   * The prefix is the Uni value over signatures a qualifying candidate may leave unshared, with
+   * the generator's margin widening it to cover the estimate.
+   */
+  @Test
+  void theSignaturePrefixRelaxesTheSharedBoundByTheGeneratorMargin() {
+    SignatureComparator comparator =
+        (SignatureComparator)
+            ComparatorFactory.createComparator(
+                "ngld",
+                Map.of(
+                    Constants.SEQUENCE_DISTANCE_TYPE,
+                    "levenshtein",
+                    Constants.SIGNATURE_GENERATOR,
+                    "icws"),
+                normalizer("complement"));
+
+    // At minSimilarity 0.8 the budget is 0.2, so 7/11 of the signatures have to collide. ICWS
+    // only estimates that to within 0.1, leaving 1 - (7/11 - 0.1) of 100 signatures unshared.
+    assertEquals(
+        47.0 + MathUtils.EPSILON_12,
+        comparator.getMinPrefixSumForSignatures(100, /* recordUniValue */ 6.0, 0.8),
+        EPSILON_9);
   }
 
   @Test

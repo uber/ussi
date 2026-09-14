@@ -203,7 +203,9 @@ the row that matches your records and the guarantee you need:
 | `inverted_term` | sparse | `l2`, `jaccard`, `ruzicka` | Exact, and much faster than `scan` when a term selects few rows. |
 | `inverted_term` | sequence | `gld`, `ngld` | Exact. Generates candidates from element multisets, then verifies with the edit distance. |
 | `inverted_signature` | sparse | `jaccard` or `ruzicka`, with `signature_generator` | Approximate. Qualifying rows can be missed; the scores that come back are exact. |
+| `inverted_signature` | sequence | `gld`, `ngld`, with `signature_generator` | Approximate. Draws signatures from the element multiset, then verifies with the edit distance. |
 | `inverted_hybrid` | sparse | `jaccard` or `ruzicka`, with `signature_generator` | Exact for rows with at most 270 terms, approximate above that. |
+| `inverted_hybrid` | sequence | `gld`, `ngld`, with `signature_generator` | Exact for sequences of at most 270 elements, approximate above that. |
 
 Any pairing not listed is reported when you create the namespace. Note that
 `matrix` takes `l2` and nothing else, even though it stores records `jaccard`
@@ -262,12 +264,16 @@ Comparator parameters:
 | Parameter | Comparator | Values | Default |
 | --- | --- | --- | --- |
 | `signature_generator` | `jaccard` | `minhash` | none |
-| `signature_generator` | `ruzicka` | `i2cws`, `icws`, `pcws`, `scws` | none |
+| `signature_generator` | `ruzicka`, `gld`, `ngld` | `i2cws`, `icws`, `pcws`, `scws` | none |
 | `sequence_distance_type` | `gld`, `ngld` | `levenshtein`, `damerau_levenshtein`, `lcs` | `levenshtein` |
 
 `signature_generator` is required by `inverted_signature` and
 `inverted_hybrid` and optional everywhere else. `l2` does not support signature
 generation.
+
+`jaccard` reads a record's distinct terms, so `minhash` serves it. The other
+comparators read counts, whether a sparse record's values or how often a
+sequence repeats an element, so they take a weighted sampler instead.
 
 `gld` reports the number of single-element edits that turn one sequence into
 the other. `ngld` divides that count by the two lengths as
@@ -307,7 +313,10 @@ changes, and each is something you opt into.
 
 **Signature indexes are approximate.** `inverted_signature`, and
 `inverted_hybrid` above 270 terms, find candidates by signature collision. The
-scores returned are exact, but qualifying rows can be missed.
+scores returned are exact, but qualifying rows can be missed. For sequences the
+signatures come from the element multiset, so the collision rate estimates a
+bound on the edit distance rather than the distance itself, and recall is
+looser than it is for a comparator the signatures estimate directly.
 
 **`inverted_term` only returns rows sharing a term with the query.** This
 matters for sparse `l2`, where two records with no terms in common can still

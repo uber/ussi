@@ -116,7 +116,8 @@ abstract class BaseInvertedIndex extends Index {
             this::matchesMetaFilter);
   }
 
-  protected abstract double getMinPrefixSum(double keysUniValue, double minSimilarity);
+  protected abstract double getMinPrefixSum(
+      double keysUniValue, double recordUniValue, double minSimilarity);
 
   /** Returns each key of {@code indexedRecord} with the Uni value it contributes. */
   protected abstract KeyAndUniTransformedValue[] getKeysAndUniTransformedValues(
@@ -624,8 +625,10 @@ abstract class BaseInvertedIndex extends Index {
     }
 
     @Override
-    public double getMinPrefixSum(double keysUniValue, double minSimilarity) {
-      return BaseInvertedIndex.this.getMinPrefixSum(keysUniValue, minSimilarity);
+    public double getMinPrefixSum(
+        double keysUniValue, double recordUniValue, double minSimilarity) {
+      return BaseInvertedIndex.this.getMinPrefixSum(
+          keysUniValue, recordUniValue, minSimilarity);
     }
 
     @Override

@@ -25,7 +25,8 @@ public final class TermIndex extends BaseInvertedIndex {
   }
 
   @Override
-  protected double getMinPrefixSum(double keysUniValue, double minSimilarity) {
+  protected double getMinPrefixSum(
+      double keysUniValue, double recordUniValue, double minSimilarity) {
     return comparator.getMinPrefixSumForTermsAndValues(keysUniValue, minSimilarity);
   }
 

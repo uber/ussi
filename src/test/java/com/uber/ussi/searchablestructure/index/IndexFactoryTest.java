@@ -98,7 +98,7 @@ class IndexFactoryTest {
   /** A comparator reading no type the structure keeps leaves no index to build. */
   @Test
   void createIndexRejectsAComparatorThatReadsNothingTheStructureStores() {
-    NamespaceConfig config = sequenceConfig().indexType("inverted_signature").build();
+    NamespaceConfig config = sequenceConfig().indexType("matrix").build();
 
     IllegalArgumentException error =
         assertThrows(
@@ -106,7 +106,7 @@ class IndexFactoryTest {
             () -> IndexFactory.createIndex(config, longObjectMap(), longObjectMap()));
 
     assertTrue(
-        error.getMessage().contains("stores sparse records")
+        error.getMessage().contains("stores dense records")
             && error.getMessage().contains("comparatorType ngld reads sequence"),
         error.getMessage());
   }

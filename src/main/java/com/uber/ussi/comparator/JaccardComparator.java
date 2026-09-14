@@ -1,18 +1,15 @@
 /* AUTHOR: Shijie Lu (shijie@uber.com), Shalini Kedlaya (skedlaya@uber.com), Ahmed Metwally (ametwally@uber.com) */
 package com.uber.ussi.comparator;
 
-import com.uber.ussi.comparator.signaturegenerator.SignatureGenerator;
 import com.uber.ussi.comparatornormalizer.ComparatorNormalizer;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.utils.MathUtils;
-import javax.annotation.Nullable;
 
 /** Jaccard similarity over the signed presence of TermsAndValues entries. */
 public final class JaccardComparator extends BaseRuzickaComparator {
 
-  JaccardComparator(
-      ComparatorNormalizer comparatorNormalizer, @Nullable SignatureGenerator signatureGenerator) {
-    super(comparatorNormalizer, signatureGenerator);
+  JaccardComparator(ComparatorNormalizer comparatorNormalizer) {
+    super(comparatorNormalizer);
   }
 
   @Override

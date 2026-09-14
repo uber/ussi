@@ -3,6 +3,7 @@ package com.uber.ussi.comparator;
 import static com.uber.ussi.utils.MathUtils.EPSILON_9;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -13,7 +14,6 @@ import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.TermsAndValues;
 import com.uber.ussi.error.ComparatorCreationError;
 import com.uber.ussi.utils.Constants;
-import com.uber.ussi.utils.MathUtils;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -198,27 +198,14 @@ class SequenceComparatorTest {
    * distinct terms and would collide at the same rate however often an element repeats.
    */
   @Test
-  void sequenceComparatorsGenerateSignaturesFromWeightedGeneratorsOnly() {
+  void sequenceComparatorsAcceptWeightedGeneratorsOnly() {
     for (String comparatorType : List.of("gld", "ngld")) {
-      SignatureComparator comparator =
-          (SignatureComparator)
-              ComparatorFactory.createComparator(
-                  comparatorType,
-                  Map.of(Constants.SIGNATURE_GENERATOR, "icws"),
-                  normalizer("complement"));
-      assertTrue(comparator.supportsSignatures(), comparatorType);
-      assertEquals(1.0, comparator.getSignatureUniTransformedValue(), 0.0);
-
-      // The multiset is what carries counts, so it is the form a weighted generator can read. A
-      // sequence keeps its elements in its terms and has no values at all.
-      LongTermsAndValues sequence = sequence(comparator, "banana");
-      assertEquals(
-          16,
-          comparator.getSignatures(sequence.toElementMultiset(comparator), 16).length,
-          comparatorType);
-      assertThrows(
-          IllegalArgumentException.class,
-          () -> comparator.getSignatures(sequence, 16),
+      assertInstanceOf(
+          SignatureBounded.class,
+          ComparatorFactory.createComparator(
+              comparatorType,
+              Map.of(Constants.SIGNATURE_GENERATOR, "icws"),
+              normalizer("complement")),
           comparatorType);
 
       ComparatorCreationError error =
@@ -232,12 +219,6 @@ class SequenceComparatorTest {
               comparatorType);
       assertTrue(
           error.getMessage().contains("is not supported by this comparator"), comparatorType);
-
-      assertFalse(
-          ((SignatureComparator) ComparatorFactory.createComparator(comparatorType, Map.of(),
-                  normalizer("complement")))
-              .supportsSignatures(),
-          comparatorType);
     }
   }
 
@@ -269,31 +250,6 @@ class SequenceComparatorTest {
     // A budget that outruns the query guarantees no overlap at all.
     assertEquals(0.0, gld.getMinSharedSignatureFraction(10.0, 40.0), EPSILON_9);
     assertEquals(0.0, ngld.getMinSharedSignatureFraction(6.0, 1.0), EPSILON_9);
-  }
-
-  /**
-   * The prefix is the Uni value over signatures a qualifying candidate may leave unshared, with
-   * the generator's margin widening it to cover the estimate.
-   */
-  @Test
-  void theSignaturePrefixRelaxesTheSharedBoundByTheGeneratorMargin() {
-    SignatureComparator comparator =
-        (SignatureComparator)
-            ComparatorFactory.createComparator(
-                "ngld",
-                Map.of(
-                    Constants.SEQUENCE_DISTANCE_TYPE,
-                    "levenshtein",
-                    Constants.SIGNATURE_GENERATOR,
-                    "icws"),
-                normalizer("complement"));
-
-    // At minSimilarity 0.8 the budget is 0.2, so 7/11 of the signatures have to collide. ICWS
-    // only estimates that to within 0.1, leaving 1 - (7/11 - 0.1) of 100 signatures unshared.
-    assertEquals(
-        47.0 + MathUtils.EPSILON_12,
-        comparator.getMinPrefixSumForSignatures(100, /* recordUniValue */ 6.0, 0.8),
-        EPSILON_9);
   }
 
   @Test

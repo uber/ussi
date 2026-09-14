@@ -1,28 +1,21 @@
 /* AUTHOR: Shijie Lu (shijie@uber.com), Shalini Kedlaya (skedlaya@uber.com), Ahmed Metwally (ametwally@uber.com) */
 package com.uber.ussi.comparator;
 
-import com.uber.ussi.comparator.signaturegenerator.SignatureGenerator;
 import com.uber.ussi.comparatornormalizer.ComparatorNormalizer;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.RecordType;
 import com.uber.ussi.error.ArraysSizeMismatchError;
 import com.uber.ussi.utils.MathUtils;
 import java.util.Set;
-import javax.annotation.Nullable;
 
 /**
  * Shared Jaccard/Ruzicka implementation with length and position filtering. A negatively weighted
  * element is treated as the corresponding negative element with a positive weight.
  */
-abstract class BaseRuzickaComparator extends SignatureComparator {
+abstract class BaseRuzickaComparator extends Comparator implements SignatureBounded {
 
   BaseRuzickaComparator(ComparatorNormalizer comparatorNormalizer) {
     super(comparatorNormalizer);
-  }
-
-  BaseRuzickaComparator(
-      ComparatorNormalizer comparatorNormalizer, @Nullable SignatureGenerator signatureGenerator) {
-    super(comparatorNormalizer, signatureGenerator);
   }
 
   protected static double computeMaxPossibleComparatorValue(
@@ -134,7 +127,7 @@ abstract class BaseRuzickaComparator extends SignatureComparator {
    * threshold needs no conversion and the record's own Uni value says nothing extra.
    */
   @Override
-  protected double getMinSharedSignatureFraction(double recordUniValue, double comparatorValue) {
+  public double getMinSharedSignatureFraction(double recordUniValue, double comparatorValue) {
     if (comparatorValue < 0.0) {
       throw new IllegalArgumentException("comparatorValue must be at least 0.0.");
     }

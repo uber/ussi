@@ -2,7 +2,6 @@
 package com.uber.ussi.comparator;
 
 import com.uber.ussi.comparator.sequencedistance.SequenceDistance;
-import com.uber.ussi.comparator.signaturegenerator.SignatureGenerator;
 import com.uber.ussi.comparatornormalizer.ComparatorNormalizer;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.RecordType;
@@ -10,7 +9,6 @@ import com.uber.ussi.error.ArraysSizeMismatchError;
 import com.uber.ussi.utils.MathUtils;
 import java.util.Objects;
 import java.util.Set;
-import javax.annotation.Nullable;
 
 /**
  * Shared implementation for the comparators reporting an edit distance, with length and prefix
@@ -27,15 +25,13 @@ import javax.annotation.Nullable;
  * <p>Merging cannot generate candidates here: the shared elements bound an order-sensitive
  * distance without determining it, so these searches generate candidates and then verify them.
  */
-abstract class BaseSequenceComparator extends SignatureComparator {
+abstract class BaseSequenceComparator extends Comparator implements SignatureBounded {
 
   private final SequenceDistance sequenceDistance;
 
   BaseSequenceComparator(
-      ComparatorNormalizer comparatorNormalizer,
-      SequenceDistance sequenceDistance,
-      @Nullable SignatureGenerator signatureGenerator) {
-    super(comparatorNormalizer, signatureGenerator);
+      ComparatorNormalizer comparatorNormalizer, SequenceDistance sequenceDistance) {
+    super(comparatorNormalizer);
     this.sequenceDistance = Objects.requireNonNull(sequenceDistance, "sequenceDistance is null.");
   }
 
@@ -65,7 +61,7 @@ abstract class BaseSequenceComparator extends SignatureComparator {
    * one share stand for every candidate the threshold admits.
    */
   @Override
-  protected final double getMinSharedSignatureFraction(
+  public final double getMinSharedSignatureFraction(
       double recordUniValue, double comparatorValue) {
     double unmatchedFraction = getMaxUnmatchedFraction(recordUniValue, comparatorValue);
     return unmatchedFraction >= 1.0

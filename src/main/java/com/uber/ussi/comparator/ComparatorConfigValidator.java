@@ -16,7 +16,7 @@ import java.util.Set;
 public final class ComparatorConfigValidator implements NamespaceConfigValidator {
   /** Every key some layer reads from comparatorParams, whatever comparator is configured. */
   private static final Set<String> RECOGNIZED_KEYS =
-      Set.of(Constants.SIGNATURE_GENERATOR_TYPE, Constants.SEQUENCE_DISTANCE_TYPE);
+      Set.of(Constants.SIGNATURE_GENERATOR, Constants.SEQUENCE_DISTANCE_TYPE);
 
   /** No normalizer reads a param, so a key here is one nothing would have read. */
   private static final Set<String> RECOGNIZED_NORMALIZER_KEYS = Set.of();
@@ -87,7 +87,7 @@ public final class ComparatorConfigValidator implements NamespaceConfigValidator
 
   private static void collectSignatureGeneratorTypeViolations(
       NamespaceConfig config, ComparatorType comparatorType, List<String> violations) {
-    String rawType = config.getComparatorParam(Constants.SIGNATURE_GENERATOR_TYPE);
+    String rawType = config.getComparatorParam(Constants.SIGNATURE_GENERATOR);
     if (rawType == null || rawType.trim().isEmpty()) {
       return;
     }
@@ -103,7 +103,7 @@ public final class ComparatorConfigValidator implements NamespaceConfigValidator
     if (signatureGeneratorType == null) {
       violations.add(
           ConfigVocabulary.unsupported(
-              Constants.SIGNATURE_GENERATOR_TYPE, rawType, SignatureGeneratorType.class));
+              Constants.SIGNATURE_GENERATOR, rawType, SignatureGeneratorType.class));
       return;
     }
     if (!supportedTypes.contains(signatureGeneratorType)) {

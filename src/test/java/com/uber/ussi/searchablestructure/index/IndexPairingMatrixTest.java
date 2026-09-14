@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.uber.ussi.TestLongObjectMaps;
 import com.uber.ussi.config.NamespaceConfig;
-import com.uber.ussi.config.NamespaceConfig.CandidateGenerator;
+import com.uber.ussi.config.NamespaceConfig.CandidateGeneratorType;
 import com.uber.ussi.utils.Constants;
 import java.util.ArrayList;
 import java.util.List;
@@ -52,12 +52,12 @@ class IndexPairingMatrixTest {
   private record Cell(
       ComparatorCase comparator,
       IndexType indexType,
-      CandidateGenerator candidateGenerator,
+      CandidateGeneratorType candidateGeneratorType,
       Expectation expectation) {
     String describe() {
       return String.format(
           "%s on %s with %s",
-          comparator.name(), indexType.getParamValue(), candidateGenerator.getParamValue());
+          comparator.name(), indexType.getParamValue(), candidateGeneratorType.getParamValue());
     }
   }
 
@@ -70,13 +70,13 @@ class IndexPairingMatrixTest {
             SPARSE_NEVER_SIGNATURES,
             SEQUENCE)) {
       for (IndexType indexType : INVERTED_STRUCTURES) {
-        for (CandidateGenerator candidateGenerator : CandidateGenerator.values()) {
+        for (CandidateGeneratorType candidateGeneratorType : CandidateGeneratorType.values()) {
           cells.add(
               new Cell(
                   comparator,
                   indexType,
-                  candidateGenerator,
-                  expect(comparator, indexType, candidateGenerator)));
+                  candidateGeneratorType,
+                  expect(comparator, indexType, candidateGeneratorType)));
         }
       }
     }
@@ -84,7 +84,9 @@ class IndexPairingMatrixTest {
   }
 
   private static Expectation expect(
-      ComparatorCase comparator, IndexType indexType, CandidateGenerator candidateGenerator) {
+      ComparatorCase comparator,
+      IndexType indexType,
+      CandidateGeneratorType candidateGeneratorType) {
     boolean readsSequences = comparator == SEQUENCE;
     if (readsSequences && indexType != IndexType.INVERTED_TERM) {
       return Expectation.NO_SHARED_RECORD_TYPE;
@@ -92,7 +94,7 @@ class IndexPairingMatrixTest {
     if (indexType.requiresSignatureSupport() && !comparator.signatureGenerator()) {
       return Expectation.NO_SIGNATURES;
     }
-    if (candidateGenerator == CandidateGenerator.SPARS_MERGE && readsSequences) {
+    if (candidateGeneratorType == CandidateGeneratorType.SPARS_MERGE && readsSequences) {
       return Expectation.NO_MERGE;
     }
     return Expectation.VALID;
@@ -149,13 +151,13 @@ class IndexPairingMatrixTest {
             .indexType(cell.indexType().getParamValue())
             .indexParams(
                 Map.of(
-                    Constants.CANDIDATE_GENERATOR, cell.candidateGenerator().getParamValue()))
+                    Constants.CANDIDATE_GENERATOR, cell.candidateGeneratorType().getParamValue()))
             .comparatorType(cell.comparator().comparatorType())
             .comparatorNormalizerType(cell.comparator().normalizerType())
             .maxNumSearchableStructures(3)
             .maxNumSimilarities(10);
     if (cell.comparator().signatureGenerator()) {
-      builder.comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR_TYPE, "minhash"));
+      builder.comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR, "minhash"));
     }
     return builder.build();
   }

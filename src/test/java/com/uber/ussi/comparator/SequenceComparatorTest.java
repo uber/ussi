@@ -201,7 +201,7 @@ class SequenceComparatorTest {
               () ->
                   ComparatorFactory.createComparator(
                       comparatorType,
-                      Map.of(Constants.SIGNATURE_GENERATOR_TYPE, "minhash"),
+                      Map.of(Constants.SIGNATURE_GENERATOR, "minhash"),
                       normalizer("complement")),
               comparatorType);
 

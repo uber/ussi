@@ -163,7 +163,7 @@ class SparseComparatorTest {
         (SignatureComparator)
             ComparatorFactory.createComparator(
                 "jaccard",
-                Map.of(Constants.SIGNATURE_GENERATOR_TYPE, "minhash"),
+                Map.of(Constants.SIGNATURE_GENERATOR, "minhash"),
                 new IdentityComparatorNormalizer());
 
     assertTrue(comparator.supportsSignatures());
@@ -181,28 +181,28 @@ class SparseComparatorTest {
         () ->
             ComparatorFactory.createComparator(
                 "jaccard",
-                Map.of(Constants.SIGNATURE_GENERATOR_TYPE, "icws"),
+                Map.of(Constants.SIGNATURE_GENERATOR, "icws"),
                 new IdentityComparatorNormalizer()));
     assertThrows(
         ComparatorCreationError.class,
         () ->
             ComparatorFactory.createComparator(
                 "ruzicka",
-                Map.of(Constants.SIGNATURE_GENERATOR_TYPE, "minhash"),
+                Map.of(Constants.SIGNATURE_GENERATOR, "minhash"),
                 new IdentityComparatorNormalizer()));
     assertThrows(
         ComparatorCreationError.class,
         () ->
             ComparatorFactory.createComparator(
                 "jaccard",
-                Map.of(Constants.SIGNATURE_GENERATOR_TYPE, "unknown"),
+                Map.of(Constants.SIGNATURE_GENERATOR, "unknown"),
                 new IdentityComparatorNormalizer()));
     assertThrows(
         ComparatorCreationError.class,
         () ->
             ComparatorFactory.createComparator(
                 "l2",
-                Map.of(Constants.SIGNATURE_GENERATOR_TYPE, "icws"),
+                Map.of(Constants.SIGNATURE_GENERATOR, "icws"),
                 new IdentityComparatorNormalizer()));
   }
 
@@ -236,7 +236,7 @@ class SparseComparatorTest {
         (BaseRuzickaComparator)
             ComparatorFactory.createComparator(
                 "ruzicka",
-                Map.of(Constants.SIGNATURE_GENERATOR_TYPE, "icws"),
+                Map.of(Constants.SIGNATURE_GENERATOR, "icws"),
                 new IdentityComparatorNormalizer());
 
     assertThrows(

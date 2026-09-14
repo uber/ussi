@@ -132,7 +132,7 @@ class IndexFactoryTest {
     return validConfig()
         .maxTermsAndValuesLength(Constants.NUM_SIGNATURES_PER_ID + 1)
         .comparatorType("jaccard")
-        .comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR_TYPE, "minhash"))
+        .comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR, "minhash"))
         .comparatorNormalizerType("identity");
   }
 }

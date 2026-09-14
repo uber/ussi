@@ -8,7 +8,7 @@ import com.uber.ussi.comparator.SignatureComparator;
 import com.uber.ussi.config.ConfigViolations;
 import com.uber.ussi.config.ConfigVocabulary;
 import com.uber.ussi.config.NamespaceConfig;
-import com.uber.ussi.config.NamespaceConfig.CandidateGenerator;
+import com.uber.ussi.config.NamespaceConfig.CandidateGeneratorType;
 import com.uber.ussi.config.NamespaceConfigValidator;
 import com.uber.ussi.entity.termsandvalues.RecordType;
 import com.uber.ussi.searchablestructure.metadata.MetadataFilteringStrategy;
@@ -69,7 +69,8 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
     collectRequiredComparatorViolations(config, indexType, comparatorType, violations);
     RecordType recordType = resolveRecordType(config, indexType, violations);
     collectSignatureSupportViolations(config, indexType, comparatorType, violations);
-    collectCandidateGeneratorViolations(config, indexType, comparatorType, recordType, violations);
+    collectCandidateGeneratorTypeViolations(
+        config, indexType, comparatorType, recordType, violations);
   }
 
   /** An indexType that is non-blank and names no structure is invalid. */
@@ -134,7 +135,7 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
               "indexType %s keys its lists by signatures, so comparatorType %s needs %s.",
               indexType.getParamValue(),
               config.getComparatorType(),
-              Constants.SIGNATURE_GENERATOR_TYPE));
+              Constants.SIGNATURE_GENERATOR));
     }
   }
 
@@ -183,23 +184,23 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
    * the keys it shares with the query. Where those keys only bound similarity it also needs
    * similarity-preserving signatures to verify candidates with.
    */
-  private static void collectCandidateGeneratorViolations(
+  private static void collectCandidateGeneratorTypeViolations(
       NamespaceConfig config,
       IndexType indexType,
       @Nullable ComparatorType comparatorType,
       @Nullable RecordType recordType,
       List<String> violations) {
-    CandidateGenerator candidateGenerator;
+    CandidateGeneratorType candidateGeneratorType;
     try {
-      candidateGenerator = config.getCandidateGenerator();
+      candidateGeneratorType = config.getCandidateGeneratorType();
     } catch (IllegalArgumentException e) {
       // An unparseable value is already reported by the config's structural checks.
       return;
     }
-    if (candidateGenerator != CandidateGenerator.SPARS_MERGE) {
+    if (candidateGeneratorType != CandidateGeneratorType.SPARS_MERGE) {
       return;
     }
-    String mergeParamValue = CandidateGenerator.SPARS_MERGE.getParamValue();
+    String mergeParamValue = CandidateGeneratorType.SPARS_MERGE.getParamValue();
     if (!indexType.supportsCandidateGenerator()) {
       violations.add(
           String.format(

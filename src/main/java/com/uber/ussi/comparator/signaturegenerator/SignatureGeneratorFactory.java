@@ -24,7 +24,7 @@ public final class SignatureGeneratorFactory {
     if (type == null) {
       throw new IllegalArgumentException(
           ConfigVocabulary.unsupported(
-              Constants.SIGNATURE_GENERATOR_TYPE, signatureGeneratorType,
+              Constants.SIGNATURE_GENERATOR, signatureGeneratorType,
               SignatureGeneratorType.class));
     }
     return createSignatureGenerator(type);

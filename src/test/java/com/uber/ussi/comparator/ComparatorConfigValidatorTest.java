@@ -24,7 +24,7 @@ class ComparatorConfigValidatorTest {
     new ValidationCase("no signature param", builder -> builder, true, null),
     new ValidationCase(
         "minhash for jaccard",
-        builder -> builder.comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR_TYPE, "minhash")),
+        builder -> builder.comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR, "minhash")),
         true,
         null),
     new ValidationCase(
@@ -32,13 +32,13 @@ class ComparatorConfigValidatorTest {
         builder ->
             builder
                 .comparatorType("l2")
-                .comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR_TYPE, "minhash")),
+                .comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR, "minhash")),
         false,
         "L2 does not support signature generation."),
     new ValidationCase(
         "unknown signature type",
         builder ->
-            builder.comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR_TYPE, "superhash")),
+            builder.comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR, "superhash")),
         false,
         null),
     new ValidationCase(
@@ -52,7 +52,7 @@ class ComparatorConfigValidatorTest {
         builder ->
             builder
                 .comparatorType("cosine")
-                .comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR_TYPE, "minhash")),
+                .comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR, "minhash")),
         false,
         UNSUPPORTED_COMPARATOR_TYPE),
     new ValidationCase(
@@ -94,7 +94,7 @@ class ComparatorConfigValidatorTest {
         builder ->
             builder
                 .comparatorType("ruzicka")
-                .comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR_TYPE, "minhash")),
+                .comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR, "minhash")),
         false,
         null),
     new ValidationCase(
@@ -128,7 +128,7 @@ class ComparatorConfigValidatorTest {
     NamespaceConfig config =
         validBuilder()
             .comparatorType("l2")
-            .comparatorParams(Map.of("Signature_Generator_Type", "minhash"))
+            .comparatorParams(Map.of("Signature_Generator", "minhash"))
             .build();
 
     assertEquals(List.of("L2 does not support signature generation."), violations(config));
@@ -163,7 +163,7 @@ class ComparatorConfigValidatorTest {
     assertEquals(
         List.of(
             "Unknown comparatorParams key (signature_type). Supported keys: "
-                + "sequence_distance_type, signature_generator_type."),
+                + "sequence_distance_type, signature_generator."),
         violations);
   }
 

@@ -69,7 +69,7 @@ class NamespaceConfigTest {
   }
 
   @Test
-  void validateRejectsUnsupportedCandidateGenerator() {
+  void validateRejectsUnsupportedCandidateGeneratorType() {
     NamespaceConfig config =
         validBuilder()
             .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, "uni_outward"))

@@ -10,7 +10,7 @@ import com.carrotsearch.hppc.cursors.LongIntCursor;
 import com.carrotsearch.hppc.cursors.LongObjectCursor;
 import com.uber.ussi.comparator.SignatureComparator;
 import com.uber.ussi.config.NamespaceConfig;
-import com.uber.ussi.config.NamespaceConfig.CandidateGenerator;
+import com.uber.ussi.config.NamespaceConfig.CandidateGeneratorType;
 import com.uber.ussi.config.NamespaceConfig.PopularTermDiscardScope;
 import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.meta.MetaFilter;
@@ -59,7 +59,7 @@ abstract class BaseInvertedIndex extends Index {
 
   @Nullable private final SignatureComparator signatureComparator;
   private final RecordIndexingStrategy recordIndexingStrategy;
-  private final CandidateGenerator candidateGenerator;
+  private final CandidateGeneratorType candidateGeneratorType;
   private final PopularTermDiscardScope popularTermDiscardScope;
   private final boolean scoresFromConjunction;
   private final double maxFractionIdsPerKey;
@@ -87,11 +87,11 @@ abstract class BaseInvertedIndex extends Index {
     RecordType recordType = resolveRecordType(indexType);
     this.recordIndexingStrategy =
         RecordIndexingStrategyFactory.createRecordIndexingStrategy(recordType);
-    this.candidateGenerator = namespaceConfig.getCandidateGenerator();
+    this.candidateGeneratorType = namespaceConfig.getCandidateGeneratorType();
     this.popularTermDiscardScope = namespaceConfig.getIndexPopularTermDiscardScope();
     // A conjunction excludes discarded terms, so CANDIDATES_ONLY verifies via the comparator.
     this.scoresFromConjunction =
-        candidateGenerator == CandidateGenerator.SPARS_MERGE
+        candidateGeneratorType == CandidateGeneratorType.SPARS_MERGE
             && indexType.conjunctionDeterminesSimilarity(recordType)
             && popularTermDiscardScope == PopularTermDiscardScope.CANDIDATES_AND_VERIFICATION;
     this.maxFractionIdsPerKey = parseMaxFractionIdsPerKey(namespaceConfig);
@@ -308,7 +308,7 @@ abstract class BaseInvertedIndex extends Index {
       @Nullable MetaFilter metadataFilter,
       float minSimilarity,
       int maxResults) {
-    if (candidateGenerator == CandidateGenerator.SPARS_MERGE) {
+    if (candidateGeneratorType == CandidateGeneratorType.SPARS_MERGE) {
       return MergeSearch.search(
           comparator,
           query,

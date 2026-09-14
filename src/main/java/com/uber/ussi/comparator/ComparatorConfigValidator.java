@@ -2,13 +2,16 @@
 package com.uber.ussi.comparator;
 
 import com.uber.ussi.comparator.signaturegenerator.SignatureGeneratorFactory.SignatureGeneratorType;
+import com.uber.ussi.comparatornormalizer.ComparatorNormalizerFactory.COMPARATOR_NORMALIZER_TYPE;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.config.NamespaceConfigValidator;
 import com.uber.ussi.error.ComparatorCreationError;
 import com.uber.ussi.utils.Constants;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /** Reports the comparator params that {@link ComparatorFactory} would reject. */
 public final class ComparatorConfigValidator implements NamespaceConfigValidator {
@@ -22,11 +25,8 @@ public final class ComparatorConfigValidator implements NamespaceConfigValidator
 
   @Override
   public void collectViolations(NamespaceConfig config, List<String> violations) {
-    /*
-     * Every other check here asks what a named comparator supports, which has no answer when the
-     * name is not one of them. Reporting only the unknown name keeps the violation list pointed at
-     * the one thing that has to change.
-     */
+    collectComparatorNormalizerTypeViolations(config, violations);
+    // Every check below asks what a named comparator supports, which an unknown name cannot answer.
     if (!ComparatorFactory.isSupportedComparatorType(config.getComparatorType())) {
       violations.add(
           String.format("Unsupported comparator type (%s).", config.getComparatorType()));
@@ -34,6 +34,22 @@ public final class ComparatorConfigValidator implements NamespaceConfigValidator
     }
     collectSequenceDistanceTypeViolations(config, violations);
     collectSignatureGeneratorTypeViolations(config, violations);
+  }
+
+  /** A comparator scores through its normalizer, so an unknown one leaves no comparator. */
+  private static void collectComparatorNormalizerTypeViolations(
+      NamespaceConfig config, List<String> violations) {
+    String rawType = config.getComparatorNormalizerType();
+    if (rawType.isEmpty() || COMPARATOR_NORMALIZER_TYPE.fromParamValue(rawType) != null) {
+      return;
+    }
+    violations.add(
+        String.format(
+            "Unsupported comparatorNormalizerType (%s). Supported values: %s.",
+            rawType,
+            Arrays.stream(COMPARATOR_NORMALIZER_TYPE.values())
+                .map(COMPARATOR_NORMALIZER_TYPE::getParamValue)
+                .collect(Collectors.joining(", "))));
   }
 
   private static void collectSequenceDistanceTypeViolations(

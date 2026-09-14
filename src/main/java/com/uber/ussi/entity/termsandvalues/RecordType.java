@@ -1,8 +1,6 @@
 /* AUTHOR: Ahmed Metwally (ametwally@uber.com) */
 package com.uber.ussi.entity.termsandvalues;
 
-import java.util.Locale;
-
 /**
  * How a {@link LongTermsAndValues} lays its data out. A comparator declares which types it reads
  * and a searchable structure declares which one it stores, so the two are paired by agreeing on a
@@ -11,16 +9,26 @@ import java.util.Locale;
  */
 public enum RecordType {
   /** No terms, and the values are a vector of a fixed dimension. */
-  ORDER_AGNOSTIC_DENSE,
+  ORDER_AGNOSTIC_DENSE("dense"),
 
   /** Terms in ascending order without repeats, and one value per term. */
-  ORDER_AGNOSTIC_SPARSE,
+  ORDER_AGNOSTIC_SPARSE("sparse"),
 
   /** Terms in the order the elements arrived, repeats included, and no values. */
-  SEQUENCE;
+  SEQUENCE("sequence");
 
-  /** Returns the name a message names this layout by. A config never names one; see IndexType. */
+  private final String displayName;
+
+  RecordType(String displayName) {
+    this.displayName = displayName;
+  }
+
+  /**
+   * Returns the name a message names this record type by. A config never names one; see IndexType.
+   * The order-agnostic distinction a constant carries is a maintainer's concern, so a message
+   * names only how a record is addressed.
+   */
   public String getDisplayName() {
-    return name().toLowerCase(Locale.ROOT);
+    return displayName;
   }
 }

@@ -2,10 +2,12 @@
 package com.uber.ussi.searchablestructure.index;
 
 import com.uber.ussi.comparator.Comparator;
+import com.uber.ussi.comparator.ComparatorType;
 import com.uber.ussi.config.ConfigVocabulary;
 import com.uber.ussi.entity.termsandvalues.RecordType;
 import java.util.EnumSet;
 import java.util.Set;
+import javax.annotation.Nullable;
 
 /**
  * The index structures a namespace can be configured with, each paired with the record types it can
@@ -17,7 +19,7 @@ import java.util.Set;
 public enum IndexType implements ConfigVocabulary {
   /**
    * Sequential scan that scores every row through the comparator, so it never reads a record's
-   * layout itself and stores whichever type the comparator reads.
+   * type itself and stores whichever type the comparator reads.
    */
   SCAN(RecordType.ORDER_AGNOSTIC_DENSE, RecordType.SEQUENCE, RecordType.ORDER_AGNOSTIC_SPARSE),
 
@@ -61,6 +63,17 @@ public enum IndexType implements ConfigVocabulary {
       }
     }
     return resolvedRecordTypes;
+  }
+
+  /**
+   * Returns the comparator this structure computes similarity with itself, or null when it scores
+   * every candidate through whichever comparator is configured. A structure that implements one
+   * comparator's arithmetic inline cannot report any other comparator's similarity, so the two
+   * have to be configured together.
+   */
+  @Nullable
+  public ComparatorType getRequiredComparatorType() {
+    return this == MATRIX ? ComparatorType.L2 : null;
   }
 
   /** Returns whether this structure keeps the uni-sorted inverted lists the generators walk. */

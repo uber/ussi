@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.uber.ussi.comparator.Comparator;
 import com.uber.ussi.comparator.ComparatorFactory;
+import com.uber.ussi.comparator.ComparatorType;
 import com.uber.ussi.config.ConfigVocabulary;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.termsandvalues.RecordType;
@@ -66,17 +67,37 @@ class IndexTypeTest {
   /** A comparator reading nothing a structure keeps is a pairing with no record type at all. */
   @Test
   void resolvingRecordTypesIsEmptyForAnImpossiblePairing() {
-    assertEquals(Set.of(), IndexType.MATRIX.resolveRecordTypes(comparator("jaccard", "identity")));
+    assertEquals(Set.of(), IndexType.MATRIX.resolveRecordTypes(comparator("ngld", "complement")));
     assertEquals(
         Set.of(), IndexType.INVERTED_SIGNATURE.resolveRecordTypes(comparator("ngld", "complement")));
   }
 
-  /** The scan structure never reads a record's layout, so it never asks which type it holds. */
+  /** The scan structure never reads a record's type, so it never asks which type it holds. */
   @Test
   void resolvingRecordTypesIsAmbiguousOnlyWhereTheAnswerIsUnused() {
     assertEquals(
         Set.of(RecordType.ORDER_AGNOSTIC_DENSE, RecordType.ORDER_AGNOSTIC_SPARSE),
         IndexType.SCAN.resolveRecordTypes(comparator("l2", "reciprocal")));
+    assertEquals(
+        Set.of(RecordType.ORDER_AGNOSTIC_DENSE, RecordType.ORDER_AGNOSTIC_SPARSE),
+        IndexType.SCAN.resolveRecordTypes(comparator("jaccard", "identity")));
+  }
+
+  /**
+   * The matrix structure shares a record type with every order-agnostic comparator, so what keeps
+   * it to one is the arithmetic it implements rather than the type it stores.
+   */
+  @Test
+  void onlyTheMatrixStructureNamesTheComparatorItComputesItself() {
+    assertEquals(
+        Set.of(RecordType.ORDER_AGNOSTIC_DENSE),
+        IndexType.MATRIX.resolveRecordTypes(comparator("jaccard", "identity")));
+
+    assertEquals(ComparatorType.L2, IndexType.MATRIX.getRequiredComparatorType());
+    assertNull(IndexType.SCAN.getRequiredComparatorType());
+    assertNull(IndexType.INVERTED_TERM.getRequiredComparatorType());
+    assertNull(IndexType.INVERTED_SIGNATURE.getRequiredComparatorType());
+    assertNull(IndexType.INVERTED_HYBRID.getRequiredComparatorType());
   }
 
   @Test

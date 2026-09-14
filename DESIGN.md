@@ -70,43 +70,47 @@ A delete arriving while a graduation or consolidation is building is recorded
 in a per-build tombstone set and replayed onto the new index when the build
 completes, so rows deleted during a build do not reappear after the swap.
 
-This keeps the immutable index implementations simple: they support search and
-tombstone-style deletes, and never in-place inserts or updates. Consolidation
-later rebuilds older indexed rows into a newer index and drops deleted rows
-from that rebuilt snapshot.
+An index implementation therefore supports search and tombstone-style deletes,
+and never in-place inserts or updates. Consolidation later rebuilds older
+indexed rows into a newer index and drops deleted rows from that rebuilt
+snapshot.
 
 ## Configuration Validation
 
 A namespace validates its whole configuration before building any layer, so
-every violation is reported in one list rather than one per construction
-attempt. Four families of rule are config-answerable and therefore checked
-here: a value naming no structure, comparator, or normalizer; a structure and a
-comparator with no record layout in common; a structure whose keys the
-comparator cannot generate; and a candidate generator the comparator does not
-support.
+every violation is reported in one list. Five families of rule are
+config-answerable and therefore checked here: a value naming no structure,
+comparator, or normalizer; a structure and a comparator with no record type in
+common; a structure paired with a comparator other than the one whose
+arithmetic it implements; a structure whose keys the comparator cannot
+generate; and a candidate generator the comparator does not support.
+
+Most of these ask the comparator what it supports, so they stay silent when its
+params leave it unbuildable and let `ComparatorConfigValidator` report that
+instead. The structure's required comparator is the exception: it is answerable
+from the configured names alone, so it is reported either way.
 
 Each layer contributes a `NamespaceConfigValidator` for the rules only that
 layer knows, and also declares the parameter keys its map is read by, so a key
 no layer reads is reported rather than silently ignored. Keys are matched the
-way `NamespaceConfigParams` matches them, ignoring case and padding, which is
-what keeps a key validation accepts identical to a key a read resolves.
+way `NamespaceConfigParams` matches them, ignoring case and padding, so
+validation accepts exactly the keys a read resolves.
 
 Enums a config names implement `ConfigVocabulary`, which holds the one
-case-insensitive lookup and the one unsupported-value message. `RecordType`
-deliberately does not implement it, because a config never names a record
-layout.
+case-insensitive lookup and the one unsupported-value message. A config never
+names a record type, so `RecordType` is not among them.
 
 ## Package Layout
 
 ### Searchable Structures
 
 Index implementations live under `com.uber.ussi.searchablestructure.index`,
-split into sub-packages by the technology each one indexes with. Record layout
-names no package, because a structure and the layout it stores vary
-independently: `IndexType` pairs each structure with the layouts it can store,
-and an index holds the one layout its comparator also reads.
+split into sub-packages by the technology each one indexes with. Record type
+names no package, because a structure and the record type it stores vary
+independently: `IndexType` pairs each structure with the record types it can
+store, and an index holds the one record type its comparator also reads.
 
-- `index.scan`: `ScanIndex`, which reads no record layout of its own and so
+- `index.scan`: `ScanIndex`, which reads no record type of its own and so
   accepts every one of them.
 - `index.matrix`: `MatrixIndex` and its matrix-vector dot-product scorers
   (`MatrixDotProductScorers` and the Java and OpenBLAS scorers). The technology
@@ -116,26 +120,25 @@ and an index holds the one layout its comparator also reads.
   few rows. `BaseInvertedIndex` owns the uni-sorted inverted lists and drives
   the candidate generators; `TermIndex` keys its lists by the terms of the
   record being indexed, `SignatureIndex` by signatures derived from it, and
-  `HybridIndex` routes by row length between the two. The layout a record has
-  is composed in rather than subclassed for, through `RecordIndexingStrategy`:
-  one implementation per layout says how a record of that layout is validated
-  and what indexed form its lists are keyed by, so a layout the family gains is
-  one new strategy rather than one new index class per structure.
+  `HybridIndex` routes by row length between the two. `RecordIndexingStrategy`
+  carries the record type: one implementation per record type says how a record
+  of that type is validated and what indexed form its lists are keyed by, so a
+  record type the family gains is one new strategy.
 - `index.inverted.generator`: the two generators every inverted index draws its
   candidates from, `FilteredSearch` (key-major) and `MergeSearch` (row-major),
   along with the inverted list they walk and the search context, row filter,
   and results heap they walk it with. A generator only ever reads keys and uni
   values, so sequences reuse both unchanged: a sequence is indexed by the
   multiset of its elements, and only the comparator that scores a candidate
-  cares about their order. Every type here is public purely to be reachable
-  from the indexes in the parent packages, and says so in its javadoc.
+  cares about their order. Every type here is public only to be reachable from
+  the indexes in the parent packages.
 
 The shared `Index` base class, `IndexFactory`, and
 `MetadataFilteredSearchExecutor` stay in the `index` package itself.
 `searchablestructure.inverted` holds `KeyAndPrefixFilteringData`, the one type
 the inverted indexes and the inverted cache both order their query keys with,
-which is why it sits beside both rather than inside either. Mutable `ScanCache`
-and `InvertedTermCache` live under `searchablestructure.cache`.
+so it sits beside both. Mutable `ScanCache` and `InvertedTermCache` live under
+`searchablestructure.cache`.
 
 ### Comparators
 
@@ -189,8 +192,10 @@ pre-filtering or post-filtering depending on configuration.
 ### Matrix Index
 
 `MatrixIndex` is delete-only and stores dense vectors in a row-major float
-matrix. It supports only `l2`. Rows must have empty terms and the same non-zero
-dimension.
+matrix. It derives L2 from dot products rather than scoring through the
+comparator, so `IndexType.getRequiredComparatorType` names `l2` and the
+validator rejects any other pairing. Rows must have empty terms and the same
+non-zero dimension.
 
 For unfiltered all-row scoring it computes matrix-vector dot products and
 derives L2 distance from:
@@ -205,18 +210,15 @@ falls back to the Java scorer when OpenBLAS cannot be loaded.
 
 ### Term Index
 
-`TermIndex` is delete-only and keys its inverted lists by canonicalized terms.
-Every inverted index keeps inverted lists, so what sets this one apart is the
-source of its keys: a row's own terms, with nothing derived from them, which is
-why the terms a query and a candidate share determine their similarity exactly
-rather than bounding it.
+`TermIndex` is delete-only and keys its inverted lists by canonicalized terms,
+a row's own terms with nothing derived from them, so the terms a query and a
+candidate share determine their similarity exactly rather than bounding it.
 
 Inverted lists are sorted by each row's comparator-specific unilateral value,
 which is what enables length filtering. Candidate traversal combines length,
 position, and prefix filtering while tightening the similarity threshold as the
 top-k heap fills. The prefix is chosen per query, cheapest inverted list first,
-and is bounded by the uni mass the visited keys accumulate, rather than being a
-prefix under an order fixed over the whole term universe. Either candidate
+and is bounded by the uni mass the visited keys accumulate. Either candidate
 generator can traverse these lists.
 
 Each row and each query must have non-empty terms and values arrays of equal
@@ -224,7 +226,7 @@ length after canonicalization; a query and a row need not have the same number
 of terms as each other. Search only considers rows sharing at least one
 non-discarded term with the query. This matters for sparse L2: two disjoint
 sparse vectors can have a non-zero normalized L2 similarity, and
-`inverted_term` deliberately does not return such rows.
+`inverted_term` does not return such rows.
 
 At build time, terms occurring in more than
 `floor(numRows * max_fraction_ids_per_key)` rows are discarded.

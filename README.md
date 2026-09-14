@@ -82,10 +82,9 @@ try (NearestNeighborSearchIndex index = NearestNeighborSearchIndex.create(config
 ```
 
 `NearestNeighborSearchIndex.create` validates the whole configuration before
-building anything, and reports every problem it finds in one message rather
-than one per attempt. A misspelled value, a parameter key nothing reads, or a combination of
-structure and comparator that cannot work together all fail here rather than
-later.
+building anything, and reports every problem it finds in one message. A
+misspelled value, a parameter key nothing reads, and a structure and comparator
+that cannot work together all fail at creation.
 
 ## Records
 
@@ -95,36 +94,48 @@ A record is a `TermsAndValues`, built from parallel arrays:
 new TermsAndValues(String[] terms, float[] values)
 ```
 
-The three shapes it can take are what decide which comparators and index types
-you can use:
+A record's type is how it is addressed, and it decides which comparators can
+read it:
 
-| Record | `terms` | `values` | Use with |
+| Record type | `terms` | `values` | Comparators |
 | --- | --- | --- | --- |
-| Dense vector | empty | fixed dimension, addressed by position | `l2` |
-| Sparse weighted features | non-empty | one per term | `l2`, `jaccard`, `ruzicka` |
-| Sequence | the elements in arrival order, repeats included | empty | `gld`, `ngld` |
+| Sparse, addressed by its own terms | non-empty | one per term | `l2`, `jaccard`, `ruzicka` |
+| Dense, addressed by position | empty | a vector of a fixed dimension | `l2`, `jaccard`, `ruzicka` |
+| Sequence, ordered elements | the elements in arrival order, repeats included | empty | `gld`, `ngld` |
 
-You never name the shape in a configuration. A comparator declares the shapes
-it reads, an index declares the shapes it stores, and the namespace uses the
-one they have in common. Pairing a comparator and an index type with no shape
-in common is reported when you create the namespace.
+Sparse means addressed by terms, not that most coordinates are zero. A sparse
+record with every coordinate populated is fine.
 
-Sparse means a record is addressed by its own terms rather than by position. It
-does not mean most coordinates are zero, and nothing checks that they are.
+A configuration names an index type and a comparator, not a record type. If the
+two share no record type, you find out when you create the namespace.
+
+One record type carries several kinds of data, and the comparator decides which
+kind you get. Pick the record type from how your data is addressed, and the
+comparator from what you want measured:
+
+| What you have | Values to use | Comparator |
+| --- | --- | --- |
+| Set | `1.0` for every term | `jaccard` |
+| Multiset or bag | a count per term, or the term repeated | `ruzicka` |
+| Weighted set | a weight per term | `ruzicka` |
+| Vector, sparse or dense | the coordinates | `l2` |
+| Sequence or string | none | `gld`, `ngld` |
+
+`jaccard` counts any non-zero value as present and ignores magnitudes, so a
+multiset handed to it behaves as a set. `ruzicka` keeps magnitudes, giving
+weighted Jaccard over weights and multiset Jaccard over counts. Both treat
+opposite signs as not intersecting, and `ruzicka` weighs by absolute value.
+`l2` uses the values as given.
 
 A few things happen to your input on the way in, which matter when you compare
 what you put in against what comes back:
 
 - Terms are lowercased and encoded into primitive longs.
 - Sparse records are canonicalized: terms sorted, values summed across
-  duplicate terms, and zero sums dropped unless every sum is zero.
-- Sequence terms are left in arrival order, because that order is what an edit
-  distance measures.
+  duplicate terms, and zero sums dropped unless every sum is zero. Summing is
+  what lets a multiset arrive as repeated terms or as counts.
+- Sequence terms stay in arrival order.
 - Metadata keys and values are lowercased.
-
-`jaccard` and `ruzicka` compare signed presence: any non-zero magnitude counts,
-and opposite signs do not intersect. `ruzicka` additionally weights by absolute
-magnitude. `l2` uses the numeric values as given.
 
 ## API
 
@@ -173,7 +184,7 @@ memory held by the dense matrix index.
 | `comparatorType` | `l2`, `jaccard`, `ruzicka`, `gld`, or `ngld`. |
 | `comparatorNormalizerType` | `identity`, `lp`, `reciprocal`, or `complement`. |
 | `comparatorParams` | Comparator options; see [Parameters](#parameters). |
-| `comparatorNormalizerParams` | Accepts no keys. No normalizer reads a parameter. |
+| `comparatorNormalizerParams` | Accepts no keys. |
 | `maxNumSearchableStructures` | Maximum number of active, graduating, and indexed structures before consolidation. Must be greater than `2`. |
 | `maxNumSimilarities` | Maximum result count kept per structure and in the final merge. Must be positive. |
 
@@ -188,20 +199,20 @@ the row that matches your records and the guarantee you need:
 | `indexType` | Records | Comparator | What you get |
 | --- | --- | --- | --- |
 | `scan` | any | `l2`, `jaccard`, `ruzicka`, `gld`, `ngld` | Exact. Scores every row. Start here when in doubt. |
-| `matrix` | dense | `l2` | Exact, with OpenBLAS dot products where available and a Java fallback otherwise. |
+| `matrix` | dense | `l2` only | Exact, with OpenBLAS dot products where available and a Java fallback otherwise. |
 | `inverted_term` | sparse | `l2`, `jaccard`, `ruzicka` | Exact, and much faster than `scan` when a term selects few rows. |
 | `inverted_term` | sequence | `gld`, `ngld` | Exact. Generates candidates from element multisets, then verifies with the edit distance. |
 | `inverted_signature` | sparse | `jaccard` or `ruzicka`, with `signature_generator_type` | Approximate. Qualifying rows can be missed; the scores that come back are exact. |
 | `inverted_hybrid` | sparse | `jaccard` or `ruzicka`, with `signature_generator_type` | Exact for rows with at most 270 terms, approximate above that. |
 
-Any pairing not listed is reported as a configuration violation when you create
-the namespace.
+Any pairing not listed is reported when you create the namespace. Note that
+`matrix` takes `l2` and nothing else, even though it stores records `jaccard`
+and `ruzicka` can also read.
 
 For the cache, `scan` works with dense or sparse records and is the right
 choice for sequences. `inverted_term` maintains mutable term lists for sparse
 records and normally graduates into one of the inverted index types. A sequence
-namespace must cache through `scan`, because the `inverted_term` cache reads one
-value per distinct term and a sequence has no values.
+namespace must cache through `scan`.
 
 ### Choosing A Normalizer
 
@@ -218,10 +229,9 @@ it into a similarity in `[0.0, 1.0]`.
 ### Parameters
 
 Every parameter map is read by key, ignoring case and surrounding space. A key
-nothing reads is a configuration violation rather than a setting that silently
-does nothing, so a typo fails loudly. Keys are recognized per map rather than
-per structure, so a parameter only one structure reads stays valid beside a
-structure that ignores it.
+nothing reads is a violation, so a typo fails loudly instead of leaving the
+default in place. Keys are recognized per map, so a parameter only one
+structure reads stays valid beside a structure that ignores it.
 
 Index parameters:
 
@@ -341,11 +351,11 @@ every metadata filtering strategy; they differ only in how much work they do.
 surviving candidate. It works with every inverted index type and every
 comparator.
 
-`spars_merge` advances all of the query's keys together, which lets it abandon
-a row as soon as no completion of it can reach the current threshold. It pays
-off when queries have many keys and the threshold rejects most rows early. It
-is available for `l2`, `jaccard`, and `ruzicka`, and not for the sequence
-comparators, since an edit distance cannot be accumulated from shared keys.
+`spars_merge` advances all of the query's keys together, letting it abandon a
+row as soon as no completion of it can reach the current threshold. It pays off
+when queries have many keys and the threshold rejects most rows early. It is
+available for `l2`, `jaccard`, and `ruzicka`, and not for the sequence
+comparators.
 
 ## What USSI Does Not Do
 
@@ -357,8 +367,8 @@ comparators, since an edit distance cannot be accumulated from shared keys.
 - No plugin or adapter layers for serving systems such as OpenSearch,
   RediSearch, or Milvus.
 
-USSI is an early open-source candidate. More specialized sparse and approximate
-index types can be added behind the same cache and index factory interfaces.
+More specialized sparse and approximate index types can be added behind the same
+USSI cache and index factory interfaces.
 
 ## Code of Conduct
 

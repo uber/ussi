@@ -66,6 +66,7 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
     }
     ComparatorType comparatorType =
         ConfigVocabulary.fromParamValue(ComparatorType.class, config.getComparatorType());
+    collectRequiredComparatorViolations(config, indexType, comparatorType, violations);
     RecordType recordType = resolveRecordType(config, indexType, violations);
     collectSignatureSupportViolations(config, indexType, comparatorType, violations);
     collectCandidateGeneratorViolations(config, indexType, comparatorType, recordType, violations);
@@ -79,6 +80,29 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
     }
     violations.add(
         ConfigVocabulary.unsupported("indexType", config.getIndexType(), IndexType.class));
+  }
+
+  /**
+   * A structure that computes similarity itself reports only the comparator whose arithmetic it
+   * implements, whatever record types the two happen to share.
+   */
+  private static void collectRequiredComparatorViolations(
+      NamespaceConfig config,
+      IndexType indexType,
+      @Nullable ComparatorType comparatorType,
+      List<String> violations) {
+    ComparatorType requiredComparatorType = indexType.getRequiredComparatorType();
+    if (requiredComparatorType == null
+        || comparatorType == null
+        || comparatorType == requiredComparatorType) {
+      return;
+    }
+    violations.add(
+        String.format(
+            "indexType %s computes similarity itself, so it needs comparatorType %s, got %s.",
+            indexType.getParamValue(),
+            requiredComparatorType.getParamValue(),
+            config.getComparatorType()));
   }
 
   /** A signature-keyed structure is invalid with a comparator that generates no signatures. */
@@ -131,7 +155,7 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
    * Returns the record type an index configured this way stores, reporting a violation and
    * returning null when the structure and the comparator share no record type. The type is left
    * unresolved only for the scan structure, which scores through the comparator and never reads a
-   * record's layout.
+   * record's type.
    */
   @Nullable
   private static RecordType resolveRecordType(

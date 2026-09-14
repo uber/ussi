@@ -10,11 +10,13 @@ import com.uber.ussi.comparatornormalizer.ComparatorNormalizer;
 import com.uber.ussi.comparatornormalizer.IdentityComparatorNormalizer;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
+import com.uber.ussi.entity.termsandvalues.RecordType;
 import com.uber.ussi.error.ComparatorCreationError;
 import com.uber.ussi.utils.Constants;
 import com.uber.ussi.utils.MathUtils;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
@@ -55,6 +57,29 @@ class SparseComparatorTest {
     LongTermsAndValues second = dense(comparator, 1f, 5f);
 
     assertEquals(4.0 / 7.0, comparator.getSimilarity(first, second, 0.0), EPSILON_9);
+  }
+
+  /** A zero coordinate is absent, so a dense record's populated positions are its elements. */
+  @Test
+  void jaccardComparesDenseVectorsByPopulatedPosition() {
+    Comparator comparator = comparator("jaccard");
+    LongTermsAndValues first = dense(comparator, 1f, 0f, 2f);
+    LongTermsAndValues second = dense(comparator, 3f, 4f, 0f);
+
+    assertEquals(1.0 / 3.0, comparator.getSimilarity(first, second, 0.0), EPSILON_9);
+  }
+
+  /**
+   * Both measures align a dense record as readily as a sparse one, so both declare it and a
+   * namespace can pair them with any structure that stores either.
+   */
+  @Test
+  void bothMeasuresReadSparseAndDenseRecords() {
+    Set<RecordType> orderAgnosticTypes =
+        Set.of(RecordType.ORDER_AGNOSTIC_SPARSE, RecordType.ORDER_AGNOSTIC_DENSE);
+
+    assertEquals(orderAgnosticTypes, comparator("jaccard").getSupportedRecordTypes());
+    assertEquals(orderAgnosticTypes, comparator("ruzicka").getSupportedRecordTypes());
   }
 
   @Test

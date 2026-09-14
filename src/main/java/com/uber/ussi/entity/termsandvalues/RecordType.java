@@ -1,6 +1,8 @@
 /* AUTHOR: Ahmed Metwally (ametwally@uber.com) */
 package com.uber.ussi.entity.termsandvalues;
 
+import java.util.Locale;
+
 /**
  * How a {@link LongTermsAndValues} lays its data out. A comparator declares which types it reads
  * and a searchable structure declares which one it stores, so the two are paired by agreeing on a
@@ -15,5 +17,10 @@ public enum RecordType {
   ORDER_AGNOSTIC_SPARSE,
 
   /** Terms in the order the elements arrived, repeats included, and no values. */
-  SEQUENCE
+  SEQUENCE;
+
+  /** Returns the name a message names this layout by. A config never names one; see IndexType. */
+  public String getDisplayName() {
+    return name().toLowerCase(Locale.ROOT);
+  }
 }

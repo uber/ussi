@@ -14,7 +14,6 @@ import com.uber.ussi.entity.termsandvalues.RecordType;
 import com.uber.ussi.searchablestructure.metadata.MetadataFilteringStrategy;
 import com.uber.ussi.utils.Constants;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
@@ -200,7 +199,7 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
 
   private static String describeRecordTypes(Set<RecordType> recordTypes) {
     return recordTypes.stream()
-        .map(recordType -> recordType.name().toLowerCase(Locale.ROOT))
+        .map(RecordType::getDisplayName)
         .sorted()
         .collect(Collectors.joining(", "));
   }

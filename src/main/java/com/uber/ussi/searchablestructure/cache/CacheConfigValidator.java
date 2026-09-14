@@ -10,7 +10,6 @@ import com.uber.ussi.config.NamespaceConfigValidator;
 import com.uber.ussi.entity.termsandvalues.RecordType;
 import com.uber.ussi.utils.Constants;
 import java.util.List;
-import java.util.Locale;
 
 /** Reports the cache types and cache params that no cache could be built from. */
 public final class CacheConfigValidator implements NamespaceConfigValidator {
@@ -41,7 +40,7 @@ public final class CacheConfigValidator implements NamespaceConfigValidator {
           String.format(
               "cacheType %s stores %s records, which comparatorType %s cannot read.",
               cacheType.getParamValue(),
-              RecordType.ORDER_AGNOSTIC_SPARSE.name().toLowerCase(Locale.ROOT),
+              RecordType.ORDER_AGNOSTIC_SPARSE.getDisplayName(),
               config.getComparatorType()));
     }
     ConfigViolations.checkDoubleAboveMinInRange(

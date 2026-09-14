@@ -134,8 +134,8 @@ public class L2Comparator extends Comparator {
   }
 
   /**
-   * An L2 distance is defined over either layout: a dense record's values are the vector, and a
-   * sparse record's terms name its non-zero coordinates.
+   * An L2 distance is defined over either record type: a dense record's values are the vector, and
+   * a sparse record's terms name its non-zero coordinates.
    */
   @Override
   public Set<RecordType> getSupportedRecordTypes() {

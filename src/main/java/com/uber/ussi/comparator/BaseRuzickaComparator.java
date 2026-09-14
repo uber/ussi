@@ -153,10 +153,14 @@ abstract class BaseRuzickaComparator extends SignatureComparator {
         >= minComparatorValue;
   }
 
-  /** Both measures walk two records term by term, which needs the terms aligned and distinct. */
+  /**
+   * Both measures walk two records coordinate by coordinate, aligning a sparse record by its terms
+   * and a dense one by position. Either way a coordinate one record does not populate weighs
+   * nothing, which is what an intersection and a union need.
+   */
   @Override
   public Set<RecordType> getSupportedRecordTypes() {
-    return Set.of(RecordType.ORDER_AGNOSTIC_SPARSE);
+    return Set.of(RecordType.ORDER_AGNOSTIC_SPARSE, RecordType.ORDER_AGNOSTIC_DENSE);
   }
 
   @Override

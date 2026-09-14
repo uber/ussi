@@ -106,7 +106,7 @@ class IndexFactoryTest {
             () -> IndexFactory.createIndex(config, longObjectMap(), longObjectMap()));
 
     assertTrue(
-        error.getMessage().contains("stores order_agnostic_sparse records")
+        error.getMessage().contains("stores sparse records")
             && error.getMessage().contains("comparatorType ngld reads sequence"),
         error.getMessage());
   }

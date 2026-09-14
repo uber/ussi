@@ -14,18 +14,18 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /**
- * Every record layout against every inverted structure against every candidate generator.
+ * Every record type against every inverted structure against every candidate generator.
  *
- * <p>The layout and the structure vary independently, so the cases form a product, and enumerating
- * it keeps a rule from quietly covering a cell no single-purpose test would visit.
+ * <p>The record type and the structure vary independently, so the cases form a product, and
+ * enumerating it keeps a rule from quietly covering a cell no single-purpose test would visit.
  */
 class IndexPairingMatrixTest {
 
   /** Why a cell is invalid, or {@link #VALID} when it is not. */
   private enum Expectation {
     VALID,
-    /** The structure stores no layout the comparator reads. */
-    NO_SHARED_LAYOUT,
+    /** The structure stores no record type the comparator reads. */
+    NO_SHARED_RECORD_TYPE,
     /** The structure keys its lists by signatures the comparator does not generate. */
     NO_SIGNATURES,
     /** The comparator cannot score a row from the keys it shares with the query. */
@@ -87,7 +87,7 @@ class IndexPairingMatrixTest {
       ComparatorCase comparator, IndexType indexType, CandidateGenerator candidateGenerator) {
     boolean readsSequences = comparator == SEQUENCE;
     if (readsSequences && indexType != IndexType.INVERTED_TERM) {
-      return Expectation.NO_SHARED_LAYOUT;
+      return Expectation.NO_SHARED_RECORD_TYPE;
     }
     if (indexType.requiresSignatureSupport() && !comparator.signatureGenerator()) {
       return Expectation.NO_SIGNATURES;

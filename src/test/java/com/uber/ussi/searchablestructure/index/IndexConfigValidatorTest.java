@@ -239,11 +239,15 @@ class IndexConfigValidatorTest {
             .comparatorType("cosine")
             .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, sparsMerge()))
             .build();
-    // Jaccard would be reported for dense records and for merging, so this pins the params.
+    // Merging would be reported for jaccard on its own, so this pins the params.
     Map<String, String> unbuildableParams = Map.of(Constants.SIGNATURE_GENERATOR_TYPE, "superhash");
+    // The structure names the comparator it computes from the config alone, so pairing it with
+    // anything else is reported whether or not that comparator could be built. Naming l2 leaves
+    // the params as the only thing wrong.
     NamespaceConfig unbuildableOnMatrixStructure =
         validBuilder()
             .indexType(IndexType.MATRIX.getParamValue())
+            .comparatorType(ComparatorType.L2.getParamValue())
             .comparatorParams(unbuildableParams)
             .build();
     NamespaceConfig unbuildableWithMerge =
@@ -270,6 +274,38 @@ class IndexConfigValidatorTest {
                 + "candidate_generator, max_fraction_ids_per_key, max_pre_filtering_rows_ratio, "
                 + "metadata_filtering_strategy, popular_term_discard_scope."),
         violations);
+  }
+
+  /**
+   * The matrix structure stores dense records and so shares a record type with every
+   * order-agnostic comparator. What it reports is L2, so the pairing is named rather than inferred.
+   */
+  @Test
+  void theMatrixStructureIsReportedForAComparatorItCannotCompute() {
+    List<String> violations =
+        violations(
+            validBuilder()
+                .indexType(IndexType.MATRIX.getParamValue())
+                .comparatorType(ComparatorType.JACCARD.getParamValue())
+                .build());
+
+    assertEquals(
+        List.of(
+            "indexType matrix computes similarity itself, so it needs comparatorType l2, "
+                + "got jaccard."),
+        violations);
+  }
+
+  @Test
+  void theMatrixStructureIsValidWithTheComparatorItComputes() {
+    NamespaceConfig config =
+        validBuilder()
+            .indexType(IndexType.MATRIX.getParamValue())
+            .comparatorType(ComparatorType.L2.getParamValue())
+            .comparatorNormalizerType("reciprocal")
+            .build();
+
+    assertEquals(List.of(), violations(config));
   }
 
   /** A key recognized here is one some layer reads, whatever structure the namespace names. */

@@ -7,7 +7,6 @@ import com.uber.ussi.config.ConfigVocabulary;
 import com.uber.ussi.entity.termsandvalues.RecordType;
 import java.util.EnumSet;
 import java.util.Set;
-import javax.annotation.Nullable;
 
 /**
  * The index structures a namespace can be configured with, each paired with the record types it can
@@ -66,14 +65,13 @@ public enum IndexType implements ConfigVocabulary {
   }
 
   /**
-   * Returns the comparator this structure computes similarity with itself, or null when it scores
-   * every candidate through whichever comparator is configured. A structure that implements one
-   * comparator's arithmetic inline cannot report any other comparator's similarity, so the two
-   * have to be configured together.
+   * Returns the comparators this structure computes similarity with itself, empty when it scores
+   * every candidate through whichever comparator is configured. A structure that implements
+   * comparator arithmetic inline can report only the comparators it implements, so it has to be
+   * configured with one of them.
    */
-  @Nullable
-  public ComparatorType getRequiredComparatorType() {
-    return this == MATRIX ? ComparatorType.L2 : null;
+  public Set<ComparatorType> getRequiredComparatorTypes() {
+    return this == MATRIX ? Set.of(ComparatorType.L2) : Set.of();
   }
 
   /** Returns whether this structure keeps the uni-sorted inverted lists the generators walk. */

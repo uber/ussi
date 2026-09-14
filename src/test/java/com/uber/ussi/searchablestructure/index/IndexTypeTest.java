@@ -11,6 +11,7 @@ import com.uber.ussi.comparator.ComparatorType;
 import com.uber.ussi.config.ConfigVocabulary;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.termsandvalues.RecordType;
+import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
@@ -93,11 +94,11 @@ class IndexTypeTest {
         Set.of(RecordType.ORDER_AGNOSTIC_DENSE),
         IndexType.MATRIX.resolveRecordTypes(comparator("jaccard", "identity")));
 
-    assertEquals(ComparatorType.L2, IndexType.MATRIX.getRequiredComparatorType());
-    assertNull(IndexType.SCAN.getRequiredComparatorType());
-    assertNull(IndexType.INVERTED_TERM.getRequiredComparatorType());
-    assertNull(IndexType.INVERTED_SIGNATURE.getRequiredComparatorType());
-    assertNull(IndexType.INVERTED_HYBRID.getRequiredComparatorType());
+    assertEquals(Set.of(ComparatorType.L2), IndexType.MATRIX.getRequiredComparatorTypes());
+    assertEquals(Set.of(), IndexType.SCAN.getRequiredComparatorTypes());
+    assertEquals(Set.of(), IndexType.INVERTED_TERM.getRequiredComparatorTypes());
+    assertEquals(Set.of(), IndexType.INVERTED_SIGNATURE.getRequiredComparatorTypes());
+    assertEquals(Set.of(), IndexType.INVERTED_HYBRID.getRequiredComparatorTypes());
   }
 
   @Test
@@ -133,6 +134,44 @@ class IndexTypeTest {
     assertFalse(
         IndexType.INVERTED_HYBRID.conjunctionDeterminesSimilarity(
             RecordType.ORDER_AGNOSTIC_SPARSE));
+  }
+
+  /**
+   * Scan scores every row through the comparator, so it is the exact fallback for anything another
+   * structure can do. Widening a structure without widening scan would leave that pairing with no
+   * structure that scores it exactly.
+   */
+  @Test
+  void scanStoresAndReadsEveryPairingAnotherStructureDoes() {
+    Set<RecordType> scanStores = IndexType.SCAN.getStorableRecordTypes();
+    for (IndexType indexType : IndexType.values()) {
+      assertTrue(
+          scanStores.containsAll(indexType.getStorableRecordTypes()),
+          indexType.getParamValue() + " stores a record type scan does not.");
+    }
+
+    for (Comparator comparator : everyComparator()) {
+      Set<RecordType> scanReads = IndexType.SCAN.resolveRecordTypes(comparator);
+      for (IndexType indexType : IndexType.values()) {
+        assertTrue(
+            scanReads.containsAll(indexType.resolveRecordTypes(comparator)),
+            indexType.getParamValue() + " resolves a record type scan does not.");
+      }
+    }
+
+    // Storing the type is only half of it: scan also imposes neither of the checks that would
+    // reject a comparator the pairing otherwise allows.
+    assertEquals(Set.of(), IndexType.SCAN.getRequiredComparatorTypes());
+    assertFalse(IndexType.SCAN.requiresSignatureSupport());
+  }
+
+  private static List<Comparator> everyComparator() {
+    return List.of(
+        comparator("l2", "reciprocal"),
+        comparator("jaccard", "identity"),
+        comparator("ruzicka", "identity"),
+        comparator("gld", "reciprocal"),
+        comparator("ngld", "complement"));
   }
 
   private static Comparator comparator(String comparatorType, String normalizerType) {

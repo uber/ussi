@@ -84,25 +84,28 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
   }
 
   /**
-   * A structure that computes similarity itself reports only the comparator whose arithmetic it
-   * implements, whatever record types the two happen to share.
+   * A structure that computes similarity itself reports only the comparators whose arithmetic it
+   * implements, whatever record types it and the configured comparator happen to share.
    */
   private static void collectRequiredComparatorViolations(
       NamespaceConfig config,
       IndexType indexType,
       @Nullable ComparatorType comparatorType,
       List<String> violations) {
-    ComparatorType requiredComparatorType = indexType.getRequiredComparatorType();
-    if (requiredComparatorType == null
+    Set<ComparatorType> requiredComparatorTypes = indexType.getRequiredComparatorTypes();
+    if (requiredComparatorTypes.isEmpty()
         || comparatorType == null
-        || comparatorType == requiredComparatorType) {
+        || requiredComparatorTypes.contains(comparatorType)) {
       return;
     }
     violations.add(
         String.format(
             "indexType %s computes similarity itself, so it needs comparatorType %s, got %s.",
             indexType.getParamValue(),
-            requiredComparatorType.getParamValue(),
+            requiredComparatorTypes.stream()
+                .map(ComparatorType::getParamValue)
+                .sorted()
+                .collect(Collectors.joining(" or ")),
             config.getComparatorType()));
   }
 

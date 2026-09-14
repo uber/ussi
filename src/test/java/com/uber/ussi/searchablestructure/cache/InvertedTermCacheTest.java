@@ -92,9 +92,9 @@ class InvertedTermCacheTest {
             config(
                 "jaccard",
                 Map.of(
-                    Constants.MAX_FRACTION_IDS_PER_KEY,
+                    Constants.MAX_FRACTION_IDS_PER_TERM,
                     "0.5",
-                    Constants.MAX_FRACTION_IDS_PER_KEY_CONFIDENCE,
+                    Constants.MAX_FRACTION_IDS_PER_TERM_CONFIDENCE,
                     "0.5")));
     long first = cache.insert(jaccard(new long[] {1, 101}, 1, 1), Map.of());
     long second = cache.insert(jaccard(new long[] {1, 102}, 1, 1), Map.of());
@@ -162,9 +162,9 @@ class InvertedTermCacheTest {
             config(
                 "jaccard",
                 Map.of(
-                    Constants.MAX_FRACTION_IDS_PER_KEY,
+                    Constants.MAX_FRACTION_IDS_PER_TERM,
                     "0.54",
-                    Constants.MAX_FRACTION_IDS_PER_KEY_CONFIDENCE,
+                    Constants.MAX_FRACTION_IDS_PER_TERM_CONFIDENCE,
                     "0.5")));
     for (int row = 0; row < 10; ++row) {
       cache.insert(jaccard(new long[] {1, 2}, 1, 1), Map.of());
@@ -193,9 +193,9 @@ class InvertedTermCacheTest {
             config(
                 "jaccard",
                 Map.of(
-                    Constants.MAX_FRACTION_IDS_PER_KEY,
+                    Constants.MAX_FRACTION_IDS_PER_TERM,
                     "0.5",
-                    Constants.MAX_FRACTION_IDS_PER_KEY_CONFIDENCE,
+                    Constants.MAX_FRACTION_IDS_PER_TERM_CONFIDENCE,
                     "0.5")));
     for (int row = 0; row < 46; ++row) {
       cache.insert(jaccard(new long[] {1}, 1), Map.of());
@@ -224,9 +224,9 @@ class InvertedTermCacheTest {
             config(
                 "jaccard",
                 Map.of(
-                    Constants.MAX_FRACTION_IDS_PER_KEY,
+                    Constants.MAX_FRACTION_IDS_PER_TERM,
                     "0.5",
-                    Constants.MAX_FRACTION_IDS_PER_KEY_CONFIDENCE,
+                    Constants.MAX_FRACTION_IDS_PER_TERM_CONFIDENCE,
                     "0.5",
                     Constants.FULL_REEVALUATION_CACHE_SIZE_DECREASE_FRACTION,
                     "0.2")));
@@ -255,9 +255,9 @@ class InvertedTermCacheTest {
             config(
                 "jaccard",
                 Map.of(
-                    Constants.MAX_FRACTION_IDS_PER_KEY,
+                    Constants.MAX_FRACTION_IDS_PER_TERM,
                     "0.5",
-                    Constants.MAX_FRACTION_IDS_PER_KEY_CONFIDENCE,
+                    Constants.MAX_FRACTION_IDS_PER_TERM_CONFIDENCE,
                     "0.5")));
     long rowNum = cache.insert(jaccard(new long[] {1}, 1), Map.of());
     assertArrayEquals(new long[] {1}, cache.getDiscardedTermsForTests());
@@ -273,7 +273,7 @@ class InvertedTermCacheTest {
     // exceeds it; at 40 rows the bound tightens to 0.63 and the term is readmitted.
     InvertedTermCache cache =
         new InvertedTermCache(
-            config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0.7")));
+            config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "0.7")));
     cache.insert(jaccard(new long[] {1, 101}, 1, 1), Map.of());
     cache.insert(jaccard(new long[] {1, 102}, 1, 1), Map.of());
     cache.insert(jaccard(new long[] {103}, 1), Map.of());
@@ -334,34 +334,34 @@ class InvertedTermCacheTest {
         IllegalArgumentException.class,
         () ->
             new InvertedTermCache(
-                config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0"))));
+                config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "0"))));
     assertThrows(
         IllegalArgumentException.class,
         () ->
             new InvertedTermCache(
                 config(
-                    "jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "not-a-number"))));
-    assertThrows(
-        IllegalArgumentException.class,
-        () ->
-            new InvertedTermCache(
-                config(
-                    "jaccard",
-                    Map.of(Constants.MAX_FRACTION_IDS_PER_KEY_CONFIDENCE, "0.4"))));
+                    "jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "not-a-number"))));
     assertThrows(
         IllegalArgumentException.class,
         () ->
             new InvertedTermCache(
                 config(
                     "jaccard",
-                    Map.of(Constants.MAX_FRACTION_IDS_PER_KEY_CONFIDENCE, "1.1"))));
+                    Map.of(Constants.MAX_FRACTION_IDS_PER_TERM_CONFIDENCE, "0.4"))));
     assertThrows(
         IllegalArgumentException.class,
         () ->
             new InvertedTermCache(
                 config(
                     "jaccard",
-                    Map.of(Constants.MAX_FRACTION_IDS_PER_KEY_CONFIDENCE, "not-a-number"))));
+                    Map.of(Constants.MAX_FRACTION_IDS_PER_TERM_CONFIDENCE, "1.1"))));
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            new InvertedTermCache(
+                config(
+                    "jaccard",
+                    Map.of(Constants.MAX_FRACTION_IDS_PER_TERM_CONFIDENCE, "not-a-number"))));
     assertThrows(
         IllegalArgumentException.class,
         () ->
@@ -511,9 +511,9 @@ class InvertedTermCacheTest {
         config(
             "jaccard",
             Map.of(
-                Constants.MAX_FRACTION_IDS_PER_KEY,
+                Constants.MAX_FRACTION_IDS_PER_TERM,
                 "0.5",
-                Constants.MAX_FRACTION_IDS_PER_KEY_CONFIDENCE,
+                Constants.MAX_FRACTION_IDS_PER_TERM_CONFIDENCE,
                 "0.5",
                 Constants.POPULAR_TERM_DISCARD_SCOPE,
                 discardScope)));

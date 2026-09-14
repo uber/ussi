@@ -17,8 +17,8 @@ public final class CacheConfigValidator implements NamespaceConfigValidator {
   /** Every key some layer reads from cacheParams, whatever structure is configured. */
   private static final Set<String> RECOGNIZED_KEYS =
       Set.of(
-          Constants.MAX_FRACTION_IDS_PER_KEY,
-          Constants.MAX_FRACTION_IDS_PER_KEY_CONFIDENCE,
+          Constants.MAX_FRACTION_IDS_PER_TERM,
+          Constants.MAX_FRACTION_IDS_PER_TERM_CONFIDENCE,
           Constants.FULL_REEVALUATION_CACHE_SIZE_DECREASE_FRACTION,
           Constants.POPULAR_TERM_DISCARD_SCOPE);
 
@@ -56,14 +56,14 @@ public final class CacheConfigValidator implements NamespaceConfigValidator {
     }
     ConfigViolations.checkDoubleAboveMinInRange(
         violations,
-        Constants.MAX_FRACTION_IDS_PER_KEY,
-        config.getCacheParam(Constants.MAX_FRACTION_IDS_PER_KEY),
+        Constants.MAX_FRACTION_IDS_PER_TERM,
+        config.getCacheParam(Constants.MAX_FRACTION_IDS_PER_TERM),
         0.0,
         1.0);
     ConfigViolations.checkDoubleInRange(
         violations,
-        Constants.MAX_FRACTION_IDS_PER_KEY_CONFIDENCE,
-        config.getCacheParam(Constants.MAX_FRACTION_IDS_PER_KEY_CONFIDENCE),
+        Constants.MAX_FRACTION_IDS_PER_TERM_CONFIDENCE,
+        config.getCacheParam(Constants.MAX_FRACTION_IDS_PER_TERM_CONFIDENCE),
         0.5,
         1.0);
     ConfigViolations.checkDoubleInRange(

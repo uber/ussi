@@ -62,7 +62,7 @@ abstract class BaseInvertedIndex extends Index {
   private final CandidateGeneratorType candidateGeneratorType;
   private final PopularTermDiscardScope popularTermDiscardScope;
   private final boolean scoresFromConjunction;
-  private final double maxFractionIdsPerKey;
+  private final double maxFractionIdsPerTerm;
   private final LongHashSet discardedTerms;
   private final LongObjectHashMap<LongTermsAndValues> verificationRowNumToTermsAndValuesMap;
   private final LongObjectHashMap<LongTermsAndValues> indexedRowNumToTermsAndValuesMap;
@@ -94,7 +94,7 @@ abstract class BaseInvertedIndex extends Index {
         candidateGeneratorType == CandidateGeneratorType.SPARS_MERGE
             && indexType.conjunctionDeterminesSimilarity(recordType)
             && popularTermDiscardScope == PopularTermDiscardScope.CANDIDATES_AND_VERIFICATION;
-    this.maxFractionIdsPerKey = parseMaxFractionIdsPerKey(namespaceConfig);
+    this.maxFractionIdsPerTerm = parseMaxFractionIdsPerTerm(namespaceConfig);
     validateRows();
     this.discardedTerms = buildDiscardedTerms();
     LongObjectHashMap<LongTermsAndValues> discardedTermFreeRows = buildDiscardedTermFreeRows();
@@ -209,8 +209,8 @@ abstract class BaseInvertedIndex extends Index {
     return terms;
   }
 
-  final boolean discardsPopularKeys() {
-    return maxFractionIdsPerKey < 1.0;
+  final boolean discardsPopularTerms() {
+    return maxFractionIdsPerTerm < 1.0;
   }
 
   final long[] getRowNumsForKeyForTests(long key) {
@@ -449,7 +449,7 @@ abstract class BaseInvertedIndex extends Index {
   /**
    * Identifies the high-popularity terms to discard. The index sees the complete dataset, so
    * observed popularity is true popularity: a term is discarded when it occurs in more than
-   * floor(numRows * maxFractionIdsPerKey) rows.
+   * floor(numRows * maxFractionIdsPerTerm) rows.
    */
   private LongHashSet buildDiscardedTerms() {
     LongIntHashMap numRowsByTerm = new LongIntHashMap();
@@ -467,7 +467,7 @@ abstract class BaseInvertedIndex extends Index {
       }
     }
     int maxNumRowsPerTerm =
-        (int) Math.floor(rowNumToTermsAndValuesMap.size() * maxFractionIdsPerKey);
+        (int) Math.floor(rowNumToTermsAndValuesMap.size() * maxFractionIdsPerTerm);
     LongHashSet popularTerms = new LongHashSet();
     for (LongIntCursor entry : numRowsByTerm) {
       if (entry.value > maxNumRowsPerTerm) {
@@ -585,9 +585,9 @@ abstract class BaseInvertedIndex extends Index {
     return invertedList == null ? EMPTY_ROW_NUMS : invertedList.getRowNums();
   }
 
-  private static double parseMaxFractionIdsPerKey(NamespaceConfig namespaceConfig) {
+  private static double parseMaxFractionIdsPerTerm(NamespaceConfig namespaceConfig) {
     return namespaceConfig.readDoubleIndexParam(
-        Constants.MAX_FRACTION_IDS_PER_KEY, Constants.DEFAULT_MAX_FRACTION_IDS_PER_KEY);
+        Constants.MAX_FRACTION_IDS_PER_TERM, Constants.DEFAULT_MAX_FRACTION_IDS_PER_TERM);
   }
 
   /**

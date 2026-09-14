@@ -189,7 +189,7 @@ class TermIndexOnSequencesTest {
 
     TermIndex index =
         new TermIndex(
-            config("ngld", Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0.75"), "inverted_term"),
+            config("ngld", Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "0.75"), "inverted_term"),
             rows,
             longObjectMap());
 
@@ -223,7 +223,7 @@ class TermIndexOnSequencesTest {
             config(
                 "ngld",
                 Map.of(
-                    Constants.MAX_FRACTION_IDS_PER_KEY,
+                    Constants.MAX_FRACTION_IDS_PER_TERM,
                     "0.75",
                     Constants.POPULAR_TERM_DISCARD_SCOPE,
                     PopularTermDiscardScope.CANDIDATES_ONLY.getParamValue()),
@@ -255,7 +255,7 @@ class TermIndexOnSequencesTest {
 
     TermIndex index =
         new TermIndex(
-            config("ngld", Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0.75"), "inverted_term"),
+            config("ngld", Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "0.75"), "inverted_term"),
             rows,
             longObjectMap());
 

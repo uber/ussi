@@ -156,7 +156,7 @@ class HybridIndexTest {
                 "minhash",
                 0,
                 1000,
-                Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0.5")),
+                Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "0.5")),
             rows,
             longObjectMap());
     LongTermsAndValues query = jaccard(sequentialTerms(300, 1));

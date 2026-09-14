@@ -233,7 +233,7 @@ public final class NamespaceConfig {
 
   /**
    * Which phases of a search a discarded high-popularity term is absent from. Which terms qualify
-   * for discarding is governed by {@link Constants#MAX_FRACTION_IDS_PER_KEY}.
+   * for discarding is governed by {@link Constants#MAX_FRACTION_IDS_PER_TERM}.
    */
   public enum PopularTermDiscardScope implements ConfigVocabulary {
     /**

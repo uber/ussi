@@ -19,7 +19,7 @@ import java.util.List;
 public final class HybridIndex extends Index {
   private final TermIndex termIndex;
   private final SignatureIndex signatureIndex;
-  private final boolean keyPopularityFilteringEnabled;
+  private final boolean termPopularityFilteringEnabled;
 
   public HybridIndex(
       NamespaceConfig namespaceConfig,
@@ -42,7 +42,7 @@ public final class HybridIndex extends Index {
     }
     this.termIndex = new TermIndex(namespaceConfig, exactRows, rowNumToMetaMap);
     this.signatureIndex = new SignatureIndex(namespaceConfig, signatureRows, rowNumToMetaMap);
-    this.keyPopularityFilteringEnabled = termIndex.discardsPopularKeys();
+    this.termPopularityFilteringEnabled = termIndex.discardsPopularTerms();
   }
 
   @Override
@@ -119,7 +119,7 @@ public final class HybridIndex extends Index {
     if (index.size() == 0) {
       return false;
     }
-    if (keyPopularityFilteringEnabled) {
+    if (termPopularityFilteringEnabled) {
       return true;
     }
     int minNumTerms = exactIndex ? 0 : Constants.NUM_SIGNATURES_PER_ID + 1;

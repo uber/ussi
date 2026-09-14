@@ -64,7 +64,7 @@ class TermIndexTest {
     rows.put(4, jaccard(new long[] {5}, 1));
     TermIndex index =
         new TermIndex(
-            config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0.5")),
+            config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "0.5")),
             rows,
             longObjectMap());
 
@@ -85,7 +85,7 @@ class TermIndexTest {
     LongObjectHashMap<LongTermsAndValues> rows = popularTermRows();
     Map<String, String> params =
         Map.of(
-            Constants.MAX_FRACTION_IDS_PER_KEY, "0.5",
+            Constants.MAX_FRACTION_IDS_PER_TERM, "0.5",
             Constants.POPULAR_TERM_DISCARD_SCOPE, CANDIDATES_ONLY);
     TermIndex index = new TermIndex(config("jaccard", params), rows, longObjectMap());
 
@@ -106,7 +106,7 @@ class TermIndexTest {
     LongObjectHashMap<LongTermsAndValues> rows = popularTermRows();
     TermIndex index =
         new TermIndex(
-            config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0.5")),
+            config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "0.5")),
             rows,
             longObjectMap());
 
@@ -122,7 +122,7 @@ class TermIndexTest {
     LongObjectHashMap<LongTermsAndValues> rows = popularTermRows();
     Map<String, String> params =
         Map.of(
-            Constants.MAX_FRACTION_IDS_PER_KEY, "0.5",
+            Constants.MAX_FRACTION_IDS_PER_TERM, "0.5",
             Constants.POPULAR_TERM_DISCARD_SCOPE, CANDIDATES_ONLY);
     TermIndex index = new TermIndex(config("jaccard", params), rows, longObjectMap());
 
@@ -136,7 +136,7 @@ class TermIndexTest {
     LongObjectHashMap<LongTermsAndValues> rows = popularTermRows();
     Map<String, String> params =
         Map.of(
-            Constants.MAX_FRACTION_IDS_PER_KEY, "0.5",
+            Constants.MAX_FRACTION_IDS_PER_TERM, "0.5",
             Constants.POPULAR_TERM_DISCARD_SCOPE, CANDIDATES_ONLY);
     TermIndex index = new TermIndex(config("jaccard", params), rows, longObjectMap());
 
@@ -153,7 +153,7 @@ class TermIndexTest {
     LongObjectHashMap<LongTermsAndValues> rows = popularTermRows();
     Map<String, String> params =
         Map.of(
-            Constants.MAX_FRACTION_IDS_PER_KEY, "0.5",
+            Constants.MAX_FRACTION_IDS_PER_TERM, "0.5",
             Constants.POPULAR_TERM_DISCARD_SCOPE, CANDIDATES_ONLY,
             Constants.CANDIDATE_GENERATOR,
             NamespaceConfig.CandidateGeneratorType.SPARS_MERGE.getParamValue());
@@ -178,7 +178,7 @@ class TermIndexTest {
 
     TermIndex index =
         new TermIndex(
-            config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0.5")),
+            config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "0.5")),
             rows,
             longObjectMap());
 
@@ -415,14 +415,14 @@ class TermIndexTest {
         () ->
             new TermIndex(
                 config(
-                    "jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "not-a-number")),
+                    "jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "not-a-number")),
                 longObjectMap(),
                 longObjectMap()));
     assertThrows(
         IllegalArgumentException.class,
         () ->
             new TermIndex(
-                config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0")),
+                config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "0")),
                 longObjectMap(),
                 longObjectMap()));
 
@@ -654,7 +654,7 @@ class TermIndexTest {
    * agrees with the merge only if it scores the verification rows.
    */
   @Test
-  void mergeResultsMatchFilteredScanWhenPopularKeysAreDropped() {
+  void mergeResultsMatchFilteredScanWhenPopularTermsAreDropped() {
     Random random = new Random(9_713L);
     LongObjectHashMap<LongTermsAndValues> rows = randomRows(random, "jaccard", 40);
     LongObjectHashMap<LongMeta> metadata = longObjectMap();
@@ -663,14 +663,14 @@ class TermIndexTest {
     }
     Map<String, String> popularityParams =
         Map.of(
-            Constants.MAX_FRACTION_IDS_PER_KEY, "0.2",
+            Constants.MAX_FRACTION_IDS_PER_TERM, "0.2",
             Index.METADATA_FILTERING_STRATEGY, "pre_filtering",
             Index.MAX_PRE_FILTERING_ROWS_RATIO, "0.9");
     TermIndex filteredScanIndex =
         new TermIndex(config("jaccard", popularityParams, "inverted_term"), rows, metadata);
     TermIndex mergeIndex =
         new TermIndex(config("jaccard", withMergeParam(popularityParams), "inverted_term"), rows, metadata);
-    assertTrue(mergeIndex.discardsPopularKeys());
+    assertTrue(mergeIndex.discardsPopularTerms());
     assertTrue(mergeIndex.getDiscardedTermsForTests().length > 0);
     MetaFilter sf = new MetaFilter(Map.of("city", List.of("sf")));
 

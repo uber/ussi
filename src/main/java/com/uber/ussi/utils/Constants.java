@@ -10,15 +10,15 @@ public final class Constants {
   public static final int NUM_SIGNATURES_PER_ID = 270;
   public static final String SIGNATURE_GENERATOR = "signature_generator";
   public static final String SEQUENCE_DISTANCE_TYPE = "sequence_distance_type";
-  public static final String MAX_FRACTION_IDS_PER_KEY = "max_fraction_ids_per_key";
-  public static final String MAX_FRACTION_IDS_PER_KEY_CONFIDENCE =
-      "max_fraction_ids_per_key_confidence";
+  public static final String MAX_FRACTION_IDS_PER_TERM = "max_fraction_ids_per_term";
+  public static final String MAX_FRACTION_IDS_PER_TERM_CONFIDENCE =
+      "max_fraction_ids_per_term_confidence";
   public static final String FULL_REEVALUATION_CACHE_SIZE_DECREASE_FRACTION =
       "full_reevaluation_cache_size_decrease_fraction";
   public static final String CANDIDATE_GENERATOR = "candidate_generator";
   public static final String POPULAR_TERM_DISCARD_SCOPE = "popular_term_discard_scope";
-  public static final double DEFAULT_MAX_FRACTION_IDS_PER_KEY = 1.0;
-  public static final double DEFAULT_MAX_FRACTION_IDS_PER_KEY_CONFIDENCE = 0.95;
+  public static final double DEFAULT_MAX_FRACTION_IDS_PER_TERM = 1.0;
+  public static final double DEFAULT_MAX_FRACTION_IDS_PER_TERM_CONFIDENCE = 0.95;
   public static final double DEFAULT_FULL_REEVALUATION_CACHE_SIZE_DECREASE_FRACTION = 0.10;
 
   private Constants() {}

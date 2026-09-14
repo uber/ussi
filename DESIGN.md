@@ -229,7 +229,7 @@ sparse vectors can have a non-zero normalized L2 similarity, and
 `inverted_term` does not return such rows.
 
 At build time, terms occurring in more than
-`floor(numRows * max_fraction_ids_per_key)` rows are discarded.
+`floor(numRows * max_fraction_ids_per_term)` rows are discarded.
 
 ### Sequences On The Term Index
 
@@ -336,6 +336,17 @@ This also rules out scoring a row from the conjunction accumulated over the
 inverted lists, since that conjunction can only report the similarity that
 excludes the discarded terms, so `spars_merge` verifies each candidate through
 the comparator under this scope.
+
+Popularity is counted over terms, never over the keys the lists end up under,
+and discarding runs before signature generation rather than after. A
+signature-keyed structure therefore draws its signatures from a record the
+popular terms are already gone from, so a discard changes which signatures a
+record has rather than removing signatures it already had. Nothing discards a
+signature that ends up in most rows, which is deliberate: a term that popular
+carries no signal, while signatures collide at a rate tracking the multiset
+similarity of the records behind them, so a popular signature is a similarity
+worth keeping. Where one does appear it comes of a term dominating the
+multisets, which is what the term-level discard removes.
 
 ## Candidate Generation
 

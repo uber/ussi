@@ -129,13 +129,13 @@ class SparseEndToEndTest {
       int maxCacheSize, double maxFraction, String metadataStrategy) {
     Map<String, String> popularityParams =
         Map.of(
-            Constants.MAX_FRACTION_IDS_PER_KEY,
+            Constants.MAX_FRACTION_IDS_PER_TERM,
             Double.toString(maxFraction),
-            Constants.MAX_FRACTION_IDS_PER_KEY_CONFIDENCE,
+            Constants.MAX_FRACTION_IDS_PER_TERM_CONFIDENCE,
             "0.5");
     Map<String, String> indexParams =
         Map.of(
-            Constants.MAX_FRACTION_IDS_PER_KEY,
+            Constants.MAX_FRACTION_IDS_PER_TERM,
             Double.toString(maxFraction),
             Index.METADATA_FILTERING_STRATEGY,
             metadataStrategy,

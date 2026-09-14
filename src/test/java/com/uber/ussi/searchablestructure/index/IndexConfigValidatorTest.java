@@ -32,6 +32,12 @@ class IndexConfigValidatorTest {
         "unsupported metadata strategy",
         builder -> builder.indexParams(Map.of(Index.METADATA_FILTERING_STRATEGY, "guesswork")),
         false),
+    /*
+     * The structures were renamed after their structure, so the names they were configured with
+     * before no longer resolve and are reported as the typos they now are.
+     */
+    new ValidationCase(
+        "the index type this vocabulary replaced", builder -> builder.indexType("term"), false),
     new ValidationCase(
         "spars merge on the scan structure",
         builder ->
@@ -161,6 +167,35 @@ class IndexConfigValidatorTest {
     }
   }
 
+  @Test
+  void aBlankIndexTypeIsReportedOnlyByTheConfigItself() {
+    List<String> violations = violations(validBuilder().indexType("").build());
+
+    assertEquals(List.of("indexType must be a non-blank string."), violations);
+  }
+
+  /**
+   * A name that resolves to no structure is reported on its own: the rules that pair a structure
+   * with a comparator have no structure to ask about, and the params a structure reads are not
+   * known to be the ones configured.
+   */
+  @Test
+  void anUnsupportedIndexTypeNamesTheSupportedOnes() {
+    NamespaceConfig config =
+        validBuilder()
+            .indexType("term")
+            .indexParams(Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0"))
+            .build();
+
+    List<String> violations = violations(config);
+
+    assertEquals(
+        List.of(
+            "Unsupported indexType (term). Supported values: "
+                + "scan, matrix, inverted_term, inverted_signature, inverted_hybrid."),
+        violations);
+  }
+
   /**
    * The tabular cases only check that something was reported, so pin the reason too: a sequence
    * comparator must be rejected for being unable to merge at all, not for the signature rule that
@@ -215,8 +250,8 @@ class IndexConfigValidatorTest {
 
   /**
    * Every rule this validator has about the comparator needs a comparator to ask. Neither an
-   * unknown name nor params it cannot be built from leaves one to ask, and ComparatorConfigValidator
-   * reports both, so nothing is reported here rather than a consequence of them.
+   * unknown name nor params it cannot be built from leaves one to ask, and the comparator
+   * validator reports both, so nothing is reported here rather than a consequence of them.
    */
   @Test
   void aComparatorThatCannotBeCreatedIsLeftToTheComparatorValidator() {
@@ -244,7 +279,8 @@ class IndexConfigValidatorTest {
             .build();
 
     assertEquals(List.of(), violations(unknownType), "unknown type");
-    assertEquals(List.of(), violations(unbuildableOnMatrixStructure), "unbuildable on the matrix structure");
+    assertEquals(
+        List.of(), violations(unbuildableOnMatrixStructure), "unbuildable on the matrix structure");
     assertEquals(List.of(), violations(unbuildableWithMerge), "unbuildable with merge");
   }
 

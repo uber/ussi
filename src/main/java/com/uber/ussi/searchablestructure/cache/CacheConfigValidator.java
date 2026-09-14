@@ -7,11 +7,14 @@ import com.uber.ussi.config.ConfigViolations;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.config.NamespaceConfigValidator;
 import com.uber.ussi.entity.termsandvalues.RecordType;
+import com.uber.ussi.searchablestructure.cache.CacheFactory.CacheType;
 import com.uber.ussi.utils.Constants;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.stream.Collectors;
 
-/** Reports the cache params that the configured cache type would reject. */
+/** Reports the cache types and cache params that no cache could be built from. */
 public final class CacheConfigValidator implements NamespaceConfigValidator {
   private static final CacheConfigValidator INSTANCE = new CacheConfigValidator();
 
@@ -23,9 +26,12 @@ public final class CacheConfigValidator implements NamespaceConfigValidator {
 
   @Override
   public void collectViolations(NamespaceConfig config, List<String> violations) {
-    String invertedTermCacheType =
-        CacheFactory.CacheType.INVERTED_TERM.name().toLowerCase(Locale.ROOT);
-    if (!invertedTermCacheType.equals(config.getCacheType())) {
+    CacheType cacheType = CacheType.fromParamValue(config.getCacheType());
+    if (cacheType == null) {
+      collectCacheTypeViolations(config, violations);
+      return;
+    }
+    if (cacheType != CacheType.INVERTED_TERM) {
       return;
     }
     /*
@@ -39,7 +45,7 @@ public final class CacheConfigValidator implements NamespaceConfigValidator {
       violations.add(
           String.format(
               "cacheType %s stores %s records, which comparatorType %s cannot read.",
-              invertedTermCacheType,
+              cacheType.getParamValue(),
               RecordType.ORDER_AGNOSTIC_SPARSE.name().toLowerCase(Locale.ROOT),
               config.getComparatorType()));
     }
@@ -63,4 +69,21 @@ public final class CacheConfigValidator implements NamespaceConfigValidator {
         1.0);
   }
 
+  /**
+   * A name that is not one of the cache structures is reported here rather than left to {@link
+   * CacheFactory}, which only refuses it once a namespace is being opened. A blank name is the
+   * config's own structural check and is not repeated.
+   */
+  private static void collectCacheTypeViolations(NamespaceConfig config, List<String> violations) {
+    if (config.getCacheType().isEmpty()) {
+      return;
+    }
+    violations.add(
+        String.format(
+            "Unsupported cacheType (%s). Supported values: %s.",
+            config.getCacheType(),
+            Arrays.stream(CacheType.values())
+                .map(CacheType::getParamValue)
+                .collect(Collectors.joining(", "))));
+  }
 }

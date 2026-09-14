@@ -11,13 +11,17 @@ import com.uber.ussi.config.NamespaceConfigValidator;
 import com.uber.ussi.entity.termsandvalues.RecordType;
 import com.uber.ussi.searchablestructure.metadata.MetadataFilteringStrategy;
 import com.uber.ussi.utils.Constants;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
-/** Reports the index params and index/comparator pairings that the index types would reject. */
+/**
+ * Reports the index types, index params, and index/comparator pairings that no index could be
+ * built from.
+ */
 public final class IndexConfigValidator implements NamespaceConfigValidator {
   private static final IndexConfigValidator INSTANCE = new IndexConfigValidator();
 
@@ -29,11 +33,8 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
 
   @Override
   public void collectViolations(NamespaceConfig config, List<String> violations) {
-    /*
-     * An unrecognized index type is reported by IndexFactory rather than here, so it is treated
-     * as a structure whose params and pairings nothing is known about.
-     */
     IndexType indexType = IndexType.fromParamValue(config.getIndexType());
+    collectIndexTypeViolations(config, indexType, violations);
     ConfigViolations.checkDoubleInRange(
         violations,
         Index.MAX_PRE_FILTERING_ROWS_RATIO,
@@ -55,6 +56,25 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
     RecordType recordType = resolveRecordType(config, indexType, violations);
     collectSignatureSupportViolations(config, indexType, violations);
     collectCandidateGeneratorViolations(config, indexType, recordType, violations);
+  }
+
+  /**
+   * A name that is not one of the structures leaves the rules below it nothing to ask about, so it
+   * is reported here rather than left to {@link IndexFactory}, which only refuses it once rows are
+   * being indexed. A blank name is the config's own structural check and is not repeated.
+   */
+  private static void collectIndexTypeViolations(
+      NamespaceConfig config, @Nullable IndexType indexType, List<String> violations) {
+    if (indexType != null || config.getIndexType().isEmpty()) {
+      return;
+    }
+    violations.add(
+        String.format(
+            "Unsupported indexType (%s). Supported values: %s.",
+            config.getIndexType(),
+            Arrays.stream(IndexType.values())
+                .map(IndexType::getParamValue)
+                .collect(Collectors.joining(", "))));
   }
 
   /**

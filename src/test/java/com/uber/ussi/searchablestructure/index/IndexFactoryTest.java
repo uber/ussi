@@ -45,10 +45,7 @@ class IndexFactoryTest {
     assertInstanceOf(TermIndex.class, index);
   }
 
-  /**
-   * The structure is the same one the sparse comparators get, because a structure names how an
-   * index is keyed and the record type it stores comes from the comparator.
-   */
+  /** A structure names how an index is keyed; the type it stores comes from the comparator. */
   @Test
   void createIndexCreatesTermIndexForSequenceComparators() {
     Index index =
@@ -98,10 +95,7 @@ class IndexFactoryTest {
         () -> IndexFactory.createIndex(config, longObjectMap(), longObjectMap()));
   }
 
-  /**
-   * An index stores the one record type its structure keeps and its comparator reads, so a
-   * comparator reading none of them is a config an index cannot be built from at all.
-   */
+  /** A comparator reading no type the structure keeps leaves no index to build. */
   @Test
   void createIndexRejectsAComparatorThatReadsNothingTheStructureStores() {
     NamespaceConfig config = sequenceConfig().indexType("inverted_signature").build();

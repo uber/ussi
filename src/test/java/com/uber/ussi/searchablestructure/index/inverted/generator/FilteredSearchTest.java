@@ -110,10 +110,7 @@ class FilteredSearchTest {
     assertThrows(NoSuchElementException.class, iterator::next);
   }
 
-  /**
-   * A query key carries the length of the inverted list it was built against, so a list of another
-   * length means the index changed underneath the query rather than that the key is absent.
-   */
+  /** A query key carries its list's length, so another length means the index changed. */
   @Test
   void candidateIteratorRejectsAnInvertedListOfUnexpectedLength() {
     FilteredSearch.CandidateIterator iterator =
@@ -122,14 +119,10 @@ class FilteredSearchTest {
     assertThrows(IllegalStateException.class, iterator::hasNext);
   }
 
-  /**
-   * Raising the threshold mid-traversal can put the prefix cost already spent over the new budget,
-   * which abandons the key being walked rather than finishing rows that can no longer qualify.
-   */
+  /** Raising the threshold mid-traversal can put the spent prefix cost over the new budget. */
   @Test
   void candidateIteratorAbandonsTheCurrentKeyWhenTheTighterThresholdOutlawsItsPrefixCost() {
-    // Every row here shares the query's uni value, so length filtering alone would keep them all
-    // and only the prefix budget can end the traversal early.
+    // Every row shares the query's uni value, so only the prefix budget can end the traversal.
     FilteredSearch.Context context =
         stubContext(
             Map.of(10L, new long[] {1}, 20L, new long[] {5, 6}),
@@ -145,8 +138,8 @@ class FilteredSearchTest {
             1.0,
             0.0);
 
-    // Drains the first key, then takes one row of the second, whose prefix cost is the first's
-    // uni-transformed value. Row 6 is left pending.
+    // Drains the first key, then one row of the second, whose prefix cost is the first's
+    // uni-transformed value; row 6 is left pending.
     assertEquals(List.of(1L, 5L), List.of(iterator.next(), iterator.next()));
 
     iterator.setMinSimilarity(0.9);

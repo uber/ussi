@@ -8,16 +8,12 @@ import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.index.IndexType;
 
 /**
- * Inverted index whose lists are keyed by the terms of the record it indexes, as opposed to by a
- * signature derived from it. Every index in this family keeps inverted lists, so it is the source
- * of the keys that separates them.
+ * Inverted index keyed by the terms of the record itself rather than by a signature derived from
+ * it.
  *
- * <p>The record type decides what those terms are: a sparse record's own terms, keyed with its own
- * values, so that the terms a query and a candidate share determine their similarity exactly; or
- * the distinct elements of a sequence, keyed with how often each occurs, which bound how far apart
- * two sequences can be without saying how far apart they are. Either way the record reaching these
- * methods is the indexed form, so its terms are sorted and distinct and it carries one value per
- * term whatever type the caller supplied; see {@link RecordIndexingStrategy}.
+ * <p>The record type decides what those terms are: a sparse record's own terms and values, whose
+ * conjunction is the similarity exactly; or a sequence's distinct elements and their counts, which
+ * only bound it. See {@link RecordIndexingStrategy}.
  */
 public final class TermIndex extends BaseInvertedIndex {
 
@@ -64,10 +60,8 @@ public final class TermIndex extends BaseInvertedIndex {
 
   /**
    * Returns where {@code term} sits among a record's terms, or a negative number if it is absent.
-   *
-   * <p>This searches the record in place rather than through {@code getTerms}, which hands out a
-   * copy of the whole term array. Callers ask for one key at a time while walking every key a
-   * record has, so copying per call would make a single record's traversal quadratic in its length.
+   * Searching in place rather than through {@code getTerms}, which copies the whole term array,
+   * keeps a full traversal of a record's keys from being quadratic in its length.
    */
   private static int indexOfTerm(LongTermsAndValues indexedRecord, long term) {
     int low = 0;

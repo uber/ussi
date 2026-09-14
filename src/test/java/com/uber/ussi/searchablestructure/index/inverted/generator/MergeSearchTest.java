@@ -70,10 +70,7 @@ class MergeSearchTest {
     assertEquals(List.of(1L), rowNums(results));
   }
 
-  /**
-   * A row deleted between candidate generation and verification has nothing left to score, so it
-   * drops out rather than being reported at whatever similarity its absence would imply.
-   */
+  /** A row deleted between generation and verification has nothing to score, so it drops out. */
   @Test
   void searchDropsACandidateThatTheVerificationLookupNoLongerHas() {
     LongTermsAndValues query = jaccard(new long[] {10}, 1);

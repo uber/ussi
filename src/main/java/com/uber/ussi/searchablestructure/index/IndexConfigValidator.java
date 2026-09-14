@@ -58,11 +58,7 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
     collectCandidateGeneratorViolations(config, indexType, recordType, violations);
   }
 
-  /**
-   * A name that is not one of the structures leaves the rules below it nothing to ask about, so it
-   * is reported here rather than left to {@link IndexFactory}, which only refuses it once rows are
-   * being indexed. A blank name is the config's own structural check and is not repeated.
-   */
+  /** An indexType that is non-blank and names no structure is invalid. */
   private static void collectIndexTypeViolations(
       NamespaceConfig config, @Nullable IndexType indexType, List<String> violations) {
     if (indexType != null || config.getIndexType().isEmpty()) {
@@ -77,12 +73,7 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
                 .collect(Collectors.joining(", "))));
   }
 
-  /**
-   * The signature-keyed structures key their lists by something the comparator has to produce, so
-   * a comparator that generates no signatures leaves them nothing to build an index from. The
-   * index constructors refuse such a pairing too, but only once rows are being indexed, which is
-   * later than a config can be checked.
-   */
+  /** A signature-keyed structure is invalid with a comparator that generates no signatures. */
   private static void collectSignatureSupportViolations(
       NamespaceConfig config, IndexType indexType, List<String> violations) {
     if (!indexType.requiresSignatureSupport()) {
@@ -96,10 +87,7 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
         && signatureComparator.supportsSignatures()) {
       return;
     }
-    /*
-     * Whether the comparator could generate signatures at all is the difference between a config
-     * that is missing a param and one that has to change structure or comparator.
-     */
+    // A comparator that generates no signatures needs a different structure, not another param.
     if (ComparatorFactory.getSupportedSignatureGeneratorTypes(config.getComparatorType())
         .isEmpty()) {
       violations.add(
@@ -132,14 +120,9 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
 
   /**
    * Returns the record type an index configured this way stores, reporting a violation and
-   * returning null when the structure and the comparator have no record type in common.
-   *
-   * <p>A structure stores a set of record types and a comparator reads a set of them, so the two
-   * can only be paired on a type they share. This is what keeps a sequence comparator off the
-   * structures whose keys are derived from a record rather than taken from it, and equally what
-   * keeps the term-based comparators off the matrix structure. It leaves one type wherever the
-   * choice matters: the scan structure is the only one storing more than one type a comparator
-   * reads, and it scans and scores through the comparator without reading a record's layout at all.
+   * returning null when the structure and the comparator share no record type. The type is left
+   * unresolved only for the scan structure, which scores through the comparator and never reads a
+   * record's layout.
    */
   @Nullable
   private static RecordType resolveRecordType(
@@ -163,11 +146,9 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
   }
 
   /**
-   * The merge generator walks whole inverted lists, so it needs a structure that keeps them
-   * uni-sorted and a comparator that can score a row from the keys it shares with the query, which
-   * rules out the order-sensitive sequence comparators entirely. Where the keys do not determine a
-   * candidate's similarity it also has to verify candidates through the comparator's signatures,
-   * which rules out L2 because it has none that preserve similarity.
+   * The merge generator needs uni-sorted inverted lists and a comparator that can score a row from
+   * the keys it shares with the query. Where those keys only bound similarity it also needs
+   * similarity-preserving signatures to verify candidates with.
    */
   private static void collectCandidateGeneratorViolations(
       NamespaceConfig config,
@@ -193,10 +174,7 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
       return;
     }
     if (!ComparatorFactory.isSupportedComparatorType(config.getComparatorType())) {
-      /*
-       * Every rule below asks what a named comparator supports, which has no answer when the name
-       * is not one of them. ComparatorConfigValidator reports the name instead.
-       */
+      // The rules below need a known comparator; ComparatorConfigValidator reports the name.
       return;
     }
     Comparator comparator = ComparatorFactory.tryCreateComparator(config);

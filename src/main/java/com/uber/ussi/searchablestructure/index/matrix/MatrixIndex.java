@@ -53,10 +53,7 @@ public final class MatrixIndex extends Index {
     this.rowNumToMatrixRowIndex = matrixData.rowNumToMatrixRowIndex;
     this.dotProductScorer =
         MatrixDotProductScorers.create(rowMajorValues, rowNums.length, dimension);
-    /*
-     * Dense matrix scoring cannot push arbitrary metadata filters into the bulk scorer. AUTO tries
-     * selective pre-filtering first and otherwise falls back to post-filtering.
-     */
+    // Dense bulk scoring cannot push metadata filters down, so AUTO pre-filters or post-filters.
     this.metadataFilteredSearchExecutor =
         new MetadataFilteredSearchExecutor(
             metadataFilteringStrategy,
@@ -152,10 +149,7 @@ public final class MatrixIndex extends Index {
       float minSimilarity,
       int maxResults) {
     if (metadataFilter == null) {
-      /*
-       * No metadata filter is present, so every row can be scored with one bulk matrix-vector
-       * multiply.
-       */
+      // Unfiltered, so every row is scored with one bulk matrix-vector multiply.
       return searchAllMatrixRowsWithDotProductScorer(
           queryValues, querySquaredNorm, minSimilarity, maxResults);
     }
@@ -241,10 +235,7 @@ public final class MatrixIndex extends Index {
 
   private float computeL2SimilarityFromDotProduct(
       double querySquaredNorm, int matrixRowIndex, double dotProduct) {
-    /*
-     * Compute ||query - row||^2 from precomputed row norms and the dot product. The clamp absorbs
-     * small negative values from floating-point round-off.
-     */
+    // The clamp absorbs the small negative ||query - row||^2 that round-off can produce.
     double squaredDistance =
         Math.max(0.0d, querySquaredNorm + rowSquaredNorms[matrixRowIndex] - 2.0d * dotProduct);
     double distance = Math.sqrt(squaredDistance);

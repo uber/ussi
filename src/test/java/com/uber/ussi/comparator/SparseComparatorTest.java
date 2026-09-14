@@ -243,10 +243,7 @@ class SparseComparatorTest {
         () -> comparator.getMinPrefixSumForTermsAndValuesInternal(1.0, -0.1));
   }
 
-  /**
-   * Two records that between them carry no magnitude have an empty union, which no ratio is
-   * defined over. They differ in nothing, so they are reported as identical.
-   */
+  /** No magnitude means an empty union, which no ratio is defined over, so they are identical. */
   @Test
   void twoRecordsWithNothingToUnionAreIdentical() {
     BaseRuzickaComparator comparator = (BaseRuzickaComparator) comparator("ruzicka");

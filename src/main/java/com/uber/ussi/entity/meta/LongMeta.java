@@ -11,11 +11,9 @@ import javax.validation.constraints.NotNull;
 import lombok.Getter;
 
 /**
- * Internal metadata representation backed by hashed {@code (metadataKey, filterKey)} pairs.
- *
- * <p>The summed pair hashes form a compact dictionary key for identical metadata objects. The
- * metadata filtering module still verifies equality after lookup, so hash collisions are detected
- * rather than treated as equivalent metadata.
+ * Internal metadata representation backed by hashed {@code (metadataKey, filterKey)} pairs. The
+ * summed pair hashes form a dictionary key, which can collide, so callers must still verify
+ * equality after a lookup.
  */
 @Getter
 public class LongMeta {

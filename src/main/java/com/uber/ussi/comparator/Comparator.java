@@ -26,18 +26,14 @@ public abstract class Comparator implements Serializable {
   }
 
   /**
-   * Returns the comparison value of the two records. If their similarity is below minSimilarity,
-   * the returned value only has to correspond to a similarity below that threshold and need not be
-   * the exact comparison value. This allows implementations to stop before scanning all values.
+   * Returns the comparison value of the two records. Below minSimilarity the value only has to
+   * correspond to a similarity below that threshold, so implementations may stop scanning early.
    */
   protected abstract double compareInternal(
       LongTermsAndValues termsAndValues1, LongTermsAndValues termsAndValues2, double minSimilarity)
       throws ArraysSizeMismatchError;
 
-  /**
-   * Returns the comparison value of the two records. Values below minSimilarity are normalized to
-   * the comparator value representing zero similarity.
-   */
+  /** Values below minSimilarity are collapsed to the comparator value for zero similarity. */
   final double compare(
       LongTermsAndValues termsAndValues1, LongTermsAndValues termsAndValues2, double minSimilarity)
       throws ArraysSizeMismatchError, IllegalArgumentException, NullPointerException {
@@ -75,7 +71,7 @@ public abstract class Comparator implements Serializable {
 
   /**
    * Returns the unilateral value of a record's canonical arrays. Comparators whose records carry
-   * no values, such as the sequence comparators, derive it from the terms instead.
+   * no values derive it from the terms instead.
    */
   public double computeUniValue(long[] terms, float[] values) {
     return computeUniValue(values);
@@ -100,14 +96,9 @@ public abstract class Comparator implements Serializable {
   }
 
   /**
-   * Assuming all the terms are sorted by "some" order, and the uniTransformation is applied to all
-   * values, and the partial sums are computed on the uniTransformed-values based on the term order,
-   * returns the partial sum of the term, below which all terms can generate candidates, and after
-   * any candidate generated cannot be similar to the search TermsAndValues. The larger the
-   * minSimilarity the smaller the minPrefixSum. For instance, if the similarity is 1.0, then only
-   * one term can generate candidates, since all the terms in the TermsAndValues (and their values)
-   * have to match. In that case, the term that generates the least candidates should be the one
-   * used to generate candidates.
+   * Returns the prefix sum, over the uniTransformed values in term order, below which terms can
+   * generate candidates; past it no candidate generated can be similar enough. A larger
+   * minSimilarity gives a smaller prefix sum, down to a single term at 1.0.
    */
   public final double getMinPrefixSumForTermsAndValues(double uniValue, double minSimilarity) {
     if (uniValue == Constants.UNSET_UNI_VALUE || uniValue < 0.0) {
@@ -131,8 +122,8 @@ public abstract class Comparator implements Serializable {
 
   /**
    * Returns whether a query may reach {@code minSimilarity} with a record whose number of terms is
-   * in the inclusive range [{@code minNumTerms}, {@code maxNumTerms}]. Comparators without a sound
-   * term-count bound conservatively return {@code true}.
+   * in [{@code minNumTerms}, {@code maxNumTerms}]. Comparators without a sound term-count bound
+   * return {@code true}.
    */
   public final boolean mayPassNumTermsFiltering(
       LongTermsAndValues query, int minNumTerms, int maxNumTerms, double minSimilarity) {
@@ -154,32 +145,23 @@ public abstract class Comparator implements Serializable {
   }
 
   /**
-   * Returns every {@link RecordType} this comparator can read, which is what decides the
-   * searchable structures it can be paired with. There is no default: a comparator is defined as
-   * much by the layout it reads as by the similarity it computes, so each one states its own set
-   * rather than inheriting one record type as the norm and overriding for the rest.
-   *
-   * <p>A comparator may read more than one record type, and so may a structure store more than
-   * one. An index holds the type both sets contain, which makes a pairing whose sets are disjoint
-   * a config violation rather than a silent choice; see {@code IndexType.resolveRecordTypes}.
+   * Returns every {@link RecordType} this comparator can read, which decides the searchable
+   * structures it can be paired with. An index holds a type that both the comparator and the
+   * structure support, so a pairing whose sets are disjoint is a config violation; see
+   * {@code IndexType.resolveRecordTypes}.
    */
   public abstract Set<RecordType> getSupportedRecordTypes();
 
   /*
-   * Merge candidate generation accumulates a conjunction: the part of the similarity that the query
-   * and an indexed row derive from the keys they share. What that means is up to each
-   * comparator. For Jaccard and Ruzicka the conjunction is the intersection of the two rows, and
-   * for L2 it is the squared distance over the shared keys. Comparators that leave these
-   * unimplemented cannot be paired with the merge generator.
+   * Merge candidate generation accumulates a conjunction: the part of the similarity the query and
+   * an indexed row derive from the keys they share. It is the intersection of the two rows for
+   * Jaccard and Ruzicka, and the squared distance over the shared keys for L2.
    */
 
   /**
    * Returns whether this comparator can generate candidates by merging inverted lists, which is
-   * exactly whether it implements the conjunction methods below.
-   *
-   * <p>Comparators that cannot must say so here rather than relying on those methods throwing, so
-   * that a config pairing one with the merge generator is rejected up front instead of failing
-   * partway through a search.
+   * exactly whether it implements the conjunction methods below. A comparator that cannot must say
+   * so here, so that the config is rejected up front rather than failing partway through a search.
    */
   public boolean supportsMergeCandidateGeneration() {
     return false;

@@ -47,8 +47,8 @@ public final class SignatureIndex extends BaseInvertedIndex {
   }
 
   /**
-   * Returns the record's distinct signatures. A record's signatures routinely collide with each
-   * other, so unlike terms they have to be deduplicated before they can serve as keys.
+   * Returns the record's distinct signatures. One record's signatures routinely collide, so unlike
+   * terms they must be deduplicated before serving as keys.
    */
   @Override
   protected long[] getKeys(LongTermsAndValues indexedRecord) {

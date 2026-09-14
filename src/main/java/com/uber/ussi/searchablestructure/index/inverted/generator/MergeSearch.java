@@ -16,28 +16,20 @@ import javax.annotation.Nullable;
 /**
  * Row-major merge candidate generation over uni-sorted inverted lists.
  *
- * <p>One frontier spans the query's keys and advances them in step, so every inverted-list
- * entry of a candidate row arrives together. That lets the merge accumulate a row's conjunction as
- * it goes and abandon the row as soon as no completion of it can reach minSimilarity.
+ * <p>One frontier spans the query's keys and advances them in step, so a candidate row's entries
+ * all arrive together. The merge accumulates the row's conjunction as it goes and abandons the row
+ * once no completion of it can reach minSimilarity.
  *
- * <p>Public only so that the inverted indexes in the sibling packages can reach it. Nothing outside
- * this library's inverted implementation should depend on it.
+ * <p>Public only for the sibling inverted index packages.
  */
 public final class MergeSearch {
   private MergeSearch() {}
 
   /**
-   * Generates and scores candidates for {@code query}.
-   *
-   * <p>When {@code scoresFromConjunction} is set, the accumulated conjunction is the row's exact
-   * score and {@code verificationRowLookup} is never consulted. The approximate index types key
-   * their lists by signature rather than by term, so they verify each candidate through the
-   * comparator.
-   *
-   * @param query the query in verification form, which is the only form the comparator can score.
-   * @param indexedQuery the query in indexed form, which is the form the rows behind {@code
-   *     context}'s uni values are in. Length filtering compares the two uni values, so it has to
-   *     read the query's from the same form, not from {@code query}.
+   * Generates and scores candidates for {@code query}. When {@code scoresFromConjunction} is set,
+   * the accumulated conjunction is the row's exact score and {@code verificationRowLookup} is never
+   * consulted. Length filtering reads the query's uni value from {@code indexedQuery}, the form the
+   * indexed rows are in.
    */
   public static List<RowNumAndSimilarity> search(
       Comparator comparator,
@@ -116,12 +108,10 @@ public final class MergeSearch {
   }
 
   /**
-   * Consumes every frontier head that sits on {@code rowNum}, adding each shared key to
-   * {@code conjunction} and recording the key indexes it advanced. Returns false once no completion
-   * of the row can reach {@code minSimilarity}, having still consumed the row's whole group.
-   *
-   * <p>A null {@code unscannedKeysUniValue} means the caller scores through the comparator instead,
-   * so neither the conjunction nor its bound is worth computing.
+   * Consumes every frontier head that sits on {@code rowNum}, adding each shared key to {@code
+   * conjunction}. Returns false once no completion of the row can reach {@code minSimilarity},
+   * having still consumed the row's whole group. A null {@code unscannedKeysUniValue} means the
+   * caller scores through the comparator, so no conjunction is computed.
    */
   private static boolean mergeRow(
       Comparator comparator,
@@ -258,9 +248,8 @@ public final class MergeSearch {
    * The merge frontier: one head per query key, ordered so that a candidate row's heads arrive
    * together and a key's own entries arrive in inverted-list order.
    *
-   * <p>Because a key contributes at most one head at a time, each key owns a single reusable head
-   * rather than one per inverted-list entry. A head is only ever mutated while it sits outside the
-   * queue, between {@link #pollAndAdvanceIndexInList()} and the matching {@link #pushHead(int)}.
+   * <p>Each key owns one reusable head, mutated only while it sits outside the queue, between
+   * {@link #pollAndAdvanceIndexInList()} and the matching {@link #pushHead(int)}.
    */
   private static final class Frontier {
     private final QueryKey[] queryKeys;
@@ -289,7 +278,6 @@ public final class MergeSearch {
       return queue.peek();
     }
 
-    /** Returns true if the next head still belongs to {@code rowNum}. */
     private boolean isOnRow(long rowNum) {
       FrontierHead head = queue.peek();
       return head != null && head.rowNum == rowNum;

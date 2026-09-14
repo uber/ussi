@@ -14,10 +14,8 @@ import javax.validation.constraints.NotNull;
 import lombok.Getter;
 
 /**
- * Public metadata filter representation.
- *
- * <p>Values for the same metadata key are ORed together; different metadata keys are ANDed. Keys
- * and values are lowercased and matched exactly after encoding to longs.
+ * Public metadata filter representation. Values for the same key are ORed, different keys are
+ * ANDed, and keys and values are lowercased and matched exactly after encoding to longs.
  */
 @Getter
 public class MetaFilter {

@@ -32,12 +32,8 @@ class IndexConfigValidatorTest {
         "unsupported metadata strategy",
         builder -> builder.indexParams(Map.of(Index.METADATA_FILTERING_STRATEGY, "guesswork")),
         false),
-    /*
-     * The structures were renamed after their structure, so the names they were configured with
-     * before no longer resolve and are reported as the typos they now are.
-     */
     new ValidationCase(
-        "the index type this vocabulary replaced", builder -> builder.indexType("term"), false),
+        "an index type that names no structure", builder -> builder.indexType("term"), false),
     new ValidationCase(
         "spars merge on the scan structure",
         builder ->
@@ -61,11 +57,7 @@ class IndexConfigValidatorTest {
                 .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.L2))
                 .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, sparsMerge())),
         true),
-    /*
-     * The sequence comparators score a pair by running a dynamic program over the ordered
-     * sequences, which the shared keys only bound, so merge is unsupported on every structure
-     * rather than only on the ones that verify candidates through signatures.
-     */
+    // Sequence comparators need the ordered sequence, not just shared keys, so merge never applies.
     new ValidationCase(
         "spars merge with ngld on the term structure",
         builder ->
@@ -91,12 +83,8 @@ class IndexConfigValidatorTest {
                 .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.RUZICKA))
                 .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, sparsMerge())),
         true),
-    /*
-     * A sequence has no values and its terms are neither sorted nor distinct, so the structures
-     * that can hold one are the term-keyed structure, which keys the element multiset instead, and
-     * the scan structure, which never reads a record's terms itself. The signature structures
-     * cannot, because a signature generator reads a record as a set of terms and values.
-     */
+    // A sequence has no values, so only the term structure, which keys the element multiset, and
+    // the scan structure, which never reads terms, can hold one.
     new ValidationCase(
         "ngld on the term structure",
         builder ->
@@ -175,9 +163,8 @@ class IndexConfigValidatorTest {
   }
 
   /**
-   * A name that resolves to no structure is reported on its own: the rules that pair a structure
-   * with a comparator have no structure to ask about, and the params a structure reads are not
-   * known to be the ones configured.
+   * An unresolvable index type is reported alone: the pairing and param rules have no structure to
+   * ask about.
    */
   @Test
   void anUnsupportedIndexTypeNamesTheSupportedOnes() {
@@ -196,11 +183,7 @@ class IndexConfigValidatorTest {
         violations);
   }
 
-  /**
-   * The tabular cases only check that something was reported, so pin the reason too: a sequence
-   * comparator must be rejected for being unable to merge at all, not for the signature rule that
-   * applies only to the approximate structures.
-   */
+  /** Pins the reason: merge is rejected for the sequence comparator, not for the signature rule. */
   @Test
   void mergeWithASequenceComparatorIsRejectedForBeingUnsupported() {
     NamespaceConfig config =
@@ -231,10 +214,7 @@ class IndexConfigValidatorTest {
         IllegalArgumentException.class, () -> config.validate(IndexConfigValidator.getInstance()));
   }
 
-  /**
-   * An unparseable generator is reported by the config's own structural checks, so this validator
-   * skips the rules that would need to know which generator was asked for.
-   */
+  /** The config's own structural checks report it, so the generator-dependent rules are skipped. */
   @Test
   void anUnparseableCandidateGeneratorIsLeftToTheStructuralChecks() {
     NamespaceConfig config =
@@ -249,9 +229,8 @@ class IndexConfigValidatorTest {
   }
 
   /**
-   * Every rule this validator has about the comparator needs a comparator to ask. Neither an
-   * unknown name nor params it cannot be built from leaves one to ask, and the comparator
-   * validator reports both, so nothing is reported here rather than a consequence of them.
+   * Every comparator rule here needs a comparator to ask, and the comparator validator already
+   * reports both an unknown name and unbuildable params.
    */
   @Test
   void aComparatorThatCannotBeCreatedIsLeftToTheComparatorValidator() {
@@ -261,10 +240,7 @@ class IndexConfigValidatorTest {
             .comparatorType("cosine")
             .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, sparsMerge()))
             .build();
-    /*
-     * Dense records and merging are both things jaccard would be reported for, so this pins that
-     * the unbuildable params, not the pairing, are what the violation list is left pointed at.
-     */
+    // Jaccard would be reported for dense records and for merging, so this pins the params.
     Map<String, String> unbuildableParams = Map.of(Constants.SIGNATURE_GENERATOR_TYPE, "superhash");
     NamespaceConfig unbuildableOnMatrixStructure =
         validBuilder()

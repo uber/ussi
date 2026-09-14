@@ -10,10 +10,8 @@ import java.util.Objects;
 import java.util.TreeMap;
 
 /**
- * Internal USSI record representation used after ingestion.
- *
- * <p>The public record uses String terms. Internally, terms are encoded as primitive longs to
- * reduce memory overhead and speed up comparisons.
+ * Internal USSI record representation used after ingestion. Terms are encoded as primitive longs
+ * rather than the public record's Strings, to cut memory and speed up comparisons.
  */
 public final class LongTermsAndValues {
   private static final long[] EMPTY_TERMS = new long[0];
@@ -32,9 +30,6 @@ public final class LongTermsAndValues {
     validateTermsAndValuesLength(this.terms, this.values);
   }
 
-  /**
-   * Encodes and canonicalizes a public record, then materializes its comparator-specific uniValue.
-   */
   public static LongTermsAndValues from(
       TermsAndValues termsAndValues, TermEncoder termEncoder, Comparator comparator) {
     Objects.requireNonNull(termsAndValues, "termsAndValues is null.");
@@ -78,9 +73,8 @@ public final class LongTermsAndValues {
   }
 
   /**
-   * Returns whether this record and the other record share at least one term. Terms are sorted and
-   * distinct within a record, so the intersection check is a single linear merge. Records without
-   * terms (dense records) never share a term.
+   * Terms are sorted and distinct within a record, so this is a single linear merge. Dense records
+   * carry no terms and so never share one.
    */
   public boolean sharesAnyTerm(LongTermsAndValues other) {
     Objects.requireNonNull(other, "other is null.");
@@ -135,14 +129,10 @@ public final class LongTermsAndValues {
   }
 
   /**
-   * Returns the multiset of this sequence's elements as an ordinary sparse record, whose terms are
-   * the distinct elements in ascending order and whose values are how many times each occurs.
-   *
-   * <p>Candidate generation for an order-sensitive distance runs over this form rather than over
-   * the sequence itself: it has the sorted, distinct, value-carrying layout the inverted-index
-   * machinery requires, and two sequences within a given edit distance have element multisets
-   * within a bounded L1 distance of each other. The counts sum to the sequence length, so the
-   * multiset reports the same Uni value as the sequence it came from.
+   * Returns this sequence's element multiset as a sparse record: distinct elements ascending,
+   * values are occurrence counts. Candidate generation for an order-sensitive distance runs over
+   * this form because two sequences within a given edit distance have multisets within a bounded
+   * L1 distance, and the counts sum to the sequence length so the Uni value is unchanged.
    */
   public LongTermsAndValues toElementMultiset(Comparator comparator) {
     Objects.requireNonNull(comparator, "comparator is null.");
@@ -152,11 +142,7 @@ public final class LongTermsAndValues {
               "Only a record without values is a sequence, got terms=%s values=%s.",
               Arrays.toString(terms), Arrays.toString(values)));
     }
-    /*
-     * Sorting a copy and then counting equal runs keeps this on primitives. A sorted map would read
-     * more directly but would box every element of the sequence, and the long sequences that most
-     * need the multiset to filter for them are exactly the ones that would pay the most for it.
-     */
+    // Sorting a copy and counting equal runs avoids boxing every element in a sorted map.
     long[] sortedElements = terms.clone();
     Arrays.sort(sortedElements);
     int numDistinctElements = 0;
@@ -183,11 +169,8 @@ public final class LongTermsAndValues {
       LongTermsAndValues termsAndValues1, LongTermsAndValues termsAndValues2) {
     Objects.requireNonNull(termsAndValues1, "termsAndValues1 is null.");
     Objects.requireNonNull(termsAndValues2, "termsAndValues2 is null.");
-    /*
-     * A sequence carries its elements, in order and with repeats, in terms and has no values.
-     * Sequences align against each other by the comparator walking both term arrays, so they need
-     * no length agreement, but they cannot be aligned against a record that does carry values.
-     */
+    // A sequence carries its elements in terms and no values, so two sequences need no length
+    // agreement, but a sequence cannot be aligned against a record that carries values.
     boolean isSequence1 = termsAndValues1.valuesLength() == 0;
     boolean isSequence2 = termsAndValues2.valuesLength() == 0;
     if (isSequence1 != isSequence2) {
@@ -324,7 +307,6 @@ public final class LongTermsAndValues {
     }
   }
 
-  /** Converts public string terms into internal primitive long terms. */
   public interface TermEncoder {
     long encode(String term);
   }

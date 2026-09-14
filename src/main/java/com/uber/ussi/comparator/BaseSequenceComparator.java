@@ -12,22 +12,17 @@ import java.util.Set;
 
 /**
  * Shared implementation for the comparators reporting an edit distance, with length and prefix
- * filtering. Subclasses differ only in how they report that distance, as a raw edit count for
- * {@link GldComparator} or a length-normalized fraction for {@link NgldComparator}, and compose the
- * {@link SequenceDistance} deciding which edits it counts.
+ * filtering. Subclasses report it as a raw edit count ({@link GldComparator}) or a
+ * length-normalized fraction ({@link NgldComparator}), over the {@link SequenceDistance} they
+ * compose.
  *
- * <p>Sequences are held differently from the other comparators' records. A sequence carries its
- * elements, in order and with repeats, in the record's terms and has no values, so {@code terms} is
- * the sequence and the record's Uni value is its length. Candidate generation instead indexes the
- * multiset of those elements as an ordinary sparse record, whose terms are the distinct elements
- * and whose values are their counts; that form sums to the same length, so both agree on the Uni
+ * <p>A sequence record carries its elements, in order and with repeats, in its terms and has no
+ * values, so its Uni value is its length. Candidate generation instead indexes the element
+ * multiset as a sparse record whose counts sum to that same length, so both forms agree on the Uni
  * value.
  *
- * <p>These comparators cannot generate candidates by merging, and leave {@link
- * Comparator#conjunctionContribution} and its companions unimplemented. Merging scores a row from
- * the elements it shares with the query, which for an order-sensitive distance bounds the
- * similarity but does not determine it, since the dynamic program still has to run over the
- * ordered sequences. Sequence searches generate candidates and then verify them.
+ * <p>Merging cannot generate candidates here: the shared elements bound an order-sensitive
+ * distance without determining it, so these searches generate candidates and then verify them.
  */
 abstract class BaseSequenceComparator extends Comparator {
 
@@ -45,16 +40,15 @@ abstract class BaseSequenceComparator extends Comparator {
 
   /**
    * Returns the largest raw distance whose comparator value still clears {@code comparatorValue},
-   * for a pair of sequences of the given lengths. A negative budget means no distance can.
+   * for sequences of the given lengths. A negative result means no distance can.
    */
   protected abstract long getMaxDistance(double comparatorValue, int length1, int length2);
 
-  /** Returns the comparator value of a raw distance between sequences of the given lengths. */
   protected abstract double getComparatorValue(long distance, int length1, int length2);
 
   /**
    * Returns a comparator value standing in for a distance that overran {@code comparatorValue}. It
-   * only has to be worse than the budget it overran, since the caller is about to discard it.
+   * only has to be worse than that budget, since the caller is about to discard it.
    */
   protected abstract double getExceededComparatorValue(double comparatorValue);
 
@@ -73,10 +67,7 @@ abstract class BaseSequenceComparator extends Comparator {
         : getComparatorValue(distance, length1, length2);
   }
 
-  /**
-   * An indexed multiset's value is how many times that element occurs, and those counts sum to the
-   * sequence length, so each contributes itself to the record's Uni value.
-   */
+  /** An element's value is its occurrence count, so it contributes itself to the Uni value. */
   @Override
   public final double getUniTransformedValue(float value) {
     if (value < 0.0f) {
@@ -92,11 +83,7 @@ abstract class BaseSequenceComparator extends Comparator {
     return Set.of(RecordType.SEQUENCE);
   }
 
-  /*
-   * A sequence's Uni value is its length. Both forms report it: the ordered sequence keeps its
-   * elements in terms and has no counts to sum, and the element multiset's counts sum to that same
-   * length, so the parent's sum over the values already gives it.
-   */
+  // A sequence's Uni value is its length, whether taken from its terms or its multiset counts.
 
   @Override
   public final double computeUniValue(long[] terms, float[] values) {
@@ -111,9 +98,8 @@ abstract class BaseSequenceComparator extends Comparator {
   }
 
   /**
-   * An edit either inserts, deletes, or rewrites one element, so it changes a sequence's length by
-   * at most one. Two sequences whose lengths differ by more than the distance budget are therefore
-   * too far apart whatever their contents.
+   * An edit changes a sequence's length by at most one, so two sequences whose lengths differ by
+   * more than the distance budget are too far apart whatever their contents.
    */
   @Override
   public final boolean mayPassLengthFiltering(
@@ -125,9 +111,8 @@ abstract class BaseSequenceComparator extends Comparator {
   }
 
   /**
-   * Returns the sequence length a Uni value represents. Lengths are whole numbers that round-trip
-   * exactly through a double at any length a sequence can reach, so the rounding only undoes the
-   * widening.
+   * Lengths are whole numbers that round-trip exactly through a double at any length a sequence
+   * can reach, so the rounding only undoes the widening.
    */
   private static int toLength(double uniValue) {
     return (int) Math.round(uniValue);

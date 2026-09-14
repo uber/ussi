@@ -2,11 +2,8 @@
 package com.uber.ussi.utils;
 
 /**
- * Constants shared across layers.
- *
- * <p>Param keys live here when more than one layer reads them, or when {@link
- * com.uber.ussi.config.NamespaceConfig} itself reads them. Keys owned by a single layer stay on
- * that layer, such as {@code Index.MAX_PRE_FILTERING_ROWS_RATIO}.
+ * Constants shared across layers. A param key lives here when more than one layer reads it; keys
+ * owned by a single layer stay on that layer, such as {@code Index.MAX_PRE_FILTERING_ROWS_RATIO}.
  */
 public final class Constants {
   public static final double UNSET_UNI_VALUE = -Double.MAX_VALUE;

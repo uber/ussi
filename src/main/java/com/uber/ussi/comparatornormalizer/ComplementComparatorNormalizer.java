@@ -4,11 +4,8 @@ package com.uber.ussi.comparatornormalizer;
 import com.uber.ussi.error.SearchResponseError;
 
 /**
- * Maps a distance that is already normalized to [0.0, 1.0] onto its complementary similarity.
- *
- * <p>This is the normalizer for comparators whose value is a normalized distance, such as the
- * normalized generalized Levenshtein distance, where a distance of 0.0 means identical and 1.0
- * means maximally different.
+ * Maps a distance already normalized to [0.0, 1.0] onto its complementary similarity. It is the
+ * normalizer for comparators whose value is a normalized distance, such as NGLD.
  */
 public class ComplementComparatorNormalizer implements ComparatorNormalizer {
 

@@ -86,11 +86,7 @@ class InvertedTermCacheTest {
 
   @Test
   void popularTermsAreFilteredOnTheFlyAndReadmittedAsTheCacheChanges() {
-    /*
-     * A 0.5 confidence degenerates the upper confidence bound to the observed popularity, making
-     * the on-the-fly filtering deterministic: term 1 is filtered exactly when it occurs in more
-     * than half of the cached rows.
-     */
+    // A 0.5 confidence makes the bound the observed popularity: term 1 is filtered above half.
     InvertedTermCache cache =
         new InvertedTermCache(
             config(
@@ -146,19 +142,13 @@ class InvertedTermCacheTest {
     List<RowNumAndSimilarity> defaultScopeResult =
         defaultScopeCache.getNearestNeighborRowNums(2, query, MetaFilter.empty());
 
-    /*
-     * Both scopes reach the same row, because both generate candidates from the query without its
-     * popular term. They disagree on what the row is worth: as supplied it shares two terms out of
-     * three with the query, and without term 1 it shares one out of two.
-     */
+    // Both scopes reach the same row but disagree on its worth: two terms of three as supplied,
+    // one of two without term 1.
     assertEquals(1, candidatesOnlyResult.size(), candidatesOnlyResult.toString());
     assertEquals(2.0f / 3.0f, candidatesOnlyResult.get(0).getSimilarity(), DELTA);
     assertEquals(1, defaultScopeResult.size(), defaultScopeResult.toString());
     assertEquals(0.5f, defaultScopeResult.get(0).getSimilarity(), DELTA);
-    /*
-     * Neither scope reaches a row through a popular term, so a query made only of one still
-     * matches nothing. This is the recall candidatesOnly trades for the exact scores above.
-     */
+    // Neither scope reaches a row through a popular term, so such a query matches nothing.
     assertTrue(
         candidatesOnlyCache
             .getNearestNeighborRowNums(2, jaccard(new long[] {1}, 1), MetaFilter.empty())
@@ -279,12 +269,8 @@ class InvertedTermCacheTest {
 
   @Test
   void smallSamplesErrTowardFilteringWithTheDefaultConfidence() {
-    /*
-     * Term 1 is observed in half the rows, below the 0.7 max fraction. With only 4 rows, the 95%
-     * upper confidence bound of its popularity (0.91) exceeds the max fraction, so the term is
-     * filtered as possibly popular. With 40 rows, the bound tightens to 0.63 and the term is
-     * confidently readmitted.
-     */
+    // Term 1 is in half the rows, below the 0.7 cap, but at 4 rows the 95% upper bound (0.91)
+    // exceeds it; at 40 rows the bound tightens to 0.63 and the term is readmitted.
     InvertedTermCache cache =
         new InvertedTermCache(
             config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0.7")));
@@ -317,10 +303,8 @@ class InvertedTermCacheTest {
     List<RowNumAndSimilarity> result =
         cache.getNearestNeighborRowNums(5, jaccard(new long[] {1, 2}, 1, 1), la);
 
-    /*
-     * The two rows matching the filter are under the 1% brute-force limit of the 200-row cache. The
-     * row sharing no term with the query is omitted on this path as well.
-     */
+    // The two matching rows are under the 1% brute-force limit of the 200-row cache, and the row
+    // sharing no term is still omitted.
     assertTrue(cache.getLastSearchUsedPreFilteringBruteForceForTests());
     assertEquals(List.of(sharing), rowNumsNearestFirst(result));
     assertEquals(1.0f, result.get(0).getSimilarity(), DELTA);
@@ -494,10 +478,7 @@ class InvertedTermCacheTest {
         int k = 1 + random.nextInt(10);
         float minSimilarity = new float[] {0.0f, 0.2f, 0.5f, 0.8f}[random.nextInt(4)];
 
-        /*
-         * The scan cache scores every row, so its results are restricted to the rows sharing a
-         * term with the query before comparing them against the inverted term cache results.
-         */
+        // The scan cache scores every row, so restrict its results to rows sharing a term.
         assertEquivalent(
             comparatorType + " nearest queryIndex=" + queryIndex + " k=" + k + " query=" + query,
             restrictToRowsSharingATerm(
@@ -524,11 +505,7 @@ class InvertedTermCacheTest {
     }
   }
 
-  /**
-   * Returns an empty cache under {@code discardScope} whose popularity filtering is deterministic:
-   * the degenerate 0.5 confidence makes the upper bound the observed popularity, so a term is
-   * discarded exactly when it occurs in more than half of the cached rows.
-   */
+  /** An empty cache whose 0.5 confidence discards a term exactly above half the cached rows. */
   private static InvertedTermCache popularTermCache(String discardScope) {
     return new InvertedTermCache(
         config(

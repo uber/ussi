@@ -16,11 +16,8 @@ import org.junit.jupiter.api.Test;
 /**
  * Every record layout against every inverted structure against every candidate generator.
  *
- * <p>The layout and the structure vary independently, so the cases they form are a product rather
- * than a list, and the ones that are invalid are invalid for stated reasons: a structure and a
- * comparator with no layout in common, a structure whose keys the comparator cannot generate, or a
- * generator the comparator cannot support. Enumerating the product is what keeps a rule from
- * quietly covering a cell that no single-purpose test would have visited.
+ * <p>The layout and the structure vary independently, so the cases form a product, and enumerating
+ * it keeps a rule from quietly covering a cell no single-purpose test would visit.
  */
 class IndexPairingMatrixTest {
 
@@ -118,10 +115,7 @@ class IndexPairingMatrixTest {
     assertEquals(List.of(), unexpected);
   }
 
-  /**
-   * A config the validator accepts has to build, and one it rejects has to be refused rather than
-   * built into an index that misreads its rows.
-   */
+  /** A config the validator accepts must build, and one it rejects must be refused. */
   @Test
   void everyAcceptedPairingBuildsAndEveryRejectedOneDoesNot() {
     for (Cell cell : matrix()) {

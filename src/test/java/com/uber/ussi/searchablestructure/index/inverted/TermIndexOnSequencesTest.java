@@ -45,10 +45,10 @@ class TermIndexOnSequencesTest {
     assertEquals(3, index.getNumIndexedKeysForTests());
     assertArrayEquals(new long[] {7}, index.getRowNumsForKeyForTests(1));
     assertArrayEquals(new long[] {8, 7}, index.getRowNumsForKeyForTests(2));
-    // The indexed form is the multiset, ascending and distinct, carrying the counts as values.
+    // The indexed form is the multiset: ascending, distinct, counts as values.
     assertArrayEquals(new long[] {1, 2}, index.getIndexedRow(7).getTerms());
     assertArrayEquals(new float[] {3.0f, 1.0f}, index.getIndexedRow(7).getValues());
-    // The scored form is the sequence exactly as it arrived, ordered and with its repeats.
+    // The scored form is the sequence as it arrived, ordered and with repeats.
     assertArrayEquals(new long[] {1, 1, 2, 1}, index.getVerificationRow(7).getTerms());
     assertEquals(0, index.getVerificationRow(7).valuesLength());
     // A sequence and its multiset agree on the Uni value, so length filtering reads one bound.
@@ -103,10 +103,7 @@ class TermIndexOnSequencesTest {
         List<RowNumAndSimilarity> actual =
             new ArrayList<>(index.getNearestNeighborRowNums(k, query, null));
 
-        /*
-         * Rows tied on similarity are interchangeable in a top-k, so the similarities are what has
-         * to agree rather than which of the tied rows each search happened to keep.
-         */
+        // Tied rows are interchangeable in a top-k, so the similarities must agree, not the choice.
         assertEquals(
             Math.min(k, expected.size()),
             actual.size(),
@@ -165,10 +162,7 @@ class TermIndexOnSequencesTest {
     assertTrue(error.getMessage().contains("must have no values"), error.getMessage());
   }
 
-  /**
-   * The same structure stores sequences only for a comparator that reads them, so pairing it with
-   * one that reads sparse records instead leaves these rows short of the values that type needs.
-   */
+  /** Paired with a comparator that reads sparse records, these rows are short of values. */
   @Test
   void sequenceRowsAreRejectedForAComparatorThatReadsSparseRecords() {
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
@@ -199,16 +193,11 @@ class TermIndexOnSequencesTest {
             rows,
             longObjectMap());
 
-    // The discarded element keys no list, and the surviving elements still key their own.
     assertEquals(0, index.getRowNumsForKeyForTests(9).length);
     long[] rowNumsForElementTwo = index.getRowNumsForKeyForTests(2).clone();
     Arrays.sort(rowNumsForElementTwo);
     assertArrayEquals(new long[] {1, 2}, rowNumsForElementTwo);
-    /*
-     * The element is gone from the scored sequence too, not just from the multiset, so what the
-     * index reports is the distance between the sequences that remain. Rows 1 and 2 differ only in
-     * where the discarded element sat, which leaves them identical once it is dropped.
-     */
+    // The element is gone from the scored sequence too, so rows 1 and 2 become identical.
     assertArrayEquals(new long[] {1, 2}, index.getVerificationRow(1).getTerms());
     assertArrayEquals(new long[] {1, 2}, index.getVerificationRow(2).getTerms());
     assertEquals(2.0, index.getVerificationRow(1).getUniValue(), DELTA);
@@ -224,7 +213,6 @@ class TermIndexOnSequencesTest {
   @Test
   void candidatesOnlyKeepsThePopularElementInTheScoredSequences() {
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
-    // Element 9 is in all four rows, so a 0.75 cap makes it the only popular one.
     rows.put(1, sequence(9, 1, 2));
     rows.put(2, sequence(1, 9, 2));
     rows.put(3, sequence(9, 3, 4));
@@ -243,14 +231,9 @@ class TermIndexOnSequencesTest {
             rows,
             longObjectMap());
 
-    // Candidate generation is unchanged: the discarded element still keys no list.
     assertEquals(0, index.getRowNumsForKeyForTests(9).length);
     assertEquals(2, index.getIndexedRow(1).termsLength());
-    /*
-     * Scoring is what changes. The sequences keep the discarded element, so rows 1 and 2 are two
-     * transpositions apart rather than identical, which is the distance between the records as
-     * they were supplied.
-     */
+    // The scored sequences keep the discarded element, so rows 1 and 2 are transpositions apart.
     assertArrayEquals(new long[] {9, 1, 2}, index.getVerificationRow(1).getTerms());
     assertArrayEquals(new long[] {1, 9, 2}, index.getVerificationRow(2).getTerms());
 
@@ -277,9 +260,8 @@ class TermIndexOnSequencesTest {
             longObjectMap());
 
     assertEquals(0, index.getVerificationRow(1).termsLength());
-    // A query that survives the discard still finds the rows that did.
     assertEquals(1, index.getSimilarRowNums(0.5f, sequence(8, 9, 1), null).size());
-    // A query that does not survive it matches nothing rather than matching everything.
+    // A query that does not survive the discard matches nothing rather than everything.
     assertTrue(index.getSimilarRowNums(0.0f, sequence(8, 9), null).isEmpty());
   }
 
@@ -328,10 +310,7 @@ class TermIndexOnSequencesTest {
     throw new AssertionError("rowNum " + rowNum + " is absent from " + results);
   }
 
-  /**
-   * Drops the rows sharing no element with the query, which the inverted lists cannot reach and a
-   * brute-force scan does not skip.
-   */
+  /** Drops the rows sharing no element with the query, which the inverted lists cannot reach. */
   private static List<RowNumAndSimilarity> restrictToRowsSharingAnElement(
       List<RowNumAndSimilarity> results,
       LongObjectHashMap<LongTermsAndValues> rows,

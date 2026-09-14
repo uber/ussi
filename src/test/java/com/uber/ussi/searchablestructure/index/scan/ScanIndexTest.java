@@ -190,10 +190,8 @@ class ScanIndexTest {
             rows,
             metadata);
 
-    /*
-     * k=1: the only matching row (22) is the least similar, so a naive top-k-then-filter would
-     * return nothing. The expansion (size/numMatching = 3) must widen the pool to reach it.
-     */
+    // k=1: the only matching row (22) is the least similar, so the expansion
+    // (size/numMatching = 3) must widen the pool to reach it.
     List<RowNumAndSimilarity> result =
         index.getNearestNeighborRowNums(
             1, denseVector(1f, 0f), new MetaFilter(Map.of("city", List.of("la"))));

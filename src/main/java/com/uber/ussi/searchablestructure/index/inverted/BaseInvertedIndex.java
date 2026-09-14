@@ -41,22 +41,17 @@ import javax.annotation.Nullable;
 /**
  * Shared inverted-list index implementation with length and prefix filtering.
  *
- * <p>A record travels through a search in two derived forms, and the names are used consistently
- * throughout this package:
+ * <p>A record travels through a search in two forms, named consistently throughout this package:
  *
  * <ul>
- *   <li><b>indexed</b> is the form a record would take if it were added to this index: the form
- *       whose terms are the inverted-list keys. It is what candidate generation probes and what the
- *       shared-key test reads. Which form that is belongs to the record type rather than to the
- *       structure; see {@link RecordIndexingStrategy}.
- *   <li><b>verification</b> is the form the comparator scores once candidate generation has
- *       proposed a row, which is the record as supplied, minus any high-popularity terms dropped at
- *       build time. It is never derived from the indexed form, so an index may key its lists by
- *       something the comparator would not recognize.
+ *   <li><b>indexed</b> is the form whose terms are the inverted-list keys, which candidate
+ *       generation probes and the shared-key test reads; see {@link RecordIndexingStrategy}.
+ *   <li><b>verification</b> is the form the comparator scores: the record as supplied, minus any
+ *       high-popularity terms dropped at build time.
  * </ul>
  *
- * <p>Both forms always report the same Uni value, so length and prefix filtering read the same
- * bound whichever one reaches them.
+ * <p>Both forms report the same Uni value, so length and prefix filtering read the same bound
+ * whichever one reaches them.
  */
 abstract class BaseInvertedIndex extends Index {
   private static final long[] EMPTY_ROW_NUMS = new long[0];
@@ -94,12 +89,7 @@ abstract class BaseInvertedIndex extends Index {
         RecordIndexingStrategyFactory.createRecordIndexingStrategy(recordType);
     this.candidateGenerator = namespaceConfig.getCandidateGenerator();
     this.popularTermDiscardScope = namespaceConfig.getIndexPopularTermDiscardScope();
-    /*
-     * A conjunction is accumulated from the inverted lists, which are keyed and valued by the
-     * discarded-term-free indexed rows, so it can only ever report the similarity that excludes
-     * them. Under CANDIDATES_ONLY the caller asked for the other one, so the merge verifies each
-     * candidate through the comparator instead of scoring it from the lists.
-     */
+    // A conjunction excludes discarded terms, so CANDIDATES_ONLY verifies via the comparator.
     this.scoresFromConjunction =
         candidateGenerator == CandidateGenerator.SPARS_MERGE
             && indexType.conjunctionDeterminesSimilarity(recordType)
@@ -128,50 +118,28 @@ abstract class BaseInvertedIndex extends Index {
 
   protected abstract double getMinPrefixSum(double keysUniValue, double minSimilarity);
 
-  /**
-   * Returns each key of {@code indexedRecord} with the Uni value it contributes.
-   *
-   * @param indexedRecord a record in indexed form, never in verification form.
-   */
+  /** Returns each key of {@code indexedRecord} with the Uni value it contributes. */
   protected abstract KeyAndUniTransformedValue[] getKeysAndUniTransformedValues(
       LongTermsAndValues indexedRecord);
 
   /**
-   * Returns the distinct keys whose inverted lists a record belongs in. Deduplicating is the
-   * implementation's job, because only the implementation knows whether its keys can repeat: terms
-   * cannot, whereas the signatures of one record often collide with each other.
-   *
-   * @param indexedRecord a record in indexed form, never in verification form.
+   * Returns the distinct keys whose inverted lists a record belongs in. Implementations
+   * deduplicate, because only they know whether their keys repeat: terms cannot, signatures often
+   * do.
    */
   protected abstract long[] getKeys(LongTermsAndValues indexedRecord);
 
-  /**
-   * Returns what {@code indexedRecord} carries at {@code key}.
-   *
-   * @param indexedRecord a record in indexed form, never in verification form.
-   */
   protected abstract float getValueAtKey(LongTermsAndValues indexedRecord, long key);
 
-  /**
-   * Returns the indexed form of a record: the form whose terms key the inverted lists, and which
-   * every key, Uni value, and shared-key test is derived from. Which form that is belongs to the
-   * record type this index stores rather than to its structure, so it comes from {@link
-   * RecordIndexingStrategy#toIndexedRecord}.
-   */
   private LongTermsAndValues toIndexedRecord(LongTermsAndValues termsAndValues) {
     return recordIndexingStrategy.toIndexedRecord(termsAndValues, comparator);
   }
 
   /**
-   * Validates a row, throwing {@link IllegalArgumentException} when it does not qualify. Only the
-   * requirements every inverted index shares live here: a record has to be present, has to carry
-   * terms for anything to be keyed by, and has to report the Uni value the comparator derives from
-   * it, because length and prefix filtering read that value rather than recomputing it. Whether
-   * those terms form the record type this index stores is that type's own requirement, asked for
-   * through {@link RecordIndexingStrategy#validateRecordType}.
-   *
-   * <p>Rows are checked before the indexed form is derived, so this sees the record as the caller
-   * supplied it.
+   * Validates the requirements every inverted index shares, throwing {@link
+   * IllegalArgumentException} when a row does not qualify: non-empty terms, and the Uni value that
+   * length and prefix filtering read rather than recompute. Rows are checked as the caller supplied
+   * them, before the indexed form is derived.
    */
   protected final void validateRecord(LongTermsAndValues termsAndValues, String source) {
     Objects.requireNonNull(termsAndValues, source + " is null.");
@@ -182,7 +150,6 @@ abstract class BaseInvertedIndex extends Index {
     validateUniValue(termsAndValues, source);
   }
 
-  /** Validates a record carries the Uni value the configured comparator derives from it. */
   private void validateUniValue(LongTermsAndValues termsAndValues, String source) {
     double expectedUniValue = comparator.computeUniValue(termsAndValues);
     double actualUniValue = termsAndValues.getUniValue();
@@ -250,17 +217,13 @@ abstract class BaseInvertedIndex extends Index {
   }
 
   /**
-   * Returns the row in its verification form: the row as the comparator scores it, which is
-   * without its high-popularity terms unless the discard scope is {@code candidates_only}.
+   * Returns the row in verification form, which keeps its high-popularity terms only under the
+   * {@code candidates_only} discard scope.
    */
   final LongTermsAndValues getVerificationRow(long rowNum) {
     return verificationRowNumToTermsAndValuesMap.get(rowNum);
   }
 
-  /**
-   * Returns the row in its indexed form: the form its inverted-list keys were derived from, which
-   * keyed by sorted distinct terms whatever type the row itself had.
-   */
   final LongTermsAndValues getIndexedRow(long rowNum) {
     return indexedRowNumToTermsAndValuesMap.get(rowNum);
   }
@@ -312,11 +275,7 @@ abstract class BaseInvertedIndex extends Index {
     if (discardedTermFreeRecord.termsLength() == 0) {
       return Collections.emptyList();
     }
-    /*
-     * The query is scored in whichever form the discard scope says the rows were kept in, so that
-     * both sides of every comparison carry the same terms, and is always probed in the indexed
-     * form, whose terms are the only ones this index has lists for.
-     */
+    // The query is scored in the form the rows were kept in, so both sides carry the same terms.
     LongTermsAndValues verificationRecord =
         popularTermDiscardScope == PopularTermDiscardScope.CANDIDATES_ONLY
             ? record
@@ -342,15 +301,7 @@ abstract class BaseInvertedIndex extends Index {
                 resolvedMaxResults));
   }
 
-  /**
-   * Generates candidates from the inverted lists and scores them.
-   *
-   * @param query the query in verification form, which is the only form the comparator can score.
-   * @param indexedQuery the query in indexed form, which is the only form whose terms are keys of
-   *     this index. It is needed solely to collect the query's keys, and is passed rather than
-   *     those keys because the two generators want them packaged differently and only one of the
-   *     two packagings is ever built.
-   */
+  /** Generates candidates from the inverted lists and scores them. */
   private List<RowNumAndSimilarity> invertedListSearch(
       LongTermsAndValues query,
       LongTermsAndValues indexedQuery,
@@ -385,8 +336,8 @@ abstract class BaseInvertedIndex extends Index {
   }
 
   /**
-   * Returns the keys of a query in indexed form, shortest inverted list first so that the
-   * merge reaches its pruning bound on the selective keys before paying for the popular ones.
+   * Returns the query's keys, shortest inverted list first so the merge reaches its pruning bound
+   * on the selective keys before paying for the popular ones.
    */
   private MergeSearch.QueryKey[] collectMergeSearchQueryKeys(
       LongTermsAndValues indexedQuery) {
@@ -408,14 +359,9 @@ abstract class BaseInvertedIndex extends Index {
   }
 
   /**
-   * Scores the pre-filtered candidate rows sequentially. These rows arrived from the metadata index
-   * rather than from an inverted list, so nothing has established that any of them shares a key
-   * with the query. The shared-key restriction of the inverted-list search is therefore applied
-   * here by hand, so that both metadata filtering strategies return the same rows.
-   *
-   * @param query the query in verification form, which is the only form the comparator can score.
-   * @param indexedQuery the query in indexed form, which is the only form whose terms are keys of
-   *     this index, and so the only one the shared-key test can be run on.
+   * Scores the pre-filtered candidate rows sequentially. They arrive from the metadata index rather
+   * than from an inverted list, so the shared-key restriction is applied here by hand to keep both
+   * metadata filtering strategies returning the same rows.
    */
   private List<RowNumAndSimilarity> searchCandidateRows(
       LongTermsAndValues query,
@@ -441,12 +387,8 @@ abstract class BaseInvertedIndex extends Index {
   }
 
   /**
-   * @param termsAndValues the row in verification form, paired with {@code query}.
-   * @param query the query in verification form, which is the only form the comparator can score.
-   * @param indexedQuery the query in indexed form, paired against the row's indexed form for the
-   *     shared-key test. The verification forms cannot stand in for these: {@code sharesAnyTerm}
-   *     walks two records in step and so needs the sorted, distinct terms that only the indexed
-   *     form is guaranteed to have.
+   * The shared-key test runs on the indexed forms: {@code sharesAnyTerm} walks two records in step,
+   * so it needs the sorted, distinct terms only that form guarantees.
    */
   private double scoreRowAndUpdateMinSimilarity(
       BoundedSizeMaxHeap<RowNumAndSimilarity> rows,
@@ -475,17 +417,12 @@ abstract class BaseInvertedIndex extends Index {
     return Math.max(minSimilarity, TopResults.getConservativeMinSimilarity(rows));
   }
 
-  /**
-   * Returns true if the row should be scored during search. A row is skipped if it has been
-   * tombstoned (soft-deleted) or does not match the metadata filter. This check allows tombstoned
-   * rows to remain in the physical inverted lists without affecting search results.
-   */
+  /** Lets tombstoned rows stay in the physical inverted lists without reaching search results. */
   private boolean canScoreRow(long rowNum, @Nullable MetaFilter metadataFilter) {
     return !isDeleted(rowNum)
         && (metadataFilter == null || matchesMetaFilter(rowNum, metadataFilter));
   }
 
-  /** Returns the keys of a query in indexed form, with each one's prefix-filtering data. */
   private KeyAndPrefixFilteringData[] collectFilteredSearchQueryKeys(
       LongTermsAndValues indexedQuery) {
     KeyAndUniTransformedValue[] keys = getKeysAndUniTransformedValues(indexedQuery);
@@ -509,11 +446,9 @@ abstract class BaseInvertedIndex extends Index {
   }
 
   /**
-   * Identifies the high-popularity terms to discard. The index is built over the complete dataset,
-   * so the observed popularity of a term is its true popularity and no confidence interval is
-   * needed: a term is discarded when it occurs in more than floor(numRows *
-   * maxFractionIdsPerKey) rows. Confidence intervals are only used by the inverted term
-   * cache, which observes an incrementally growing sample.
+   * Identifies the high-popularity terms to discard. The index sees the complete dataset, so
+   * observed popularity is true popularity: a term is discarded when it occurs in more than
+   * floor(numRows * maxFractionIdsPerKey) rows.
    */
   private LongHashSet buildDiscardedTerms() {
     LongIntHashMap numRowsByTerm = new LongIntHashMap();
@@ -555,8 +490,8 @@ abstract class BaseInvertedIndex extends Index {
   }
 
   /**
-   * Returns the rows in the form the inverted lists are keyed by. The comparators whose records are
-   * already keyed that way derive the identity here, so they share one map rather than two.
+   * Returns the rows in the form the inverted lists are keyed by, reusing the input map when that
+   * form is the identity.
    */
   private LongObjectHashMap<LongTermsAndValues> buildIndexedRows(
       LongObjectHashMap<LongTermsAndValues> discardedTermFreeRows) {
@@ -590,8 +525,8 @@ abstract class BaseInvertedIndex extends Index {
   }
 
   /**
-   * Builds the uni-sorted inverted list of every key. The merge generator scores from the
-   * inverted-list values when it can, so those are only materialized when they will be read.
+   * Builds the uni-sorted inverted list of every key. Values are materialized only when the merge
+   * generator will score from them.
    */
   private LongObjectHashMap<InvertedList> buildInvertedLists(
       LongObjectHashMap<LongTermsAndValues> indexedRows) {
@@ -655,15 +590,9 @@ abstract class BaseInvertedIndex extends Index {
   }
 
   /**
-   * Returns the record type this index stores, which is the one type the structure stores and the
-   * comparator reads.
-   *
-   * <p>Both failures are backstops rather than the reported rule, and they are not the same
-   * mistake. Having none in common is a pairing {@code IndexConfigValidator} rejects with the two
-   * sets spelled out, so reaching it here means an index was built from a config nothing
-   * validated. Having several is a comparator that reads more than one type this structure
-   * stores, which no comparator does today; it would leave the layout a row is validated against
-   * decided by neither the structure nor the comparator, so it fails rather than picking one.
+   * Returns the one record type the structure stores and the comparator reads. Both failures are
+   * backstops: {@code IndexConfigValidator} rejects a pairing with none in common, and no
+   * comparator today reads more than one type a structure stores.
    */
   private RecordType resolveRecordType(IndexType indexType) {
     Set<RecordType> recordTypes = indexType.resolveRecordTypes(comparator);
@@ -681,11 +610,8 @@ abstract class BaseInvertedIndex extends Index {
   /** The index state both candidate generators traverse, shared so it is allocated once. */
   final class SharedSearchContext implements FilteredSearch.Context, MergeSearch.Context {
     /**
-     * Returns a row's Uni value.
-     *
-     * <p>Length filtering calls this for every row of every inverted list it narrows, which makes
-     * it the most frequently reached read in a search, so it resolves the row to a slot once and
-     * both tests and reads through that slot rather than hashing the row number twice.
+     * Length filtering calls this for every row of every list it narrows, so the row is resolved to
+     * a slot once rather than hashed twice.
      */
     @Override
     public double getUniValue(long rowNum) {

@@ -30,7 +30,6 @@ public class ComparatorFactory {
     RUZICKA
   }
 
-  /** Returns whether the comparator type is one this factory can create. */
   public static boolean isSupportedComparatorType(String comparatorType) {
     if (comparatorType == null) {
       return false;
@@ -120,9 +119,8 @@ public class ComparatorFactory {
 
   /**
    * Returns the configured comparator, or null when the config does not describe one that can be
-   * created. Config validators read this when a check asks what the comparator supports, so that
-   * the reason it cannot be created is reported once, by {@link ComparatorConfigValidator}, rather
-   * than once per check that could not be run.
+   * created. Validators use this so that a comparator that cannot be created is reported once, by
+   * {@link ComparatorConfigValidator}, rather than once per check that could not be run.
    */
   @Nullable
   public static Comparator tryCreateComparator(NamespaceConfig namespaceConfig) {
@@ -135,8 +133,7 @@ public class ComparatorFactory {
 
   /**
    * Returns the configured edit distance, defaulting to {@link SequenceDistanceType#LEVENSHTEIN}
-   * when the param is absent. This is the single source of truth for both creation and config
-   * validation.
+   * when the param is absent.
    */
   static SequenceDistance createSequenceDistance(Map<String, String> comparatorParams)
       throws ComparatorCreationError {

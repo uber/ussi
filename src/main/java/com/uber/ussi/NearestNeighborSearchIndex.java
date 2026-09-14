@@ -43,18 +43,12 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
   private final NamespaceConfig namespaceConfig;
   private final List<Index> indexes;
   private final List<Cache> graduatingCaches;
-  /*
-   * Per-cache tombstone sets capture deletes that race a background cache graduation, replayed onto
-   * the freshly built index at swap time.
-   */
+  // Deletes that race a background cache graduation, replayed onto the new index at swap time.
   private final Map<Cache, LongHashSet> graduationDeletes;
   private final Map<Cache, Integer> graduatingCacheGenerations;
   private final Map<Index, Integer> indexGenerations;
   private final List<Future<?>> backgroundTasks;
-  /*
-   * Tombstone set capturing deletes that race a background index consolidation, replayed onto the
-   * merged index at swap time.
-   */
+  // Deletes that race an index consolidation, replayed onto the merged index at swap time.
   @Nullable private LongHashSet consolidationDeletes;
   private final ExecutorService backgroundExecutor;
   private final ReadWriteLock lock;
@@ -139,10 +133,7 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
       if (!deleteInternalLocked(rowNum)) {
         return false;
       }
-      /*
-       * Updates keep the logical rowNum but move the current row version back into the active
-       * mutable cache.
-       */
+      // Updates keep the rowNum but move the current row version back into the active cache.
       boolean inserted = cache.insertWithRowNum(rowNum, encodedRecord, metadata);
       if (!inserted) {
         throw new IllegalStateException(
@@ -316,10 +307,7 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
       return null;
     }
     Cache cacheToGraduate = cache;
-    /*
-     * After rotation, this cache no longer receives inserts or updates. It remains searchable and
-     * deletable while the background task builds an index from its snapshot.
-     */
+    // A rotated cache takes no more inserts, but stays searchable and deletable during the build.
     graduatingCaches.add(cacheToGraduate);
     graduationDeletes.put(cacheToGraduate, new LongHashSet());
     graduatingCacheGenerations.put(cacheToGraduate, nextStructureGeneration++);
@@ -338,12 +326,10 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
   }
 
   /**
-   * Builds an index from a graduating cache. The cache stays whole and searchable throughout: its
-   * contents are snapshotted under the read lock, the index is built off-lock so searches and
-   * deletes keep running, and the write lock is taken only for the swap. Rows deleted from the
-   * cache during the build are accumulated in a per-cache tombstone set (see {@link
-   * #deleteInternalLocked}) and replayed onto the freshly built index at swap time, so the
-   * write-lock window is O(deletes-during-build) rather than O(cache size).
+   * Builds an index from a graduating cache: snapshot under the read lock, build off-lock, swap
+   * under the write lock. Deletes that race the build are tombstoned (see {@link
+   * #deleteInternalLocked}) and replayed at swap time, so the write-lock window is
+   * O(deletes-during-build) rather than O(cache size).
    */
   private void graduateCache(Cache cacheToGraduate) {
     LongObjectHashMap<LongTermsAndValues> snapshotRows;
@@ -387,13 +373,10 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
   }
 
   /**
-   * Merges the indexes into a single index when there are too many searchable structures. The old
-   * indexes stay whole and searchable throughout: the index set is snapshotted, the merged index is
-   * built off-lock so searches and deletes keep running, and the write lock is taken only for the
-   * swap. Rows deleted from the old indexes during the build are accumulated in a tombstone set
-   * (see {@link #deleteInternalLocked}) and replayed onto the merged index at swap time, so the
-   * write-lock window is O(deletes-during-build) rather than O(total row count). Old indexes are
-   * closed after the swap, outside the lock.
+   * Merges the indexes when there are too many searchable structures: snapshot under the read
+   * lock, build off-lock, swap under the write lock, then close the old indexes outside the lock.
+   * Deletes that race the build are tombstoned (see {@link #deleteInternalLocked}) and replayed at
+   * swap time, so the write-lock window is O(deletes-during-build) rather than O(total rows).
    */
   private void consolidateIndexesIfNeeded() {
     List<Index> oldIndexes;
@@ -410,10 +393,7 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
         return;
       }
       consolidatedGeneration = getLatestIndexGenerationLocked(oldIndexes);
-      /*
-       * Start routing index deletes into the tombstone set before snapshotting, so every deletion
-       * that races the build is captured.
-       */
+      // Route deletes into the tombstone set before snapshotting, so no racing delete is missed.
       consolidationInFlight = true;
       consolidationDeletes = tombstones;
     } finally {
@@ -443,10 +423,8 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
       lock.writeLock().lock();
       try {
         consolidationDeletes = null;
-        /*
-         * Only replace the older prefix we built from. Any indexes appended by concurrent
-         * graduations stay after the consolidated index, preserving oldest-to-newest ordering.
-         */
+        // Replace only the prefix we built from, so indexes appended by concurrent graduations
+        // stay after the consolidated index and oldest-to-newest ordering holds.
         if (indexesStartWithSnapshotLocked(oldIndexes)) {
           List<Index> appendedIndexes =
               new ArrayList<>(indexes.subList(oldIndexes.size(), indexes.size()));
@@ -466,9 +444,7 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
         lock.writeLock().unlock();
       }
     } finally {
-      /*
-       * Stop routing deletes into the sink even if the build above threw before the swap block ran.
-       */
+      // Stop routing deletes into the sink even if the build threw before the swap.
       clearConsolidationDeletes(tombstones);
     }
 
@@ -510,9 +486,8 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
   }
 
   /**
-   * Replays deletes accumulated during a cache graduation onto the freshly built index. Must be
-   * called while holding the write lock. rowNums absent from the index (deleted before the build
-   * snapshot was taken) are no-ops, so replaying the full set is safe and exact.
+   * Replays deletes accumulated during a build onto the freshly built index. Must hold the write
+   * lock. rowNums absent from the index are no-ops, so replaying the full set is exact.
    */
   private static void applyTombstones(Index builtIndex, @Nullable LongHashSet tombstones) {
     if (tombstones == null) {
@@ -524,14 +499,11 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
   }
   
   /**
-   * Removes the record from the active cache if present (physical delete). Otherwise, scans
-   * searchable structures from newest to oldest and tombstones the record in the first structure
-   * that contains it. Only the first match is tombstoned because each rowNum lives in exactly one
-   * structure at a time. If the deleted row belongs to a graduating cache or an index that is
-   * currently being rebuilt in the background, the deletion is recorded in a per-build tombstone
-   * set ({@link #graduationDeletes} or {@link #consolidationDeletes}) and replayed onto the new
-   * index at swap time, so deleted rows do not reappear after the build completes. Must be called
-   * while holding the write lock.
+   * Deletes from the active cache if present, otherwise scans searchable structures newest to
+   * oldest and tombstones the first match, since each rowNum lives in exactly one structure. A
+   * delete against a structure whose build is in flight is also recorded in {@link
+   * #graduationDeletes} or {@link #consolidationDeletes} for replay at swap time. Must hold the
+   * write lock.
    */
   private boolean deleteInternalLocked(long rowNum) {
     if (cache.delete(rowNum)) {
@@ -540,10 +512,6 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
     for (OrderedSearchableStructure structure : orderedSearchableStructuresLocked(true)) {
       if (structure.cache != null) {
         if (structure.cache.delete(rowNum)) {
-          /*
-           * The index build snapshots this cache after graduation starts, so replay deletes seen
-           * during the build onto the new index at swap time.
-           */
           LongHashSet tombstones = graduationDeletes.get(structure.cache);
           if (tombstones != null) {
             tombstones.add(rowNum);
@@ -551,12 +519,7 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
           return true;
         }
       } else if (structure.index != null && structure.index.delete(rowNum)) {
-        /*
-         * Indexes do not accept inserts or updates, but delete-only tombstoning lets the top-level
-         * index hide rows that have already graduated. A consolidation in flight is building a
-         * merged index from a snapshot of these indexes, so the deletion must be replayed onto it
-         * at swap time.
-         */
+        // Indexes are delete-only; tombstoning hides rows that have already graduated.
         if (consolidationDeletes != null) {
           consolidationDeletes.add(rowNum);
         }
@@ -571,10 +534,7 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
   }
 
   private void insertIndexLocked(Index newIndex, int generation) {
-    /*
-     * Background graduations can complete out of order, so indexes are inserted by generation
-     * instead of append order.
-     */
+    // Graduations can complete out of order, so insert by generation rather than append order.
     int insertionPoint = 0;
     while (insertionPoint < indexes.size()
         && getIndexGenerationLocked(indexes.get(insertionPoint), insertionPoint) <= generation) {
@@ -585,11 +545,8 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
   }
 
   private List<Index> getConsolidatableIndexPrefixLocked() {
-    /*
-     * Only consolidate indexes older than the oldest graduating cache. Newer indexes may still be
-     * interleaved with caches whose builds have not finished, and preserving that order keeps
-     * newest-version semantics correct.
-     */
+    // Only consolidate indexes older than the oldest graduating cache; newer ones may interleave
+    // with caches whose builds are unfinished, and that order is what makes the newest win.
     int oldestGraduatingCacheGeneration = getOldestGraduatingCacheGenerationLocked();
     List<Index> prefix = new ArrayList<>();
     for (int i = 0; i < indexes.size(); ++i) {
@@ -647,10 +604,8 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
   }
 
   private List<OrderedSearchableStructure> orderedSearchableStructuresLocked(boolean newestFirst) {
-    /*
-     * Deletes and searches scan newest-first so an updated rowNum is found before older versions.
-     * Snapshot and merge paths use oldest-first when reconstructing all visible rows.
-     */
+    // Deletes and searches scan newest-first so an updated rowNum is found before older versions;
+    // snapshot and merge paths use oldest-first when reconstructing all visible rows.
     List<OrderedSearchableStructure> structures =
         new ArrayList<>(graduatingCaches.size() + indexes.size());
     for (int i = 0; i < indexes.size(); ++i) {

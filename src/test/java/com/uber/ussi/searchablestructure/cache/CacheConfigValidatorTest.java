@@ -12,12 +12,8 @@ class CacheConfigValidatorTest {
 
   private static final ValidationCase[] VALIDATION_CASES = {
     new ValidationCase("inverted term cache without params", builder -> builder, true),
-    /*
-     * The cache structures were renamed after their structure, so the names they were configured
-     * with before no longer resolve and are reported as the typos they now are.
-     */
     new ValidationCase(
-        "the cache type this vocabulary replaced", builder -> builder.cacheType("sparse"), false),
+        "a cache type that names no structure", builder -> builder.cacheType("sparse"), false),
     new ValidationCase(
         "max fraction at zero",
         builder ->
@@ -42,19 +38,12 @@ class CacheConfigValidatorTest {
                 .cacheType("scan")
                 .cacheParams(Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0")),
         true),
-    /*
-     * The inverted term cache keys its inverted lists by the record's own terms and reads a value
-     * per term, neither of which an ordered sequence supplies, so such a namespace caches through
-     * the scan cache.
-     */
+    // The inverted term cache needs terms and a value per term, which a sequence does not supply.
     new ValidationCase(
         "inverted term cache with a sequence comparator",
         builder -> builder.comparatorType("ngld").comparatorNormalizerType("complement"),
         false),
-    /*
-     * An unknown comparator has no answer to what it reads, and ComparatorConfigValidator already
-     * reports the name, so this validator stays quiet rather than reporting a consequence of it.
-     */
+    // An unknown comparator leaves nothing to ask, and the comparator validator reports the name.
     new ValidationCase(
         "inverted term cache with a comparator that cannot be created",
         builder -> builder.comparatorType("cosine"),

@@ -70,10 +70,7 @@ abstract class BaseRuzickaComparator extends SignatureComparator {
     double partialUni2 = 0.0;
     int pointer1 = 0;
     int pointer2 = 0;
-    /*
-     * Dense records have empty terms and align values by position. Sparse records merge their
-     * sorted terms, treating a term missing from either record as having value 0.0.
-     */
+    // Dense records align values by position; sparse merge sorted terms, a missing term is 0.0.
     while (pointer1 < termsAndValues1.valuesLength() || pointer2 < termsAndValues2.valuesLength()) {
       float value1;
       float value2;
@@ -107,10 +104,7 @@ abstract class BaseRuzickaComparator extends SignatureComparator {
       } else {
         union += transformedValue1 + transformedValue2;
       }
-      /*
-       * Position filtering computes the highest similarity attainable from the unscanned values.
-       * Stop once even that upper bound is below minSimilarity.
-       */
+      // Position filtering: stop once the best the unscanned values allow is below minSimilarity.
       double maxPossibleComparatorValue =
           computeMaxPossibleComparatorValue(
               partialUni1,

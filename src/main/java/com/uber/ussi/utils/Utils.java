@@ -10,25 +10,21 @@ public final class Utils {
 
   private Utils() {}
 
-  /** Checks if the JVM is running on macOS. */
   public static boolean isRunningOnMacOs() {
     String osName = System.getProperty("os.name").toLowerCase();
     return osName.contains("mac");
   }
 
-  /** Checks if the JVM is running on Linux. */
   public static boolean isRunningOnLinux() {
     String osName = System.getProperty("os.name").toLowerCase();
     return osName.contains("linux");
   }
 
-  /** Checks if the JVM is running on ARM architecture. */
   public static boolean isRunningOnArm() {
     String osArchitecture = System.getProperty("os.arch").toLowerCase();
     return osArchitecture.contains("arm") || osArchitecture.contains("aarch64");
   }
 
-  /** Checks if the JVM is running on x86 architecture. */
   public static boolean isRunningOnX86() {
     String osArchitecture = System.getProperty("os.arch").toLowerCase();
     return osArchitecture.contains("x86") || osArchitecture.contains("amd64");
@@ -48,7 +44,7 @@ public final class Utils {
     return ByteBuffer.wrap(bytes).getLong();
   }
 
-  /** When fingerprinting a double, ignores the 8 lest significant digits. */
+  /** Fingerprints a double, ignoring its 8 least significant bits. */
   public static long longHashCode(double d) {
     byte[] bytes = doubleToByteArray(d);
     bytes[bytes.length - 1] = 0;
@@ -57,8 +53,7 @@ public final class Utils {
 
   /**
    * Combines two longs into a single fingerprint using Guava's FarmHash. The combination is
-   * order-dependent (unlike XOR), so {@code longHashCode(k, v) != longHashCode(v, k)} and {@code
-   * longHashCode(k, k) != 0}. This prevents key/value-swapped metadata pairs from colliding.
+   * order-dependent, so key/value-swapped metadata pairs do not collide.
    */
   public static long longHashCode(long k, long v) {
     return Hashing.farmHashFingerprint64().newHasher().putLong(k).putLong(v).hash().asLong();
@@ -71,11 +66,7 @@ public final class Utils {
         .asLong();
   }
 
-  /**
-   * Returns a pseudo random number generator seeded by t. Done by converting t to a String, str,
-   * and calling Guava FarmHash on str. Hence, a consistent String value should be produced every
-   * time toString() is invoked on any T instance.
-   */
+  /** Fingerprints a boxed primitive or a String; any other type is rejected. */
   public static <T> long longHashCode(T t) {
     if (t instanceof Long) {
       return (long) t;

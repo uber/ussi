@@ -6,21 +6,16 @@ import java.io.Serializable;
 import java.util.Objects;
 
 /**
- * A unit-cost, L1-boundable edit distance between two sequences.
+ * A unit-cost, L1-boundable edit distance between two sequences, the distances that the
+ * generalized Levenshtein distance generalizes over. Every one of them charges unit cost for
+ * inserting or deleting one element, which bounds the normalized distance the comparators report
+ * to [0.0, 1.0]; they differ in the other moves they permit, and so in
+ * {@link #getL1BoundFactor()}.
  *
- * <p>These distances are what the generalized Levenshtein distance generalizes over. A sequence
- * comparator decides how to express a distance, as a raw edit count for {@code gld} or a normalized
- * fraction for {@code ngld}, while the distance it composes decides which edits that count is over.
- *
- * <p>A sequence is a record that carries its elements, in order and with repeats, in its terms and
- * has no values. Every distance here charges unit cost for inserting or deleting one element, which
- * is what bounds the normalized distance the comparators report to [0.0, 1.0]. They differ in the
- * other moves they permit, and correspondingly in {@link #getL1BoundFactor()}.
- *
- * <p>That bound is what lets an inverted index generate candidates for an order-sensitive distance.
- * Two sequences within edit distance {@code d} have element multisets within L1 distance {@code
- * getL1BoundFactor() * d} of each other, so a candidate sharing too few elements with the query,
- * disregarding their order, cannot be close enough in order either.
+ * <p>That bound is what lets an inverted index generate candidates for an order-sensitive
+ * distance. Two sequences within edit distance {@code d} have element multisets within L1 distance
+ * {@code getL1BoundFactor() * d} of each other, so a candidate sharing too few elements with the
+ * query, disregarding their order, cannot be close enough in order either.
  */
 public abstract class SequenceDistance implements Serializable {
 
@@ -72,17 +67,15 @@ public abstract class SequenceDistance implements Serializable {
    * Runs the banded dynamic program with {@code shorter} along the row and {@code longer} down the
    * columns.
    *
-   * <p>Only the band is stored, and it is stored right-aligned: slot {@code index} of a row holds
-   * column {@code lowColumn + index - 1}, and slot zero holds the column just left of the band.
-   * That keeps a row {@code min(numColumns, 2 * maxDistance + 1)} slots wide rather than
-   * {@code numColumns} wide. Because the band's first column advances by one on most rows, a
-   * retained row has to slide one slot left to stay aligned with the row being filled; see {@link
-   * #shiftLeft}.
+   * <p>Only the band is stored, right-aligned: slot {@code index} of a row holds column {@code
+   * lowColumn + index - 1}, and slot zero holds the column just left of the band. That keeps a row
+   * {@code min(numColumns, 2 * maxDistance + 1)} slots wide. Because the band's first column
+   * advances by one on most rows, a retained row has to slide one slot left to stay aligned; see
+   * {@link #shiftLeft}.
    *
-   * <p>The rows rotate by reference rather than being copied. That is sound because every cell read
-   * while filling a row is either written earlier in that same row, or sits in a retained row at a
-   * slot that row wrote, or is one of the infinities fenced below, so no stale value from an older
-   * row is ever read.
+   * <p>The rows rotate by reference rather than being copied. Every cell read while filling a row
+   * is either written earlier in that same row, sits in a retained row at a slot that row wrote,
+   * or is one of the infinities fenced below, so no stale value is ever read.
    */
   private long getBandedDistance(
       LongTermsAndValues shorter, LongTermsAndValues longer, long requestedMaxDistance) {
@@ -97,17 +90,10 @@ public abstract class SequenceDistance implements Serializable {
     if (numColumns == 0) {
       return numRows;
     }
-    /*
-     * Rewriting one sequence into the other wholesale costs numRows + numColumns, so no budget
-     * above that can reject anything and every larger one describes the same, full table. Capping
-     * it keeps the band width below from overflowing on the unbounded budget that a minSimilarity
-     * of zero produces.
-     */
+    // A budget above numRows + numColumns rejects nothing, and capping stops the band width below
+    // from overflowing on the unbounded budget a minSimilarity of zero produces.
     long maxDistance = Math.min(requestedMaxDistance, (long) numRows + numColumns);
-    /*
-     * Read the move rules into locals so the innermost loop tests a local rather than dispatching
-     * on the concrete distance for every cell in the band.
-     */
+    // Hoist the move rules into locals so the innermost loop tests a local rather than a field.
     boolean substitutes = allowsSubstitution;
     boolean transposes = allowsTransposition;
 
@@ -137,11 +123,7 @@ public abstract class SequenceDistance implements Serializable {
         if (transposes) {
           shiftLeft(beforePrevious);
         }
-        /*
-         * Once the band has left column zero, the column just left of it is more than maxDistance
-         * edits away from this row, so every path through it is already over budget and an infinity
-         * stands in for it.
-         */
+        // Every path through the column just left of the band is over budget for this row.
         current[0] = UNSET;
       }
       long rowMinimum = current[0];
@@ -155,11 +137,8 @@ public abstract class SequenceDistance implements Serializable {
           if (substitutes) {
             best = Math.min(best, previous[index - 1] + 1);
           }
-          /*
-           * Below slot two the transposed pair's cell lies left of the band, where every value is
-           * already over budget, so the move cannot win there and is skipped. The same test keeps
-           * the two-back term reads in range.
-           */
+          // Below slot two the transposed cell lies left of the band, over budget, so the move
+          // cannot win; the same test keeps the two-back term reads in range.
           if (transposes
               && row >= 2
               && index >= 2
@@ -171,13 +150,9 @@ public abstract class SequenceDistance implements Serializable {
         }
         rowMinimum = Math.min(rowMinimum, current[index]);
       }
-      /*
-       * The next row's band may reach one column further right, so fence the slot just past this
-       * one's with an infinity rather than let a value left over from an older row show through.
-       * Such a leftover cannot change the distance, since it sits outside the band and every
-       * path from there to the far corner arrives over budget, but it can understate a later
-       * row's minimum and so cost the early exit below.
-       */
+      // The next row's band may reach one column further right, so fence the slot past this one's.
+      // A leftover from an older row cannot change the distance, but it can understate a later
+      // row's minimum and so cost the early exit below.
       current[cells + 1] = UNSET;
       if (rowMinimum > maxDistance) {
         return DISTANCE_EXCEEDED;
@@ -190,16 +165,14 @@ public abstract class SequenceDistance implements Serializable {
       previous = current;
       current = retired;
     }
-    /*
-     * The length check above admits only pairs whose last row reaches column numColumns, which the
-     * right-aligned layout puts in the last slot the row wrote.
-     */
+    // The length check above admits only pairs whose last row reaches numColumns, which the
+    // right-aligned layout puts in the last slot that row wrote.
     return previous[cells] <= maxDistance ? previous[cells] : DISTANCE_EXCEEDED;
   }
 
   /**
-   * Slides a retained row one slot left, so that it lines up with a band whose first column is one
-   * further right than the band the row was filled against, and fences the vacated slot.
+   * Slides a retained row one slot left, to line up with a band whose first column is one further
+   * right than the band the row was filled against, and fences the vacated slot.
    */
   private static void shiftLeft(long[] row) {
     System.arraycopy(row, 1, row, 0, row.length - 1);
@@ -207,9 +180,9 @@ public abstract class SequenceDistance implements Serializable {
   }
 
   /**
-   * A record that carries values is a dense or sparse feature rather than a sequence. Its terms are
-   * sorted and deduplicated, so reading them in order would silently measure the distance between
-   * two sorted element sets instead of between the sequences themselves.
+   * A record that carries values is a dense or sparse feature, not a sequence: its terms are
+   * sorted and deduplicated, so reading them in order would measure the distance between two
+   * sorted element sets rather than between the sequences.
    */
   private static void validateSequence(LongTermsAndValues termsAndValues, String name) {
     Objects.requireNonNull(termsAndValues, name);

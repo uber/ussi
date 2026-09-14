@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.uber.ussi.config.NamespaceConfig.PopularTermDiscardScope;
-import com.uber.ussi.config.NamespaceConfig.CandidateGenerator;
+import com.uber.ussi.config.NamespaceConfig.CandidateGeneratorType;
 import com.uber.ussi.utils.Constants;
 import java.util.List;
 import java.util.Map;
@@ -54,18 +54,18 @@ class NamespaceConfigAccessorsTest {
   }
 
   @Test
-  void getCandidateGeneratorCases() {
+  void getCandidateGeneratorTypeCases() {
     NamespaceConfig defaults = fullBuilder().build();
     NamespaceConfig merge =
         fullBuilder()
             .indexParams(
                 Map.of(
                     Constants.CANDIDATE_GENERATOR,
-                    CandidateGenerator.SPARS_MERGE.getParamValue()))
+                    CandidateGeneratorType.SPARS_MERGE.getParamValue()))
             .build();
 
-    assertEquals(CandidateGenerator.SPARS, defaults.getCandidateGenerator());
-    assertEquals(CandidateGenerator.SPARS_MERGE, merge.getCandidateGenerator());
+    assertEquals(CandidateGeneratorType.SPARS, defaults.getCandidateGeneratorType());
+    assertEquals(CandidateGeneratorType.SPARS_MERGE, merge.getCandidateGeneratorType());
   }
 
   /** An index reads the scope from the index params and a cache reads it from the cache params. */

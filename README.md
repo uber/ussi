@@ -202,8 +202,8 @@ the row that matches your records and the guarantee you need:
 | `matrix` | dense | `l2` only | Exact, with OpenBLAS dot products where available and a Java fallback otherwise. |
 | `inverted_term` | sparse | `l2`, `jaccard`, `ruzicka` | Exact, and much faster than `scan` when a term selects few rows. |
 | `inverted_term` | sequence | `gld`, `ngld` | Exact. Generates candidates from element multisets, then verifies with the edit distance. |
-| `inverted_signature` | sparse | `jaccard` or `ruzicka`, with `signature_generator_type` | Approximate. Qualifying rows can be missed; the scores that come back are exact. |
-| `inverted_hybrid` | sparse | `jaccard` or `ruzicka`, with `signature_generator_type` | Exact for rows with at most 270 terms, approximate above that. |
+| `inverted_signature` | sparse | `jaccard` or `ruzicka`, with `signature_generator` | Approximate. Qualifying rows can be missed; the scores that come back are exact. |
+| `inverted_hybrid` | sparse | `jaccard` or `ruzicka`, with `signature_generator` | Exact for rows with at most 270 terms, approximate above that. |
 
 Any pairing not listed is reported when you create the namespace. Note that
 `matrix` takes `l2` and nothing else, even though it stores records `jaccard`
@@ -261,11 +261,11 @@ Comparator parameters:
 
 | Parameter | Comparator | Values | Default |
 | --- | --- | --- | --- |
-| `signature_generator_type` | `jaccard` | `minhash` | none |
-| `signature_generator_type` | `ruzicka` | `i2cws`, `icws`, `pcws`, `scws` | none |
+| `signature_generator` | `jaccard` | `minhash` | none |
+| `signature_generator` | `ruzicka` | `i2cws`, `icws`, `pcws`, `scws` | none |
 | `sequence_distance_type` | `gld`, `ngld` | `levenshtein`, `damerau_levenshtein`, `lcs` | `levenshtein` |
 
-`signature_generator_type` is required by `inverted_signature` and
+`signature_generator` is required by `inverted_signature` and
 `inverted_hybrid` and optional everywhere else. `l2` does not support signature
 generation.
 

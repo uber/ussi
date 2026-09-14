@@ -236,7 +236,7 @@ class HybridIndexTest {
                 1000,
                 Map.of(
                     Constants.CANDIDATE_GENERATOR,
-                    NamespaceConfig.CandidateGenerator.SPARS_MERGE.getParamValue())),
+                    NamespaceConfig.CandidateGeneratorType.SPARS_MERGE.getParamValue())),
             rows,
             longObjectMap());
 
@@ -286,7 +286,7 @@ class HybridIndexTest {
         .indexType("inverted_hybrid")
         .indexParams(indexParams)
         .comparatorType(comparatorType)
-        .comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR_TYPE, signatureGeneratorType))
+        .comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR, signatureGeneratorType))
         .comparatorNormalizerType("identity")
         .maxNumSearchableStructures(3)
         .maxNumSimilarities(100)

@@ -123,8 +123,8 @@ public final class NamespaceConfig {
     return NamespaceConfigParams.readDoubleParam(cacheParams, key, defaultValue);
   }
 
-  public CandidateGenerator getCandidateGenerator() {
-    return parseCandidateGenerator(indexParams);
+  public CandidateGeneratorType getCandidateGeneratorType() {
+    return parseCandidateGeneratorType(indexParams);
   }
 
   public PopularTermDiscardScope getIndexPopularTermDiscardScope() {
@@ -177,7 +177,7 @@ public final class NamespaceConfig {
               + maxTermsAndValuesLength
               + ".");
     }
-    collectCandidateGeneratorViolations(violations);
+    collectCandidateGeneratorTypeViolations(violations);
     collectPopularTermDiscardScopeViolations(violations);
     return violations;
   }
@@ -192,9 +192,9 @@ public final class NamespaceConfig {
     }
   }
 
-  private void collectCandidateGeneratorViolations(List<String> violations) {
+  private void collectCandidateGeneratorTypeViolations(List<String> violations) {
     try {
-      parseCandidateGenerator(indexParams);
+      parseCandidateGeneratorType(indexParams);
     } catch (IllegalArgumentException e) {
       violations.add(e.getMessage());
     }
@@ -215,19 +215,20 @@ public final class NamespaceConfig {
     return scope;
   }
 
-  private static CandidateGenerator parseCandidateGenerator(Map<String, String> indexParams) {
+  private static CandidateGeneratorType parseCandidateGeneratorType(
+      Map<String, String> indexParams) {
     String rawValue = NamespaceConfigParams.getParam(indexParams, Constants.CANDIDATE_GENERATOR);
     if (NamespaceConfigParams.isBlank(rawValue)) {
-      return CandidateGenerator.SPARS;
+      return CandidateGeneratorType.SPARS;
     }
-    CandidateGenerator generator =
-        ConfigVocabulary.fromParamValue(CandidateGenerator.class, rawValue);
-    if (generator == null) {
+    CandidateGeneratorType generatorType =
+        ConfigVocabulary.fromParamValue(CandidateGeneratorType.class, rawValue);
+    if (generatorType == null) {
       throw new IllegalArgumentException(
           ConfigVocabulary.unsupported(
-              Constants.CANDIDATE_GENERATOR, rawValue, CandidateGenerator.class));
+              Constants.CANDIDATE_GENERATOR, rawValue, CandidateGeneratorType.class));
     }
-    return generator;
+    return generatorType;
   }
 
   /**
@@ -250,7 +251,7 @@ public final class NamespaceConfig {
   }
 
   /** Candidate-generation algorithm for the immutable inverted indexes. */
-  public enum CandidateGenerator implements ConfigVocabulary {
+  public enum CandidateGeneratorType implements ConfigVocabulary {
     SPARS,
     SPARS_MERGE
   }

@@ -156,7 +156,7 @@ class TermIndexTest {
             Constants.MAX_FRACTION_IDS_PER_KEY, "0.5",
             Constants.POPULAR_TERM_DISCARD_SCOPE, CANDIDATES_ONLY,
             Constants.CANDIDATE_GENERATOR,
-            NamespaceConfig.CandidateGenerator.SPARS_MERGE.getParamValue());
+            NamespaceConfig.CandidateGeneratorType.SPARS_MERGE.getParamValue());
     TermIndex index = new TermIndex(config("jaccard", params, "inverted_term"), rows, longObjectMap());
 
     // A conjunction cannot score the discarded terms, so the merge verifies through the comparator.
@@ -737,7 +737,7 @@ class TermIndexTest {
     Map<String, String> merged = new LinkedHashMap<>(indexParams);
     merged.put(
         Constants.CANDIDATE_GENERATOR,
-        NamespaceConfig.CandidateGenerator.SPARS_MERGE.getParamValue());
+        NamespaceConfig.CandidateGeneratorType.SPARS_MERGE.getParamValue());
     return merged;
   }
 
@@ -746,7 +746,7 @@ class TermIndexTest {
         comparatorType,
         Map.of(
             Constants.CANDIDATE_GENERATOR,
-            NamespaceConfig.CandidateGenerator.SPARS_MERGE.getParamValue()),
+            NamespaceConfig.CandidateGeneratorType.SPARS_MERGE.getParamValue()),
         "inverted_term");
   }
 

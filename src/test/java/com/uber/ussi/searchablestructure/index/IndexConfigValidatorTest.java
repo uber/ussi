@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.uber.ussi.comparator.ComparatorType;
 import com.uber.ussi.config.NamespaceConfig;
-import com.uber.ussi.config.NamespaceConfig.CandidateGenerator;
+import com.uber.ussi.config.NamespaceConfig.CandidateGeneratorType;
 import com.uber.ussi.utils.Constants;
 import java.util.List;
 import java.util.Map;
@@ -215,7 +215,7 @@ class IndexConfigValidatorTest {
 
   /** The config's own structural checks report it, so the generator-dependent rules are skipped. */
   @Test
-  void anUnparseableCandidateGeneratorIsLeftToTheStructuralChecks() {
+  void anUnparseableCandidateGeneratorTypeIsLeftToTheStructuralChecks() {
     NamespaceConfig config =
         validBuilder()
             .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, "uni_outward"))
@@ -240,7 +240,7 @@ class IndexConfigValidatorTest {
             .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, sparsMerge()))
             .build();
     // Merging would be reported for jaccard on its own, so this pins the params.
-    Map<String, String> unbuildableParams = Map.of(Constants.SIGNATURE_GENERATOR_TYPE, "superhash");
+    Map<String, String> unbuildableParams = Map.of(Constants.SIGNATURE_GENERATOR, "superhash");
     // The structure names the comparator it computes from the config alone, so pairing it with
     // anything else is reported whether or not that comparator could be built. Naming l2 leaves
     // the params as the only thing wrong.
@@ -339,7 +339,7 @@ class IndexConfigValidatorTest {
   }
 
   private static String sparsMerge() {
-    return CandidateGenerator.SPARS_MERGE.getParamValue();
+    return CandidateGeneratorType.SPARS_MERGE.getParamValue();
   }
 
   @FunctionalInterface

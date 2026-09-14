@@ -130,7 +130,7 @@ class SignatureIndexTest {
                     config("l2", null), longObjectMap(1, l2(new long[] {1}, 1f)), longObjectMap()));
 
     assertTrue(
-        missingParam.getMessage().contains("needs signature_generator_type"),
+        missingParam.getMessage().contains("needs signature_generator"),
         missingParam.getMessage());
     assertTrue(
         noSuchParam.getMessage().contains("comparatorType l2 cannot generate"),
@@ -221,7 +221,7 @@ class SignatureIndexTest {
   private static Map<String, String> mergeIndexParams() {
     return Map.of(
         Constants.CANDIDATE_GENERATOR,
-        NamespaceConfig.CandidateGenerator.SPARS_MERGE.getParamValue());
+        NamespaceConfig.CandidateGeneratorType.SPARS_MERGE.getParamValue());
   }
 
   private static NamespaceConfig termConfig(
@@ -273,7 +273,7 @@ class SignatureIndexTest {
     Map<String, String> comparatorParams =
         signatureGeneratorType == null
             ? Map.of()
-            : Map.of(Constants.SIGNATURE_GENERATOR_TYPE, signatureGeneratorType);
+            : Map.of(Constants.SIGNATURE_GENERATOR, signatureGeneratorType);
     return NamespaceConfig.builder()
         .minTermsAndValuesLength(0)
         .maxTermsAndValuesLength(1000)

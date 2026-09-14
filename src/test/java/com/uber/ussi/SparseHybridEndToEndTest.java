@@ -80,7 +80,7 @@ class SparseHybridEndToEndTest {
         .cacheType("inverted_term")
         .indexType("inverted_hybrid")
         .comparatorType("jaccard")
-        .comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR_TYPE, "minhash"))
+        .comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR, "minhash"))
         .comparatorNormalizerType("identity")
         .maxNumSearchableStructures(3)
         .maxNumSimilarities(10)

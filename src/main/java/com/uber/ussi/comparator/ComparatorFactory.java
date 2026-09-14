@@ -104,7 +104,7 @@ public class ComparatorFactory {
   }
 
   private static boolean hasSignatureGeneratorType(Map<String, String> comparatorParams) {
-    return NamespaceConfigParams.getParam(comparatorParams, Constants.SIGNATURE_GENERATOR_TYPE)
+    return NamespaceConfigParams.getParam(comparatorParams, Constants.SIGNATURE_GENERATOR)
         != null;
   }
 
@@ -112,7 +112,7 @@ public class ComparatorFactory {
   private static SignatureGenerator createSignatureGenerator(
       Map<String, String> comparatorParams, ComparatorType comparatorType) {
     String configuredType =
-        NamespaceConfigParams.getParam(comparatorParams, Constants.SIGNATURE_GENERATOR_TYPE);
+        NamespaceConfigParams.getParam(comparatorParams, Constants.SIGNATURE_GENERATOR);
     if (configuredType == null || configuredType.trim().isEmpty()) {
       return null;
     }
@@ -121,7 +121,7 @@ public class ComparatorFactory {
     if (type == null) {
       throw new ComparatorCreationError(
           ConfigVocabulary.unsupported(
-              Constants.SIGNATURE_GENERATOR_TYPE, configuredType, SignatureGeneratorType.class));
+              Constants.SIGNATURE_GENERATOR, configuredType, SignatureGeneratorType.class));
     }
     if (!comparatorType.getSupportedSignatureGeneratorTypes().contains(type)) {
       throw new ComparatorCreationError(

@@ -70,12 +70,7 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
 
   NearestNeighborSearchIndex(NamespaceConfig namespaceConfig, ExecutorService backgroundExecutor) {
     this.namespaceConfig = Objects.requireNonNull(namespaceConfig, "namespaceConfig");
-    /*
-     * A namespace holds a cache and the indexes that cache graduates into, so every layer's rules
-     * have to hold before any of them is built. Validating here reports all of them at once,
-     * rather than letting whichever layer is constructed first raise a creation error for the one
-     * it happened to reach.
-     */
+    // A namespace holds a cache and the indexes it graduates into, so all their rules must hold.
     this.namespaceConfig.validate(
         CacheConfigValidator.getInstance(),
         IndexConfigValidator.getInstance(),

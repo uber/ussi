@@ -100,10 +100,7 @@ class ComparatorConfigValidatorTest {
         false,
         "Unsupported comparatorNormalizerType (softmax). Supported values: "
             + "complement, identity, lp, reciprocal."),
-    /*
-     * A comparator scores through its normalizer, so an unsupported normalizer is reported even
-     * though nothing else here could be answered for it either.
-     */
+    // The normalizer is reported even when the comparator name cannot be answered for either.
     new ValidationCase(
         "unsupported comparator normalizer type on an unknown comparator",
         builder -> builder.comparatorType("cosine").comparatorNormalizerType("softmax"),
@@ -122,11 +119,7 @@ class ComparatorConfigValidatorTest {
     }
   }
 
-  /**
-   * A param is found the same way wherever it is read, so a key validation resolved is one
-   * construction resolves too. Reading the map two ways let a config be validated on a value that
-   * construction never saw: this signature param was reported against L2 and then ignored by it.
-   */
+  /** A key validation resolves is one construction resolves, so the two cannot disagree. */
   @Test
   void aParamUnderADifferentlyCasedKeyIsReadByValidationAndConstructionAlike() {
     NamespaceConfig config =
@@ -139,10 +132,7 @@ class ComparatorConfigValidatorTest {
     assertThrows(ComparatorCreationError.class, () -> ComparatorFactory.createComparator(config));
   }
 
-  /**
-   * The same key on the sequence comparators, where being missed is silent rather than loud: an
-   * absent sequence distance type means Levenshtein.
-   */
+  /** The same rule where a missed key is silent: an absent sequence distance means Levenshtein. */
   @Test
   void aSequenceDistanceUnderADifferentlyCasedKeyIsNotTheDefault() {
     SequenceDistance distance =

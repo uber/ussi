@@ -6,9 +6,8 @@ import javax.annotation.Nullable;
 
 /**
  * Param-map lookup shared by {@link NamespaceConfig}, {@link ConfigViolations}, and the factories
- * that read a param map they were handed rather than the config it came from. A param has to be
- * found the same way wherever it is read, or a config can be validated on a value that the layer
- * building from it never sees.
+ * handed a param map rather than the config it came from. A param must be found the same way
+ * wherever it is read, or a config is validated on a value its layer never sees.
  */
 public final class NamespaceConfigParams {
   private NamespaceConfigParams() {}

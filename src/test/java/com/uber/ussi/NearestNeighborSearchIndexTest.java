@@ -30,11 +30,7 @@ class NearestNeighborSearchIndexTest {
     assertEquals(0, index.getAllRowNums().length);
   }
 
-  /**
-   * A namespace is checked against every layer's rules before any of them is built, so a config
-   * that no layer could be built from is reported as the violation it is rather than as whichever
-   * creation error the first layer constructed happened to raise.
-   */
+  /** Every layer's rules are checked before any layer is built. */
   @Test
   void createReportsViolationsBeforeBuildingAnyLayer() {
     NamespaceConfig config =

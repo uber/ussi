@@ -3,6 +3,7 @@ package com.uber.ussi.searchablestructure.index;
 
 import com.uber.ussi.comparator.Comparator;
 import com.uber.ussi.comparator.ComparatorFactory;
+import com.uber.ussi.comparator.SignatureComparator;
 import com.uber.ussi.config.ConfigViolations;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.config.NamespaceConfig.CandidateGenerator;
@@ -52,7 +53,47 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
           1.0);
     }
     RecordType recordType = resolveRecordType(config, indexType, violations);
+    collectSignatureSupportViolations(config, indexType, violations);
     collectCandidateGeneratorViolations(config, indexType, recordType, violations);
+  }
+
+  /**
+   * The signature-keyed structures key their lists by something the comparator has to produce, so
+   * a comparator that generates no signatures leaves them nothing to build an index from. The
+   * index constructors refuse such a pairing too, but only once rows are being indexed, which is
+   * later than a config can be checked.
+   */
+  private static void collectSignatureSupportViolations(
+      NamespaceConfig config, IndexType indexType, List<String> violations) {
+    if (!indexType.requiresSignatureSupport()) {
+      return;
+    }
+    Comparator comparator = ComparatorFactory.tryCreateComparator(config);
+    if (comparator == null) {
+      return;
+    }
+    if (comparator instanceof SignatureComparator signatureComparator
+        && signatureComparator.supportsSignatures()) {
+      return;
+    }
+    /*
+     * Whether the comparator could generate signatures at all is the difference between a config
+     * that is missing a param and one that has to change structure or comparator.
+     */
+    if (ComparatorFactory.getSupportedSignatureGeneratorTypes(config.getComparatorType())
+        .isEmpty()) {
+      violations.add(
+          String.format(
+              "indexType %s keys its lists by signatures, which comparatorType %s cannot generate.",
+              indexType.getParamValue(), config.getComparatorType()));
+    } else {
+      violations.add(
+          String.format(
+              "indexType %s keys its lists by signatures, so comparatorType %s needs %s.",
+              indexType.getParamValue(),
+              config.getComparatorType(),
+              Constants.SIGNATURE_GENERATOR_TYPE));
+    }
   }
 
   private static void collectMetadataFilteringStrategyViolations(

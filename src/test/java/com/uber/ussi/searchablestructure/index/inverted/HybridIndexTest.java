@@ -12,7 +12,6 @@ import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
-import com.uber.ussi.error.IndexCreationError;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
 import com.uber.ussi.utils.Constants;
 import java.util.Arrays;
@@ -204,7 +203,7 @@ class HybridIndexTest {
         IllegalArgumentException.class,
         () -> index.getSimilarRowNums(1.1f, query, MetaFilter.empty()));
     assertThrows(
-        IndexCreationError.class,
+        IllegalArgumentException.class,
         () -> new HybridIndex(configWithoutSignatures(), longObjectMap(), longObjectMap()));
   }
 

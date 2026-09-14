@@ -34,10 +34,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
 /**
@@ -657,29 +655,27 @@ abstract class BaseInvertedIndex extends Index {
   }
 
   /**
-   * Returns the record type this index stores, which is the one type the structure can store and
-   * the comparator can read. {@link IndexConfigValidator} reports a config with no such type, so
-   * reaching one here means the index was built without being validated first.
+   * Returns the record type this index stores, which is the one type the structure stores and the
+   * comparator reads.
+   *
+   * <p>Both failures are backstops rather than the reported rule, and they are not the same
+   * mistake. Having none in common is a pairing {@code IndexConfigValidator} rejects with the two
+   * sets spelled out, so reaching it here means an index was built from a config nothing
+   * validated. Having several is a comparator that reads more than one type this structure
+   * stores, which no comparator does today; it would leave the layout a row is validated against
+   * decided by neither the structure nor the comparator, so it fails rather than picking one.
    */
   private RecordType resolveRecordType(IndexType indexType) {
     Set<RecordType> recordTypes = indexType.resolveRecordTypes(comparator);
     if (recordTypes.size() != 1) {
       throw new IndexCreationError(
           String.format(
-              "indexType %s stores %s records, and comparatorType %s reads %s.",
+              "indexType %s and comparatorType %s have %s record type in common, not one.",
               indexType.getParamValue(),
-              describeRecordTypes(indexType.getStorableRecordTypes()),
               namespaceConfig.getComparatorType(),
-              describeRecordTypes(comparator.getSupportedRecordTypes())));
+              recordTypes.isEmpty() ? "no" : "more than one"));
     }
     return recordTypes.iterator().next();
-  }
-
-  private static String describeRecordTypes(Set<RecordType> recordTypes) {
-    return recordTypes.stream()
-        .map(recordType -> recordType.name().toLowerCase(Locale.ROOT))
-        .sorted()
-        .collect(Collectors.joining(", "));
   }
 
   /** The index state both candidate generators traverse, shared so it is allocated once. */

@@ -14,7 +14,6 @@ import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
-import com.uber.ussi.error.IndexCreationError;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.index.inverted.generator.InvertedList;
 import com.uber.ussi.utils.Constants;
@@ -108,25 +107,40 @@ class SignatureIndexTest {
     assertTrue(index.getNearestNeighborRowNums(2, record, MetaFilter.empty()).isEmpty());
   }
 
+  /**
+   * A comparator that generates no signatures leaves this structure nothing to key its lists by,
+   * which is a property of the config rather than of the rows, so it is reported before any row is
+   * read. A comparator that could generate them is told which param is missing; one that could not
+   * is told that no param would help.
+   */
   @Test
-  void constructorRequiresSignatureSupportBeforeBuildingRows() {
+  void aComparatorWithoutSignaturesIsRejectedBeforeBuildingRows() {
     NamespaceConfig exactJaccardConfig = config("jaccard", null);
 
+    IllegalArgumentException missingParam =
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> new SignatureIndex(exactJaccardConfig, longObjectMap(), longObjectMap()));
     assertThrows(
-        IndexCreationError.class,
-        () -> new SignatureIndex(exactJaccardConfig, longObjectMap(), longObjectMap()));
-    assertThrows(
-        IndexCreationError.class,
+        IllegalArgumentException.class,
         () ->
             new SignatureIndex(
                 exactJaccardConfig,
                 longObjectMap(1, jaccard(new long[] {1}, 1f)),
                 longObjectMap()));
-    assertThrows(
-        IndexCreationError.class,
-        () ->
-            new SignatureIndex(
-                config("l2", null), longObjectMap(1, l2(new long[] {1}, 1f)), longObjectMap()));
+    IllegalArgumentException noSuchParam =
+        assertThrows(
+            IllegalArgumentException.class,
+            () ->
+                new SignatureIndex(
+                    config("l2", null), longObjectMap(1, l2(new long[] {1}, 1f)), longObjectMap()));
+
+    assertTrue(
+        missingParam.getMessage().contains("needs signature_generator_type"),
+        missingParam.getMessage());
+    assertTrue(
+        noSuchParam.getMessage().contains("comparatorType l2 cannot generate"),
+        noSuchParam.getMessage());
   }
 
   /**

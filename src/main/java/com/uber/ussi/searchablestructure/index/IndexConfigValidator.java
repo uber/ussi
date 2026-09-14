@@ -23,6 +23,15 @@ import javax.annotation.Nullable;
  * built from.
  */
 public final class IndexConfigValidator implements NamespaceConfigValidator {
+  /** Every key some layer reads from indexParams, whatever structure is configured. */
+  private static final Set<String> RECOGNIZED_KEYS =
+      Set.of(
+          Index.MAX_PRE_FILTERING_ROWS_RATIO,
+          Index.METADATA_FILTERING_STRATEGY,
+          Constants.MAX_FRACTION_IDS_PER_KEY,
+          Constants.CANDIDATE_GENERATOR,
+          Constants.POPULAR_TERM_DISCARD_SCOPE);
+
   private static final IndexConfigValidator INSTANCE = new IndexConfigValidator();
 
   private IndexConfigValidator() {}
@@ -33,6 +42,8 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
 
   @Override
   public void collectViolations(NamespaceConfig config, List<String> violations) {
+    ConfigViolations.checkNoUnknownKeys(
+        violations, "indexParams", config.getIndexParams(), RECOGNIZED_KEYS);
     IndexType indexType = ConfigVocabulary.fromParamValue(IndexType.class, config.getIndexType());
     collectIndexTypeViolations(config, indexType, violations);
     ConfigViolations.checkDoubleInRange(

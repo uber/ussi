@@ -83,6 +83,30 @@ class CacheConfigValidatorTest {
         violations);
   }
 
+  @Test
+  void anUnknownCacheParamKeyNamesTheRecognizedOnes() {
+    List<String> violations =
+        violations(
+            invertedTermCacheBuilder().cacheParams(Map.of("max_fraction_ids", "0.5")).build());
+
+    assertEquals(
+        List.of(
+            "Unknown cacheParams key (max_fraction_ids). Supported keys: "
+                + "full_reevaluation_cache_size_decrease_fraction, max_fraction_ids_per_key, "
+                + "max_fraction_ids_per_key_confidence, popular_term_discard_scope."),
+        violations);
+  }
+
+  /** A key validation accepts is a key a read resolves, so casing cannot make the two disagree. */
+  @Test
+  void aRecognizedKeyUnderADifferentCasingIsNotUnknown() {
+    NamespaceConfig config =
+        invertedTermCacheBuilder().cacheParams(Map.of(" Max_Fraction_Ids_Per_Key ", "0.5")).build();
+
+    assertEquals(List.of(), violations(config));
+    assertEquals("0.5", config.getCacheParam(Constants.MAX_FRACTION_IDS_PER_KEY));
+  }
+
   private static NamespaceConfig.Builder invertedTermCacheBuilder() {
     return NamespaceConfig.builder()
         .minTermsAndValuesLength(0)

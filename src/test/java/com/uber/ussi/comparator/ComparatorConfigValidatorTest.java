@@ -155,6 +155,28 @@ class ComparatorConfigValidatorTest {
         ConfigVocabulary.fromParamValue(ComparatorType.class, " Jaccard "));
   }
 
+  @Test
+  void anUnknownComparatorParamKeyNamesTheRecognizedOnes() {
+    List<String> violations =
+        violations(validBuilder().comparatorParams(Map.of("signature_type", "minhash")).build());
+
+    assertEquals(
+        List.of(
+            "Unknown comparatorParams key (signature_type). Supported keys: "
+                + "sequence_distance_type, signature_generator_type."),
+        violations);
+  }
+
+  /** No normalizer reads a param, so any key under one is a key nothing would have read. */
+  @Test
+  void aNormalizerParamKeyIsUnknownBecauseNoNormalizerReadsOne() {
+    List<String> violations =
+        violations(validBuilder().comparatorNormalizerParams(Map.of("p", "2")).build());
+
+    assertEquals(
+        List.of("Unknown comparatorNormalizerParams key (p). It reads no keys."), violations);
+  }
+
   private static NamespaceConfig.Builder validBuilder() {
     return NamespaceConfig.builder()
         .minTermsAndValuesLength(0)

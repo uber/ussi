@@ -3,6 +3,7 @@ package com.uber.ussi.comparator;
 
 import com.uber.ussi.comparator.signaturegenerator.SignatureGeneratorFactory.SignatureGeneratorType;
 import com.uber.ussi.comparatornormalizer.ComparatorNormalizerType;
+import com.uber.ussi.config.ConfigViolations;
 import com.uber.ussi.config.ConfigVocabulary;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.config.NamespaceConfigValidator;
@@ -13,6 +14,13 @@ import java.util.Set;
 
 /** Reports the comparator params that {@link ComparatorFactory} would reject. */
 public final class ComparatorConfigValidator implements NamespaceConfigValidator {
+  /** Every key some layer reads from comparatorParams, whatever comparator is configured. */
+  private static final Set<String> RECOGNIZED_KEYS =
+      Set.of(Constants.SIGNATURE_GENERATOR_TYPE, Constants.SEQUENCE_DISTANCE_TYPE);
+
+  /** No normalizer reads a param, so a key here is one nothing would have read. */
+  private static final Set<String> RECOGNIZED_NORMALIZER_KEYS = Set.of();
+
   private static final ComparatorConfigValidator INSTANCE = new ComparatorConfigValidator();
 
   private ComparatorConfigValidator() {}
@@ -23,6 +31,13 @@ public final class ComparatorConfigValidator implements NamespaceConfigValidator
 
   @Override
   public void collectViolations(NamespaceConfig config, List<String> violations) {
+    ConfigViolations.checkNoUnknownKeys(
+        violations, "comparatorParams", config.getComparatorParams(), RECOGNIZED_KEYS);
+    ConfigViolations.checkNoUnknownKeys(
+        violations,
+        "comparatorNormalizerParams",
+        config.getComparatorNormalizerParams(),
+        RECOGNIZED_NORMALIZER_KEYS);
     collectComparatorNormalizerTypeViolations(config, violations);
     // Every check below asks what a named comparator supports, which an unknown name cannot answer.
     ComparatorType comparatorType =

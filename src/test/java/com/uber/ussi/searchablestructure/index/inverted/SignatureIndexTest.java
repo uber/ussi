@@ -93,7 +93,7 @@ class SignatureIndexTest {
     LongTermsAndValues record = jaccard(new long[] {11}, 1f);
     SignatureIndex index =
         new SignatureIndex(
-            config("jaccard", "minhash", Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0.5")),
+            config("jaccard", "minhash", Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "0.5")),
             longObjectMap(1, record, 2, record),
             longObjectMap());
 

@@ -17,11 +17,11 @@ class IndexConfigValidatorTest {
     new ValidationCase("defaults", builder -> builder, true),
     new ValidationCase(
         "unparseable max fraction",
-        builder -> builder.indexParams(Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "bad")),
+        builder -> builder.indexParams(Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "bad")),
         false),
     new ValidationCase(
         "max fraction at zero",
-        builder -> builder.indexParams(Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0")),
+        builder -> builder.indexParams(Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "0")),
         false),
     new ValidationCase(
         "pre-filtering ratio above one",
@@ -112,7 +112,7 @@ class IndexConfigValidatorTest {
             builder
                 .indexType(IndexType.INVERTED_TERM.getParamValue())
                 .comparatorType(ComparatorType.NGLD.getParamValue())
-                .indexParams(Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0.05")),
+                .indexParams(Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "0.05")),
         true),
     new ValidationCase(
         "the term structure keeping every element",
@@ -120,7 +120,7 @@ class IndexConfigValidatorTest {
             builder
                 .indexType(IndexType.INVERTED_TERM.getParamValue())
                 .comparatorType(ComparatorType.NGLD.getParamValue())
-                .indexParams(Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "1.0")),
+                .indexParams(Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "1.0")),
         true),
     // L2 reads both dense and sparse records, so no structure here can turn it away.
     new ValidationCase(
@@ -170,7 +170,7 @@ class IndexConfigValidatorTest {
     NamespaceConfig config =
         validBuilder()
             .indexType("term")
-            .indexParams(Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0"))
+            .indexParams(Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "0"))
             .build();
 
     List<String> violations = violations(config);
@@ -271,7 +271,7 @@ class IndexConfigValidatorTest {
     assertEquals(
         List.of(
             "Unknown indexParams key (candidate_generation). Supported keys: "
-                + "candidate_generator, max_fraction_ids_per_key, max_pre_filtering_rows_ratio, "
+                + "candidate_generator, max_fraction_ids_per_term, max_pre_filtering_rows_ratio, "
                 + "metadata_filtering_strategy, popular_term_discard_scope."),
         violations);
   }
@@ -315,7 +315,7 @@ class IndexConfigValidatorTest {
         validBuilder()
             .indexType(IndexType.MATRIX.getParamValue())
             .comparatorType(ComparatorType.L2.getParamValue())
-            .indexParams(Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0.5"))
+            .indexParams(Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "0.5"))
             .build();
 
     assertEquals(List.of(), violations(config));

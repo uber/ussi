@@ -31,14 +31,14 @@ import javax.annotation.Nullable;
  * <p>High-popularity terms are filtered dynamically. The cache sees an incrementally changing
  * sample rather than a complete dataset, so each cached row is a Bernoulli trial for containing a
  * term, and a term is excluded from comparisons when the upper bound of the one-sided confidence
- * interval of its true popularity exceeds max_fraction_ids_per_key. Decisions are reversible,
+ * interval of its true popularity exceeds max_fraction_ids_per_term. Decisions are reversible,
  * since lists and stored rows retain all terms; they are updated incrementally after mutations and
  * fully reevaluated once the cache shrinks enough for the lower denominator to matter.
  */
 public final class InvertedTermCache extends Cache {
   private static final double MAX_ROWS_RATIO_TO_BRUTE_FORCE_PRE_FILTERING = 0.01;
 
-  private final double maxFractionIdsPerKey;
+  private final double maxFractionIdsPerTerm;
   private final PopularTermDiscardScope popularTermDiscardScope;
   private final double fullReevaluationCacheSizeDecreaseFraction;
   private final MathUtils.ProportionConfidenceInterval1Sided popularityConfidenceTester;
@@ -49,13 +49,13 @@ public final class InvertedTermCache extends Cache {
 
   public InvertedTermCache(NamespaceConfig namespaceConfig) {
     super(namespaceConfig);
-    this.maxFractionIdsPerKey = parseMaxFractionIdsPerKey(namespaceConfig);
+    this.maxFractionIdsPerTerm = parseMaxFractionIdsPerTerm(namespaceConfig);
     this.popularTermDiscardScope = namespaceConfig.getCachePopularTermDiscardScope();
     this.fullReevaluationCacheSizeDecreaseFraction =
         parseFullReevaluationCacheSizeDecreaseFraction(namespaceConfig);
     this.popularityConfidenceTester =
         new MathUtils.ProportionConfidenceInterval1Sided(
-            parseMaxFractionIdsPerKeyConfidence(namespaceConfig));
+            parseMaxFractionIdsPerTermConfidence(namespaceConfig));
     this.termAndRowNumsIndex = new LongObjectHashMap<>(CACHE_INITIAL_CAPACITY);
     this.discardedTerms = new LongHashSet();
   }
@@ -264,7 +264,7 @@ public final class InvertedTermCache extends Cache {
   }
 
   private void updateDiscardedTermsAfterInsertion(LongTermsAndValues insertedRecord) {
-    if (maxFractionIdsPerKey == 1.0) {
+    if (maxFractionIdsPerTerm == 1.0) {
       discardedTerms.clear();
       return;
     }
@@ -285,7 +285,7 @@ public final class InvertedTermCache extends Cache {
   }
 
   private void updateDiscardedTermsAfterDeletion(LongTermsAndValues deletedRecord) {
-    if (maxFractionIdsPerKey == 1.0) {
+    if (maxFractionIdsPerTerm == 1.0) {
       discardedTerms.clear();
       return;
     }
@@ -331,7 +331,7 @@ public final class InvertedTermCache extends Cache {
     }
     return popularityConfidenceTester.getConfidenceIntervalUpperBound(
             /* numTrials */ numRows, /* numSuccesses */ numRowsWithTerm)
-        > maxFractionIdsPerKey;
+        > maxFractionIdsPerTerm;
   }
 
   /** Rebuilds all popularity decisions and resets the exact-evaluation cache-size baseline. */
@@ -339,7 +339,7 @@ public final class InvertedTermCache extends Cache {
     discardedTerms.clear();
     int numRows = size();
     numRowsAtLastExactPopularityEvaluation = numRows;
-    if (numRows == 0 || maxFractionIdsPerKey == 1.0) {
+    if (numRows == 0 || maxFractionIdsPerTerm == 1.0) {
       return;
     }
     for (LongObjectCursor<LongArrayList> entry : termAndRowNumsIndex) {
@@ -351,10 +351,10 @@ public final class InvertedTermCache extends Cache {
     return new BoundedSizeMaxHeap<>(maxResults, RowNumAndSimilarity.TOP_RESULTS_HEAP_ORDER);
   }
 
-  private static double parseMaxFractionIdsPerKey(NamespaceConfig namespaceConfig) {
+  private static double parseMaxFractionIdsPerTerm(NamespaceConfig namespaceConfig) {
     return namespaceConfig.readDoubleCacheParam(
-        Constants.MAX_FRACTION_IDS_PER_KEY,
-        Constants.DEFAULT_MAX_FRACTION_IDS_PER_KEY);
+        Constants.MAX_FRACTION_IDS_PER_TERM,
+        Constants.DEFAULT_MAX_FRACTION_IDS_PER_TERM);
   }
 
   private static double parseFullReevaluationCacheSizeDecreaseFraction(
@@ -366,11 +366,11 @@ public final class InvertedTermCache extends Cache {
 
   /**
    * Parses the one-sided confidence used to declare a term high-popularity. A confidence of 0.5
-   * degenerates to comparing the observed popularity against maxFractionIdsPerKey directly.
+   * degenerates to comparing the observed popularity against maxFractionIdsPerTerm directly.
    */
-  private static double parseMaxFractionIdsPerKeyConfidence(NamespaceConfig namespaceConfig) {
+  private static double parseMaxFractionIdsPerTermConfidence(NamespaceConfig namespaceConfig) {
     return namespaceConfig.readDoubleCacheParam(
-        Constants.MAX_FRACTION_IDS_PER_KEY_CONFIDENCE,
-        Constants.DEFAULT_MAX_FRACTION_IDS_PER_KEY_CONFIDENCE);
+        Constants.MAX_FRACTION_IDS_PER_TERM_CONFIDENCE,
+        Constants.DEFAULT_MAX_FRACTION_IDS_PER_TERM_CONFIDENCE);
   }
 }

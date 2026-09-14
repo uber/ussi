@@ -17,13 +17,13 @@ class CacheConfigValidatorTest {
     new ValidationCase(
         "max fraction at zero",
         builder ->
-            builder.cacheParams(Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0")),
+            builder.cacheParams(Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "0")),
         false),
     new ValidationCase(
         "confidence below one half",
         builder ->
             builder.cacheParams(
-                Map.of(Constants.MAX_FRACTION_IDS_PER_KEY_CONFIDENCE, "0.4")),
+                Map.of(Constants.MAX_FRACTION_IDS_PER_TERM_CONFIDENCE, "0.4")),
         false),
     new ValidationCase(
         "unparseable reevaluation fraction",
@@ -36,7 +36,7 @@ class CacheConfigValidatorTest {
         builder ->
             builder
                 .cacheType("scan")
-                .cacheParams(Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0")),
+                .cacheParams(Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "0")),
         true),
     // The inverted term cache needs terms and a value per term, which a sequence does not supply.
     new ValidationCase(
@@ -92,8 +92,8 @@ class CacheConfigValidatorTest {
     assertEquals(
         List.of(
             "Unknown cacheParams key (max_fraction_ids). Supported keys: "
-                + "full_reevaluation_cache_size_decrease_fraction, max_fraction_ids_per_key, "
-                + "max_fraction_ids_per_key_confidence, popular_term_discard_scope."),
+                + "full_reevaluation_cache_size_decrease_fraction, max_fraction_ids_per_term, "
+                + "max_fraction_ids_per_term_confidence, popular_term_discard_scope."),
         violations);
   }
 
@@ -101,10 +101,12 @@ class CacheConfigValidatorTest {
   @Test
   void aRecognizedKeyUnderADifferentCasingIsNotUnknown() {
     NamespaceConfig config =
-        invertedTermCacheBuilder().cacheParams(Map.of(" Max_Fraction_Ids_Per_Key ", "0.5")).build();
+        invertedTermCacheBuilder()
+            .cacheParams(Map.of(" Max_Fraction_Ids_Per_Term ", "0.5"))
+            .build();
 
     assertEquals(List.of(), violations(config));
-    assertEquals("0.5", config.getCacheParam(Constants.MAX_FRACTION_IDS_PER_KEY));
+    assertEquals("0.5", config.getCacheParam(Constants.MAX_FRACTION_IDS_PER_TERM));
   }
 
   private static NamespaceConfig.Builder invertedTermCacheBuilder() {

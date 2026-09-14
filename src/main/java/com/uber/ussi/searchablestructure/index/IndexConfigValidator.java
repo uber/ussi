@@ -28,7 +28,7 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
       Set.of(
           Index.MAX_PRE_FILTERING_ROWS_RATIO,
           Index.METADATA_FILTERING_STRATEGY,
-          Constants.MAX_FRACTION_IDS_PER_KEY,
+          Constants.MAX_FRACTION_IDS_PER_TERM,
           Constants.CANDIDATE_GENERATOR,
           Constants.POPULAR_TERM_DISCARD_SCOPE);
 
@@ -59,8 +59,8 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
     if (indexType.supportsCandidateGenerator()) {
       ConfigViolations.checkDoubleAboveMinInRange(
           violations,
-          Constants.MAX_FRACTION_IDS_PER_KEY,
-          config.getIndexParam(Constants.MAX_FRACTION_IDS_PER_KEY),
+          Constants.MAX_FRACTION_IDS_PER_TERM,
+          config.getIndexParam(Constants.MAX_FRACTION_IDS_PER_TERM),
           0.0,
           1.0);
     }

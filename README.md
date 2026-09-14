@@ -237,24 +237,24 @@ structure reads stays valid beside a structure that ignores it.
 
 Index parameters:
 
-| Parameter | Values | Default | Description |
-| --- | --- | --- | --- |
-| `metadata_filtering_strategy` | `auto`, `in_filtering`, `pre_filtering`, `post_filtering` | `auto` | How the index applies metadata filters. Leave at `auto` unless you are tuning. |
-| `max_pre_filtering_rows_ratio` | double in `[0.0, 1.0]` | `0.1` | How selective a metadata filter has to be before pre-filtering is used. |
-| `max_fraction_ids_per_key` | double in `(0.0, 1.0]` | `1.0` | For the inverted index types, discards a term occurring in more than this fraction of rows. `1.0` disables it. See [Discarding Popular Terms](#discarding-popular-terms). |
-| `popular_term_discard_scope` | `candidates_and_verification`, `candidates_only` | `candidates_and_verification` | What discarding a term means. See [Discarding Popular Terms](#discarding-popular-terms). |
-| `candidate_generator` | `spars`, `spars_merge` | `spars` | Which candidate generator the inverted index types use. Both return identical results. See [Candidate Generation](#candidate-generation). |
+| Parameter | Values | Description |
+| --- | --- | --- |
+| `metadata_filtering_strategy` | `auto` (default), `in_filtering`, `pre_filtering`, `post_filtering` | How the index applies metadata filters. Leave at `auto` unless you are tuning. |
+| `max_pre_filtering_rows_ratio` | double in `[0.0, 1.0]`, default `0.1` | How selective a metadata filter has to be before pre-filtering is used. |
+| `max_fraction_ids_per_term` | double in `(0.0, 1.0]`, default `1.0` | For the inverted index types, discards a term occurring in more than this fraction of rows. `1.0` disables it. See [Discarding Popular Terms](#discarding-popular-terms). |
+| `popular_term_discard_scope` | `candidates_and_verification` (default), `candidates_only` | What discarding a term means. See [Discarding Popular Terms](#discarding-popular-terms). |
+| `candidate_generator` | `spars` (default), `spars_merge` | Which candidate generator the inverted index types use. Both return identical results. See [Candidate Generation](#candidate-generation). |
 
 Cache parameters, read by the `inverted_term` cache:
 
-| Parameter | Values | Default | Description |
-| --- | --- | --- | --- |
-| `max_fraction_ids_per_key` | double in `(0.0, 1.0]` | `1.0` | Discards a term whose one-sided popularity bound exceeds this fraction. `1.0` disables it. |
-| `popular_term_discard_scope` | `candidates_and_verification`, `candidates_only` | `candidates_and_verification` | What discarding a term means. See [Discarding Popular Terms](#discarding-popular-terms). |
-| `max_fraction_ids_per_key_confidence` | double in `[0.5, 1.0]` | `0.95` | Confidence used for the popularity bound. `0.5` reduces it to observed popularity. |
-| `full_reevaluation_cache_size_decrease_fraction` | double in `[0.0, 1.0]` | `0.10` | How far the cache must shrink before popularity is reevaluated for every term. `0.0` reevaluates after every deletion. |
+| Parameter | Values | Description |
+| --- | --- | --- |
+| `max_fraction_ids_per_term` | double in `(0.0, 1.0]`, default `1.0` | Discards a term whose one-sided popularity bound exceeds this fraction. `1.0` disables it. |
+| `popular_term_discard_scope` | `candidates_and_verification` (default), `candidates_only` | What discarding a term means. See [Discarding Popular Terms](#discarding-popular-terms). |
+| `max_fraction_ids_per_term_confidence` | double in `[0.5, 1.0]`, default `0.95` | Confidence used for the popularity bound. `0.5` reduces it to observed popularity. |
+| `full_reevaluation_cache_size_decrease_fraction` | double in `[0.0, 1.0]`, default `0.10` | How far the cache must shrink before popularity is reevaluated for every term. `0.0` reevaluates after every deletion. |
 
-Set `max_fraction_ids_per_key` and `popular_term_discard_scope` to the same
+Set `max_fraction_ids_per_term` and `popular_term_discard_scope` to the same
 values in both `cacheParams` and `indexParams`. Each structure reads its own,
 so setting them on only one leaves a namespace behaving one way before
 graduation and another way after.
@@ -331,7 +331,7 @@ structure, so a deleted row never comes back.
 ### Discarding Popular Terms
 
 A term occurring in most rows produces most of the index as candidates without
-narrowing anything down. Setting `max_fraction_ids_per_key` below `1.0` lets
+narrowing anything down. Setting `max_fraction_ids_per_term` below `1.0` lets
 the inverted cache and indexes discard such terms.
 `popular_term_discard_scope` decides what a discard means, and the two settings
 differ in which half of the answer stays exact:

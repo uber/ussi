@@ -259,6 +259,32 @@ class IndexConfigValidatorTest {
     assertEquals(List.of(), violations(unbuildableWithMerge), "unbuildable with merge");
   }
 
+  @Test
+  void anUnknownIndexParamKeyNamesTheRecognizedOnes() {
+    List<String> violations =
+        violations(validBuilder().indexParams(Map.of("candidate_generation", "spars")).build());
+
+    assertEquals(
+        List.of(
+            "Unknown indexParams key (candidate_generation). Supported keys: "
+                + "candidate_generator, max_fraction_ids_per_key, max_pre_filtering_rows_ratio, "
+                + "metadata_filtering_strategy, popular_term_discard_scope."),
+        violations);
+  }
+
+  /** A key recognized here is one some layer reads, whatever structure the namespace names. */
+  @Test
+  void aKeyOnlyOneStructureReadsIsRecognizedForEveryStructure() {
+    NamespaceConfig config =
+        validBuilder()
+            .indexType(IndexType.MATRIX.getParamValue())
+            .comparatorType(ComparatorType.L2.getParamValue())
+            .indexParams(Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0.5"))
+            .build();
+
+    assertEquals(List.of(), violations(config));
+  }
+
   private static NamespaceConfig.Builder validBuilder() {
     return NamespaceConfig.builder()
         .minTermsAndValuesLength(0)

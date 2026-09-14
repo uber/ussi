@@ -2,6 +2,10 @@
 package com.uber.ussi.config;
 
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
 /** Violation checks shared by {@link NamespaceConfig} and the layer validators. */
@@ -46,6 +50,27 @@ public final class ConfigViolations {
     checkDouble(violations, name, rawValue, minValue, maxValue, /* minValueExcluded */ true);
   }
 
+  /**
+   * Checks that every key in {@code params} is one {@code recognizedKeys} names. A key is matched
+   * the way {@link NamespaceConfigParams#getParam} matches it, so a key reported here is one no
+   * layer would have read, and a key accepted here is one some layer reads.
+   */
+  public static void checkNoUnknownKeys(
+      List<String> violations,
+      String paramsName,
+      Map<String, String> params,
+      Set<String> recognizedKeys) {
+    for (String key : params.keySet()) {
+      if (key != null && recognizedKeys.contains(key.trim().toLowerCase(Locale.ROOT))) {
+        continue;
+      }
+      violations.add(
+          String.format(
+              "Unknown %s key (%s). %s",
+              paramsName, key, describeRecognizedKeys(recognizedKeys)));
+    }
+  }
+
   /** Renders violations as a single message, listing them when there is more than one. */
   public static String format(List<String> violations) {
     if (violations.size() == 1) {
@@ -57,6 +82,15 @@ public final class ConfigViolations {
       message.append("\n  - ").append(violation);
     }
     return message.toString();
+  }
+
+  private static String describeRecognizedKeys(Set<String> recognizedKeys) {
+    if (recognizedKeys.isEmpty()) {
+      return "It reads no keys.";
+    }
+    return "Supported keys: "
+        + recognizedKeys.stream().sorted().collect(Collectors.joining(", "))
+        + ".";
   }
 
   private static void checkDouble(

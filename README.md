@@ -288,6 +288,13 @@ intended for sparse numeric records. It should normally graduate to an
 namespace caches through `scan`, because the `inverted_term` cache reads one
 value per distinct term and a sequence supplies neither.
 
+Each param map is read by key, ignoring case and surrounding space, and a key
+no layer reads is a config violation rather than a setting that silently does
+nothing. A key is recognized per map, not per structure, so a parameter only
+one structure reads is still accepted alongside a structure that ignores it.
+No normalizer reads a parameter, so `comparatorNormalizerParams` accepts no
+keys at all.
+
 Index parameters:
 
 | Parameter | Values | Default | Description |

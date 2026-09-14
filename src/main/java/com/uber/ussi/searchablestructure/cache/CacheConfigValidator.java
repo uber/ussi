@@ -10,9 +10,18 @@ import com.uber.ussi.config.NamespaceConfigValidator;
 import com.uber.ussi.entity.termsandvalues.RecordType;
 import com.uber.ussi.utils.Constants;
 import java.util.List;
+import java.util.Set;
 
 /** Reports the cache types and cache params that no cache could be built from. */
 public final class CacheConfigValidator implements NamespaceConfigValidator {
+  /** Every key some layer reads from cacheParams, whatever structure is configured. */
+  private static final Set<String> RECOGNIZED_KEYS =
+      Set.of(
+          Constants.MAX_FRACTION_IDS_PER_KEY,
+          Constants.MAX_FRACTION_IDS_PER_KEY_CONFIDENCE,
+          Constants.FULL_REEVALUATION_CACHE_SIZE_DECREASE_FRACTION,
+          Constants.POPULAR_TERM_DISCARD_SCOPE);
+
   private static final CacheConfigValidator INSTANCE = new CacheConfigValidator();
 
   private CacheConfigValidator() {}
@@ -23,6 +32,8 @@ public final class CacheConfigValidator implements NamespaceConfigValidator {
 
   @Override
   public void collectViolations(NamespaceConfig config, List<String> violations) {
+    ConfigViolations.checkNoUnknownKeys(
+        violations, "cacheParams", config.getCacheParams(), RECOGNIZED_KEYS);
     CacheType cacheType = ConfigVocabulary.fromParamValue(CacheType.class, config.getCacheType());
     if (cacheType == null) {
       collectCacheTypeViolations(config, violations);

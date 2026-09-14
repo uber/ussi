@@ -40,7 +40,8 @@ public interface ConfigVocabulary {
   }
 
   /** Returns the names a config can write, in declaration order. */
-  static <E extends Enum<E> & ConfigVocabulary> String supportedParamValues(Class<E> vocabulary) {
+  private static <E extends Enum<E> & ConfigVocabulary> String supportedParamValues(
+      Class<E> vocabulary) {
     return Arrays.stream(vocabulary.getEnumConstants())
         .map(ConfigVocabulary::getParamValue)
         .collect(Collectors.joining(", "));

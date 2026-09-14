@@ -22,16 +22,13 @@ import org.junit.jupiter.api.Test;
 
 class SequenceComparatorTest {
 
-  /**
-   * Sequences are spelled as strings and split into one term per character, so the terms of
-   * "kitten" are its six letters in order, repeats included.
-   */
+  /** Sequences are spelled as strings, one term per character, in order and with repeats. */
   private static final SimilarityCase[] SIMILARITY_CASES = {
     // NGLD divides by the lengths, so the same edit counts for less between longer sequences.
     new SimilarityCase("ngld", "complement", "levenshtein", "kitten", "sitting", 0.625),
     new SimilarityCase("ngld", "complement", "levenshtein", "abc", "abd", 5.0 / 7.0),
     new SimilarityCase("ngld", "complement", "levenshtein", "abc", "abc", 1.0),
-    // Every element of the longer sequence is an insertion, the worst a sequence pair can do.
+    // Every element is an insertion, the worst a pair can do.
     new SimilarityCase("ngld", "complement", "levenshtein", "abc", "", 0.0),
     // GLD reports the edit count itself, so the same count scores the same at any length.
     new SimilarityCase("gld", "reciprocal", "levenshtein", "kitten", "sitting", 0.25),
@@ -45,16 +42,13 @@ class SequenceComparatorTest {
     // Without substitution a rewritten element costs a delete and an insert instead of one edit.
     new SimilarityCase("gld", "reciprocal", "lcs", "abc", "abd", 1.0 / 3.0),
     new SimilarityCase("ngld", "complement", "lcs", "abc", "abd", 0.5),
-    // The normalizer is the caller's choice: reciprocal compresses NGLD into [0.5, 1.0].
+    // Reciprocal compresses NGLD into [0.5, 1.0].
     new SimilarityCase("ngld", "reciprocal", "levenshtein", "kitten", "sitting", 1.0 / 1.375),
   };
 
   private static final LengthFilteringCase[] LENGTH_FILTERING_CASES = {
-    /*
-     * At a similarity of 0.5 NGLD admits a normalized distance of 0.5, so a 4-element query
-     * tolerates a distance of 0.5 * (4 + length2) / 1.5, which reaches 2 only once the candidate
-     * has 2 elements. Shorter candidates differ in length by more than that and are rejected.
-     */
+    // At 0.5 similarity a 4-element query tolerates a distance of 0.5 * (4 + length2) / 1.5, which
+    // reaches 2 only at 2 elements; shorter candidates differ by more and are rejected.
     new LengthFilteringCase("ngld", "complement", 4, 4, 0.5, true),
     new LengthFilteringCase("ngld", "complement", 4, 2, 0.5, true),
     new LengthFilteringCase("ngld", "complement", 4, 1, 0.5, false),
@@ -65,7 +59,7 @@ class SequenceComparatorTest {
     // GLD's budget is an absolute edit count, so it bounds the length gap directly.
     new LengthFilteringCase("gld", "reciprocal", 10, 8, 1.0 / 3.0, true),
     new LengthFilteringCase("gld", "reciprocal", 10, 7, 1.0 / 3.0, false),
-    // A similarity of zero asks for no filtering at all, however far apart the lengths are.
+    // A similarity of zero asks for no filtering, however far apart the lengths are.
     new LengthFilteringCase("gld", "reciprocal", 1000, 0, 0.0, true),
     new LengthFilteringCase("ngld", "complement", 1000, 0, 0.0, true),
   };
@@ -94,9 +88,8 @@ class SequenceComparatorTest {
   }
 
   /**
-   * The comparator may stop early once a pair cannot reach minSimilarity, and is then only required
-   * to report a similarity that is also below it. Every case is checked at a threshold just above
-   * and just below its own similarity, so each one exercises both the early exit and the full run.
+   * Early exit only has to report a similarity below the threshold, so each case is checked just
+   * above and just below its own.
    */
   @Test
   void similarityCasesRespectTheThresholdTheyAreGiven() {
@@ -139,10 +132,7 @@ class SequenceComparatorTest {
     }
   }
 
-  /**
-   * Length filtering is only allowed to reject pairs that the comparator would score below the
-   * threshold anyway, which is what lets an index skip them without changing any result.
-   */
+  /** Length filtering may only reject pairs the comparator would score below the threshold. */
   @Test
   void lengthFilteringOnlyRejectsPairsBelowTheThreshold() {
     String alphabet = "abc";
@@ -238,7 +228,7 @@ class SequenceComparatorTest {
         ComparatorFactory.createComparator("ngld", Map.of(), normalizer("complement"));
     Comparator explicit = createComparator("ngld", "complement", "levenshtein");
 
-    // The default is not observable directly, so compare it against the distance it should be.
+    // The default is not observable directly, so compare against the distance it should be.
     assertEquals(
         ((BaseSequenceComparator) explicit).getSequenceDistance().getClass(),
         ((BaseSequenceComparator) withDefault).getSequenceDistance().getClass());
@@ -294,10 +284,7 @@ class SequenceComparatorTest {
     }
   }
 
-  /**
-   * Merging scores rows from the elements they share with the query, which for an order-sensitive
-   * distance only bounds the similarity rather than determining it.
-   */
+  /** Shared elements only bound an order-sensitive distance, so merging cannot score rows. */
   @Test
   void sequenceComparatorsCannotGenerateCandidatesByMerging() {
     for (String comparatorType : List.of("gld", "ngld")) {
@@ -320,10 +307,7 @@ class SequenceComparatorTest {
     }
   }
 
-  /**
-   * The capability has to agree with whether the conjunction methods are actually implemented,
-   * since it is what a config is validated against before any search runs.
-   */
+  /** The capability is what a config is validated against, so it must match what is implemented. */
   @Test
   void theValueComparatorsReportThatTheySupportMerging() {
     for (String comparatorType : List.of("l2", "jaccard", "ruzicka")) {
@@ -331,15 +315,12 @@ class SequenceComparatorTest {
           ComparatorFactory.createComparator(comparatorType, Map.of(), normalizer("reciprocal"));
 
       assertTrue(comparator.supportsMergeCandidateGeneration(), comparatorType);
-      // Implemented rather than throwing, which is what the capability promises.
+      // Implemented rather than throwing.
       comparator.conjunctionContribution(1f, 1f);
     }
   }
 
-  /**
-   * A length gap wider than the distance budget leaves no budget at all to run the dynamic program
-   * with, so the pair is reported as exceeding the threshold without one being run.
-   */
+  /** A length gap wider than the distance budget rejects the pair without running the program. */
   @Test
   void aPairTooFarApartInLengthIsRejectedWithoutMeasuringIt() {
     Comparator comparator = createComparator("ngld", "complement", "levenshtein");
@@ -352,9 +333,8 @@ class SequenceComparatorTest {
   }
 
   /**
-   * A sequence comparator reads two forms of the same record: the ordered sequence it scores, whose
-   * Uni value is its length, and the element multiset an index keys by, whose counts sum to that
-   * same length.
+   * The ordered sequence's Uni value is its length, and the multiset an index keys by has counts
+   * summing to the same length.
    */
   @Test
   void bothFormsOfASequenceReportTheSameUniValue() {
@@ -368,10 +348,7 @@ class SequenceComparatorTest {
         4.0, comparator.computeUniValue(multiset.getTerms(), multiset.getValues()), EPSILON_9);
   }
 
-  /**
-   * The prefix a query has to generate candidates from grows with the distance budget, so a budget
-   * below zero has no prefix to report and points at a normalizer that inverted a similarity wrong.
-   */
+  /** The prefix grows with the distance budget, so a negative budget has no prefix to report. */
   @Test
   void aNegativeDistanceBudgetLeavesNoPrefixToGenerateCandidatesFrom() {
     for (String comparatorType : List.of("gld", "ngld")) {

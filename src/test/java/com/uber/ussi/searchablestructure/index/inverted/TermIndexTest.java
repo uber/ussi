@@ -89,16 +89,12 @@ class TermIndexTest {
             Constants.POPULAR_TERM_DISCARD_SCOPE, CANDIDATES_ONLY);
     TermIndex index = new TermIndex(config("jaccard", params), rows, longObjectMap());
 
-    // Candidate generation is unchanged: the discarded term still keys no list.
+    // The scope leaves candidate generation alone and changes only scoring.
     assertArrayEquals(new long[] {1}, index.getDiscardedTermsForTests());
     assertArrayEquals(new long[0], index.getRowNumsForKeyForTests(1));
-    // Scoring is what changes: the rows keep the discarded term.
     assertArrayEquals(new long[] {1, 2}, index.getVerificationRow(1).getTerms());
 
-    /*
-     * Row 1 is reached through term 2 and then scored as the caller supplied it, so it is two
-     * terms out of three rather than the one out of two that the discard would have made it.
-     */
+    // Row 1 is reached via term 2 and scored as supplied: two terms of three, not one of two.
     List<RowNumAndSimilarity> results =
         index.getSimilarRowNums(0.4f, jaccard(new long[] {1, 2, 6}, 1, 1, 1), MetaFilter.empty());
     assertEquals(List.of(1L), rowNumsNearestFirst(results));
@@ -114,7 +110,7 @@ class TermIndexTest {
             rows,
             longObjectMap());
 
-    // The same row and query as above, scored without term 1 on either side: one term out of two.
+    // Same row and query as above, scored without term 1: one term out of two.
     List<RowNumAndSimilarity> results =
         index.getSimilarRowNums(0.4f, jaccard(new long[] {1, 2, 6}, 1, 1, 1), MetaFilter.empty());
     assertEquals(List.of(1L), rowNumsNearestFirst(results));
@@ -130,11 +126,7 @@ class TermIndexTest {
             Constants.POPULAR_TERM_DISCARD_SCOPE, CANDIDATES_ONLY);
     TermIndex index = new TermIndex(config("jaccard", params), rows, longObjectMap());
 
-    /*
-     * Rows 1, 2 and 3 all share term 1 with this query, so scored as supplied each is one term out
-     * of two. None of them is reachable, because term 1 is the only key the query has and its list
-     * is the one the discard emptied. This is the recall the scope trades away.
-     */
+    // Term 1 is the query's only key and the discard emptied its list, so no row is reachable.
     assertTrue(
         index.getSimilarRowNums(0.4f, jaccard(new long[] {1}, 1), MetaFilter.empty()).isEmpty());
   }
@@ -148,13 +140,8 @@ class TermIndexTest {
             Constants.POPULAR_TERM_DISCARD_SCOPE, CANDIDATES_ONLY);
     TermIndex index = new TermIndex(config("jaccard", params), rows, longObjectMap());
 
-    /*
-     * Scored as supplied, row 1 is two terms out of three against this query, which clears a 0.6
-     * threshold. It is still pruned, because length filtering can only bound the similarity that
-     * excludes term 1, and that bound is one term out of two. A threshold above what the surviving
-     * terms alone can reach therefore rejects rows the verification would have accepted, which is
-     * the same recall trade seen from the threshold's side rather than the query's.
-     */
+    // Row 1 is two terms of three as supplied, clearing 0.6, but length filtering can only bound
+    // the similarity excluding term 1, which is one of two, so it is pruned.
     assertTrue(
         index
             .getSimilarRowNums(0.6f, jaccard(new long[] {1, 2, 6}, 1, 1, 1), MetaFilter.empty())
@@ -172,11 +159,7 @@ class TermIndexTest {
             NamespaceConfig.CandidateGenerator.SPARS_MERGE.getParamValue());
     TermIndex index = new TermIndex(config("jaccard", params, "inverted_term"), rows, longObjectMap());
 
-    /*
-     * A conjunction accumulated from the inverted lists can only report the similarity that
-     * excludes the discarded terms, so under this scope the merge has to verify each candidate
-     * through the comparator instead. It therefore reports the same score the filtered scan does.
-     */
+    // A conjunction cannot score the discarded terms, so the merge verifies through the comparator.
     List<RowNumAndSimilarity> results =
         index.getSimilarRowNums(0.4f, jaccard(new long[] {1, 2, 6}, 1, 1, 1), MetaFilter.empty());
     assertEquals(List.of(1L), rowNumsNearestFirst(results));
@@ -185,10 +168,8 @@ class TermIndexTest {
 
   @Test
   void highFrequencyFilteringUsesTheObservedFractionOfRows() {
-    /*
-     * With 4 rows and a 0.5 max fraction, a term may occur in at most floor(4 * 0.5) = 2 rows. Term 1
-     * occurs in 3 rows and is discarded; term 2 occurs in exactly 2 rows and is kept.
-     */
+    // With 4 rows and a 0.5 cap, a term may occur in at most floor(4 * 0.5) = 2 rows: term 1
+    // occurs in 3 and is discarded, term 2 in exactly 2 and is kept.
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
     rows.put(1, jaccard(new long[] {1, 2}, 1, 1));
     rows.put(2, jaccard(new long[] {1, 3}, 1, 1));
@@ -216,10 +197,7 @@ class TermIndexTest {
     List<RowNumAndSimilarity> result =
         index.getNearestNeighborRowNums(4, jaccard(new long[] {1, 2}, 1, 1), MetaFilter.empty());
 
-    /*
-     * Row 3 shares no term with the query, so it is omitted even though k exceeds the number of rows
-     * sharing a term.
-     */
+    // Row 3 shares no term with the query, so it is omitted even though k exceeds the match count.
     assertEquals(List.of(1L, 4L, 2L), rowNumsNearestFirst(result));
     LongFloatHashMap similarities = rowNumToSimilarity(result);
     assertEquals(1.0f, similarities.get(1), DELTA);
@@ -319,10 +297,7 @@ class TermIndexTest {
     List<RowNumAndSimilarity> result =
         index.getNearestNeighborRowNums(2, l2(new long[] {1}, 1), MetaFilter.empty());
 
-    /*
-     * Row 2 shares no term with the query and is omitted, per the documented sparse-index
-     * assumption, even though its L2 similarity to the query is positive.
-     */
+    // Row 2 shares no term, so it is omitted even though its L2 similarity is positive.
     assertEquals(List.of(1L), rowNumsNearestFirst(result));
     assertEquals(1.0f, result.get(0).getSimilarity(), DELTA);
     assertTrue(index.getNearestNeighborRowNums(1, l2(new long[] {3}, 1), MetaFilter.empty()).isEmpty());
@@ -569,10 +544,7 @@ class TermIndexTest {
         int k = 1 + random.nextInt(10);
         float minSimilarity = new float[] {0.0f, 0.2f, 0.5f, 0.8f}[random.nextInt(4)];
 
-        /*
-         * The scan index scores every row, so its results are restricted to the rows sharing a
-         * term with the query before comparing them against the term index results.
-         */
+        // The scan index scores every row, so restrict its results to rows sharing a term.
         assertEquivalent(
             comparatorType + " nearest queryIndex=" + queryIndex + " k=" + k + " query=" + query,
             restrictToRowsSharingATerm(
@@ -599,10 +571,7 @@ class TermIndexTest {
     }
   }
 
-  /**
-   * The merge generator reaches the same rows as the filtered scan and scores them identically, so
-   * any divergence between the two is a bug in one of them.
-   */
+  /** The merge generator must reach and score the same rows as the filtered scan. */
   @Test
   void randomizedMergeResultsMatchFilteredScanForEverySparseComparator() {
     for (String comparatorType : List.of("jaccard", "ruzicka", "l2")) {
@@ -634,8 +603,8 @@ class TermIndexTest {
   }
 
   /**
-   * Metadata filtering wraps candidate generation, so the merge has to agree with the filtered scan
-   * under every strategy, including the pre-filtering path that bypasses the generator entirely.
+   * Metadata filtering wraps candidate generation, so the merge must agree with the filtered scan
+   * under every strategy, including pre-filtering, which bypasses the generator.
    */
   @Test
   void mergeResultsMatchFilteredScanUnderEveryMetadataFilteringStrategy() {
@@ -681,9 +650,8 @@ class TermIndexTest {
   }
 
   /**
-   * Sparse-key popularity filtering makes the verification rows differ from the indexed rows, so
-   * the metadata pre-filtering path can only agree with the merge path if it scores the
-   * verification rows too.
+   * Popularity filtering makes the verification rows differ from the indexed rows, so pre-filtering
+   * agrees with the merge only if it scores the verification rows.
    */
   @Test
   void mergeResultsMatchFilteredScanWhenPopularKeysAreDropped() {
@@ -721,9 +689,8 @@ class TermIndexTest {
   }
 
   /**
-   * Every caller asks for a key the record it hands over actually has, so this only fires if one
-   * stops doing that. It is checked rather than returning whatever value happens to sit at the
-   * insertion point, which would be scored as if the record carried a term it does not.
+   * Rejected rather than returning the value at the insertion point, which would score the record
+   * as carrying a term it does not have.
    */
   @Test
   void readingAValueAtAnAbsentKeyIsRejected() {

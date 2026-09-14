@@ -12,10 +12,8 @@ import javax.annotation.Nullable;
  * The index structures a namespace can be configured with, each paired with the record types it can
  * store.
  *
- * <p>A structure and a record type vary independently: the structure decides what the index is
- * keyed by and how it generates candidates, and the record type decides how a record is laid out. A
- * namespace names only the structure, because a comparator publishes the record types it can read
- * and an index stores the type the two have in common; see {@link #resolveRecordTypes}.
+ * <p>A namespace names only the structure: the record type is the one the structure stores and the
+ * configured comparator reads; see {@link #resolveRecordTypes}.
  */
 public enum IndexType {
   /**
@@ -34,8 +32,8 @@ public enum IndexType {
   INVERTED_TERM(RecordType.SEQUENCE, RecordType.ORDER_AGNOSTIC_SPARSE),
 
   /**
-   * Inverted lists keyed by similarity-preserving signatures. Only a comparator with a configured
-   * signature generator can produce them, which today means a comparator reading sparse records.
+   * Inverted lists keyed by similarity-preserving signatures, which only a comparator with a
+   * configured signature generator can produce.
    */
   INVERTED_SIGNATURE(RecordType.ORDER_AGNOSTIC_SPARSE),
 
@@ -48,7 +46,6 @@ public enum IndexType {
     this.storableRecordTypes = Set.of(storableRecordTypes);
   }
 
-  /** Returns the structure of {@code paramValue}, or null if no structure has that name. */
   @Nullable
   public static IndexType fromParamValue(String paramValue) {
     String normalizedParamValue = paramValue.trim().toLowerCase(Locale.ROOT);
@@ -69,9 +66,8 @@ public enum IndexType {
   }
 
   /**
-   * Returns the record types this structure can store that the comparator can also read, which is
-   * the one type an index configured this way holds. An empty result is a config that pairs a
-   * structure with a comparator that cannot read anything it stores.
+   * Returns the record types this structure stores that the comparator also reads. An empty result
+   * is a structure paired with a comparator that can read nothing it stores.
    */
   public Set<RecordType> resolveRecordTypes(Comparator comparator) {
     Set<RecordType> resolvedRecordTypes = EnumSet.noneOf(RecordType.class);
@@ -94,11 +90,9 @@ public enum IndexType {
   }
 
   /**
-   * Returns whether the conjunction a merge accumulates while walking the inverted lists is a
-   * candidate's similarity rather than a bound on it. It is when the lists are keyed by a record's
-   * own terms and carry its own values, which takes both a term-keyed structure and a record type
-   * whose terms determine its similarity. A sequence's elements, keyed without the order the
-   * similarity depends on, only bound it.
+   * Returns whether the conjunction a merge accumulates is a candidate's similarity rather than a
+   * bound on it. It is only when the lists carry a record's own terms and values; a sequence's
+   * elements are keyed without the order its similarity depends on, so they only bound it.
    */
   public boolean conjunctionDeterminesSimilarity(RecordType recordType) {
     return this == INVERTED_TERM && recordType == RecordType.ORDER_AGNOSTIC_SPARSE;

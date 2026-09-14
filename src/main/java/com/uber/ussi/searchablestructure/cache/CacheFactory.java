@@ -18,7 +18,6 @@ public final class CacheFactory {
     /** Mutable inverted lists keyed by the terms of the record itself. */
     INVERTED_TERM;
 
-    /** Returns the structure of {@code paramValue}, or null if no structure has that name. */
     @Nullable
     public static CacheType fromParamValue(String paramValue) {
       String normalizedParamValue = paramValue.trim().toLowerCase(Locale.ROOT);

@@ -8,8 +8,8 @@ public final class MathUtils {
   public static final double EPSILON_12 = 1e-12;
 
   /**
-   * Tolerance for comparing values that accumulate rounding error over many operations, such as a
-   * similarity reached through a normalizer, and so cannot be held to {@link #EPSILON_12}.
+   * Tolerance for values that accumulate rounding error over many operations, such as a similarity
+   * reached through a normalizer, and so cannot be held to {@link #EPSILON_12}.
    */
   public static final double EPSILON_9 = 1e-9;
 
@@ -73,9 +73,8 @@ public final class MathUtils {
   }
 
   /**
-   * Computes one-sided confidence intervals for proportions.
-   *
-   * <p>The equivalent two-sided confidence is {@code 2 * confidence - 1}.
+   * Computes one-sided confidence intervals for proportions. The equivalent two-sided confidence
+   * is {@code 2 * confidence - 1}.
    */
   public static class ProportionConfidenceInterval1Sided {
 
@@ -107,10 +106,7 @@ public final class MathUtils {
       }
     }
 
-    /**
-     * Returns the lower-bound on the one-sided confidence interval of the probability of success.
-     * The upper bound is always 1.0.
-     */
+    /** Returns the lower bound of the one-sided interval; the upper bound is always 1.0. */
     public double getConfidenceIntervalLowerBound(int numTrials, int numSuccesses) {
       validateNumTrialsAndNumSuccesses(numTrials, numSuccesses);
       double pHat = numSuccesses * 1.0 / numTrials;
@@ -118,10 +114,7 @@ public final class MathUtils {
       return Math.max(0.0, pHat - errorMargin);
     }
 
-    /**
-     * Returns the upper-bound on the one-sided confidence interval of the probability of success.
-     * The lower bound is always 0.0.
-     */
+    /** Returns the upper bound of the one-sided interval; the lower bound is always 0.0. */
     public double getConfidenceIntervalUpperBound(int numTrials, int numSuccesses) {
       validateNumTrialsAndNumSuccesses(numTrials, numSuccesses);
       double pHat = numSuccesses * 1.0 / numTrials;

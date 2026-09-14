@@ -43,7 +43,7 @@ class ComparatorConfigValidatorTest {
         builder -> builder.comparatorType("cosine"),
         false,
         "Unsupported comparator type (cosine)."),
-    // The unknown name is the only thing reported, rather than piling on what it cannot support.
+    // Only the unknown name is reported, not what it cannot support.
     new ValidationCase(
         "unknown comparator type carrying a signature param",
         builder ->
@@ -76,7 +76,7 @@ class ComparatorConfigValidatorTest {
                 .comparatorParams(Map.of(Constants.SEQUENCE_DISTANCE_TYPE, "hamming")),
         false,
         null),
-    // A blank value is the same as leaving it unset, which is what a sequence comparator defaults.
+    // A blank value is treated as unset, which a sequence comparator defaults.
     new ValidationCase(
         "blank sequence distance type",
         builder ->

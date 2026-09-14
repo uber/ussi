@@ -6,17 +6,13 @@ import com.uber.ussi.comparatornormalizer.ComparatorNormalizer;
 import com.uber.ussi.utils.MathUtils;
 
 /**
- * The normalized generalized Levenshtein distance (NGLD) between two sequences.
+ * The normalized generalized Levenshtein distance (NGLD) between two sequences: the edit count
+ * {@link GldComparator} reports, over the same composed {@link SequenceDistance}, divided by the
+ * sequences' lengths.
  *
- * <p>NGLD is the generalized Levenshtein distance {@link GldComparator} reports, divided by the
- * two sequences' lengths. It measures the same edits, over whichever {@link SequenceDistance} the
- * namespace configures, and differs only in expressing them as a fraction rather than a count.
- *
- * <p>The comparator value is {@code 2 * distance / (length1 + length2 + distance)}, which is 0.0
- * for identical sequences and 1.0 for maximally different ones. Dividing by the lengths is what
- * makes the value comparable across sequences of different lengths, unlike the edit count {@link
- * GldComparator} reports. Pair this with the {@code complement} normalizer, which maps the
- * distance onto the similarity {@code 1 - distance}.
+ * <p>The comparator value is {@code 2 * distance / (length1 + length2 + distance)}, 0.0 for
+ * identical sequences and 1.0 for maximally different ones, and unlike an edit count it is
+ * comparable across lengths. Pair it with the {@code complement} normalizer.
  *
  * <p>Normalizing needs both sequences' lengths, which is why this cannot be expressed as a {@link
  * ComparatorNormalizer}: that interface converts a lone comparator value.
@@ -31,8 +27,8 @@ public class NgldComparator extends BaseSequenceComparator {
   }
 
   /**
-   * Returns the normalized distance in [0.0, 1.0] for a raw distance over the two given lengths.
-   * Two empty sequences are identical, so they normalize to 0.0 rather than dividing by zero.
+   * Returns the normalized distance in [0.0, 1.0]. Two empty sequences are identical, so they
+   * normalize to 0.0 rather than dividing by zero.
    */
   static double getNormalizedDistance(long distance, int length1, int length2) {
     double denominator = (double) length1 + (double) length2 + (double) distance;
@@ -41,14 +37,13 @@ public class NgldComparator extends BaseSequenceComparator {
 
   /**
    * Returns the largest raw distance whose normalized distance still clears {@code
-   * maxNormalizedDistance}, the inverse of {@link #getNormalizedDistance}. The budget has to be a
-   * normalized distance, in [0.0, 1.0], since only those have an inverse.
+   * maxNormalizedDistance}, the inverse of {@link #getNormalizedDistance}. The budget has to be in
+   * [0.0, 1.0], since only those have an inverse.
    *
-   * <p>Every supported distance is integer-valued, so the real-valued budget is floored to an
-   * integer band radius. The epsilon keeps a budget that should land exactly on an integer from
-   * being floored down by representation error, which would reject a genuine match. It is an
-   * absolute tolerance on a budget that grows with the sequences, so it stops covering that error
-   * once the combined length reaches the low tens of thousands of elements.
+   * <p>Distances are integer-valued, so the budget is floored; the epsilon keeps one that should
+   * land exactly on an integer from being floored down by representation error. That tolerance is
+   * absolute on a budget that grows with the sequences, so it stops covering the error once the
+   * combined length reaches the low tens of thousands of elements.
    */
   static long getDenormalizedMaxDistance(double maxNormalizedDistance, int length1, int length2) {
     double totalLength = (double) length1 + (double) length2;
@@ -67,8 +62,8 @@ public class NgldComparator extends BaseSequenceComparator {
   }
 
   /**
-   * A normalized distance can never exceed {@link #MAX_NORMALIZED_DISTANCE}, so that is the only
-   * sound stand-in for one that overran a budget, which is itself normalized.
+   * A normalized distance cannot exceed {@link #MAX_NORMALIZED_DISTANCE}, so that is the only
+   * sound stand-in for one that overran a budget.
    */
   @Override
   protected double getExceededComparatorValue(double comparatorValue) {
@@ -78,9 +73,8 @@ public class NgldComparator extends BaseSequenceComparator {
   /**
    * A query within {@code d} edits of a candidate has at most {@code l1BoundFactor * d} of its own
    * elements unmatched by that candidate, disregarding order. Substituting the largest {@code d}
-   * this threshold allows turns that into a fraction of the query's length that is the same for
-   * every candidate, because both the budget and the bound scale with the lengths involved. Only a
-   * prefix that long has to generate candidates.
+   * this threshold allows gives a fraction of the query's length, the same for every candidate,
+   * and only a prefix that long has to generate candidates.
    */
   @Override
   protected double getMinPrefixSumForTermsAndValuesInternal(
@@ -92,11 +86,9 @@ public class NgldComparator extends BaseSequenceComparator {
   }
 
   /**
-   * Caps a distance budget at the largest normalized distance there is.
-   *
-   * <p>Normalizers are free to map a similarity of zero to an unbounded distance, which suits the
-   * comparators whose value is unbounded but is outside the range a normalized distance can take.
-   * Any budget at or above the maximum admits every pair, so capping changes no result, and it
+   * Caps a distance budget at {@link #MAX_NORMALIZED_DISTANCE}. A normalizer may map zero
+   * similarity to an unbounded distance, which lies outside the range a normalized distance can
+   * take; any budget at or above the maximum admits every pair, so capping changes no result and
    * keeps the conversions above from being handed a value they have no inverse for.
    */
   private static double getBoundedComparatorValue(double comparatorValue) {

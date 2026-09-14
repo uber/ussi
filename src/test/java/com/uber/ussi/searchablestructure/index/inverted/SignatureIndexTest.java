@@ -38,11 +38,7 @@ class SignatureIndexTest {
     assertEquals(1, index.getNumIndexedKeysForTests());
     assertEquals(
         1, index.getKeysAndUniTransformedValues(jaccard(new long[] {11}, 1f)).length);
-    /*
-     * A single-term record hashes to the same signature all NUM_SIGNATURES_PER_ID times, and
-     * getKeys owes its caller distinct keys, so it reports the one key rather than the
-     * repeats behind it.
-     */
+    // A single-term record hashes to one signature every time, and getKeys owes distinct keys.
     long[] signatures = index.getKeys(jaccard(new long[] {11}, 1f));
     assertEquals(1, signatures.length);
     assertArrayEquals(new long[] {7}, index.getRowNumsForKeyForTests(signatures[0]));
@@ -108,10 +104,8 @@ class SignatureIndexTest {
   }
 
   /**
-   * A comparator that generates no signatures leaves this structure nothing to key its lists by,
-   * which is a property of the config rather than of the rows, so it is reported before any row is
-   * read. A comparator that could generate them is told which param is missing; one that could not
-   * is told that no param would help.
+   * No signature generator leaves nothing to key the lists by, a property of the config rather than
+   * the rows. One that could generate them names the missing param; one that could not does not.
    */
   @Test
   void aComparatorWithoutSignaturesIsRejectedBeforeBuildingRows() {
@@ -143,10 +137,7 @@ class SignatureIndexTest {
         noSuchParam.getMessage());
   }
 
-  /**
-   * Signature keys say nothing about the values behind them, so the merge generator has to verify
-   * every candidate through the comparator. Its results must still match the filtered scan.
-   */
+  /** Signature keys say nothing about values, so the merge must verify through the comparator. */
   @Test
   void mergeResultsMatchFilteredScanForSignatureKeys() {
     for (String[] comparatorAndGenerator :
@@ -189,8 +180,7 @@ class SignatureIndexTest {
 
   /**
    * Only exact sparse keys let the merge score from the conjunction, so only they carry the
-   * inverted-list values. Signature keys verify candidates through the comparator instead, and the
-   * filtered scan always does, so neither materializes the values.
+   * inverted-list values.
    */
   @Test
   void mergeMaterializesInvertedListValuesOnlyForExactKeys()

@@ -13,10 +13,9 @@ import java.util.Objects;
 import javax.annotation.Nullable;
 
 /**
- * ERD metadata filtering structure.
- *
- * <p>The first map points each rowNum to a metadataDictionaryKey. The second map points each
- * metadataDictionaryKey to the distinct metadata value and the rowNums sharing that value.
+ * ERD metadata filtering structure. One map points each rowNum to a metadataDictionaryKey, the
+ * other points each metadataDictionaryKey to the distinct metadata value and the rowNums sharing
+ * it.
  */
 public final class MetadataFilteringModule {
   private final LongLongHashMap rowNumToMetadataDictionaryKeyMap;

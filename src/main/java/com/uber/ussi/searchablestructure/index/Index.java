@@ -22,11 +22,8 @@ import java.util.Objects;
 /**
  * Delete-only searchable structure built from rows graduated out of a cache.
  *
- * <p>Deletions are soft: the row is added to an internal tombstone set ({@code deletedRowNums})
- * without physical removal from the inverted lists or the forward map. Query-time scoring checks
- * {@link #isDeleted} and skips tombstoned rows, so they are excluded from search results without
- * waiting for physical removal. The tombstoned rows are dropped permanently when the index is
- * consolidated (rebuilt from scratch via {@link #getAll}, which filters out deleted rows).
+ * <p>Deletions are soft: the row joins a tombstone set and scoring skips it through {@link
+ * #isDeleted}. Tombstoned rows are dropped only when the index is rebuilt from {@link #getAll}.
  */
 public abstract class Index implements SearchableStructure, AutoCloseable {
   public static final String MAX_PRE_FILTERING_ROWS_RATIO = "max_pre_filtering_rows_ratio";
@@ -130,9 +127,8 @@ public abstract class Index implements SearchableStructure, AutoCloseable {
   }
 
   /**
-   * Expands the unfiltered candidate pool for post-filtering. Without this, a kNN search could keep
-   * only globally-nearest rows that are later removed by metadata filtering and miss matching rows
-   * just below the initial top-k boundary.
+   * Expands the unfiltered candidate pool so post-filtering still reaches the matching rows that
+   * sit just below the unexpanded top-k boundary.
    */
   protected final int getPostFilteringMaxResults(int maxResults, MetaFilter metadataFilter) {
     if (!hasMetadataFilter(metadataFilter)) {

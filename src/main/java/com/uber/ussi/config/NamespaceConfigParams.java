@@ -5,9 +5,9 @@ import java.util.Map;
 import javax.annotation.Nullable;
 
 /**
- * Param-map lookup shared by {@link NamespaceConfig}, {@link ConfigViolations}, and the factories
- * handed a param map rather than the config it came from. A param must be found the same way
- * wherever it is read, or a config is validated on a value its layer never sees.
+ * Param-map lookup shared by {@link NamespaceConfig}, {@link ConfigViolations}, and the factories.
+ * A param must be found the same way wherever it is read, or a config is validated on a value its
+ * layer never sees.
  */
 public final class NamespaceConfigParams {
   private NamespaceConfigParams() {}
@@ -27,7 +27,6 @@ public final class NamespaceConfigParams {
     return null;
   }
 
-  /** Returns the double at {@code key}, or {@code defaultValue} when unset. */
   static double readDoubleParam(Map<String, String> params, String key, double defaultValue) {
     String value = getParam(params, key);
     return isBlank(value) ? defaultValue : Double.parseDouble(value.trim());

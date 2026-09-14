@@ -47,7 +47,7 @@ class MetaFilterTest {
 
   @Test
   void swappedKeyAndValueDoesNotMatch() {
-    // Guards against the symmetric-hash bug: a filter for key "b" = "a" must not match {"a":"b"}.
+    // A filter for key "b" = "a" must not match {"a":"b"}: the hash must not be symmetric.
     MetaFilter filter = new MetaFilter(Map.of("b", List.of("a")));
     assertFalse(filter.doesMatch(meta(Map.of("a", "b"))));
     assertTrue(filter.doesMatch(meta(Map.of("b", "a"))));

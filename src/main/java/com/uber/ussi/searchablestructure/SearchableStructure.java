@@ -6,7 +6,7 @@ import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import java.util.List;
 
-/** Common searchable structure API shared by caches and future indexes. */
+/** Common searchable structure API shared by caches and indexes. */
 public interface SearchableStructure {
 
   boolean delete(long rowNum);

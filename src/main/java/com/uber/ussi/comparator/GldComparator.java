@@ -6,18 +6,14 @@ import com.uber.ussi.comparatornormalizer.ComparatorNormalizer;
 import com.uber.ussi.utils.MathUtils;
 
 /**
- * The raw generalized Levenshtein distance (GLD) between two sequences, as a count of edits.
+ * The number of single-element edits that turn one sequence into the other, the raw generalized
+ * Levenshtein distance (GLD). It is generalized in that the composed {@link SequenceDistance}
+ * decides which edits count, so the same comparator measures a Levenshtein, Damerau-Levenshtein,
+ * or longest-common-subsequence distance.
  *
- * <p>GLD is the number of single-element edits that turn one sequence into the other. It is
- * generalized in that which edits count is not fixed: the {@link SequenceDistance} this composes
- * decides that, so the same comparator measures a Levenshtein, Damerau-Levenshtein, or
- * longest-common-subsequence distance depending on how the namespace is configured.
- *
- * <p>The comparator value is the edit count itself, so it is unbounded above and grows with the
- * sequences rather than with how different they are: one edit is a near match between two long
- * sequences and a wholesale rewrite between two short ones. Pair this with the {@code reciprocal}
- * normalizer, which maps an unbounded distance onto a similarity. Callers wanting a similarity that
- * is comparable across sequence lengths should use {@link NgldComparator} instead.
+ * <p>The comparator value is the edit count itself, so it is unbounded above and not comparable
+ * across sequence lengths. Pair it with the {@code reciprocal} normalizer, or use {@link
+ * NgldComparator} for a value that is comparable across lengths.
  */
 public class GldComparator extends BaseSequenceComparator {
 
@@ -26,9 +22,8 @@ public class GldComparator extends BaseSequenceComparator {
   }
 
   /**
-   * The budget is already an edit count, so it needs no conversion, only flooring to an integer.
-   * The epsilon keeps a budget that should land exactly on an integer from being floored down by
-   * representation error, which would reject a genuine match.
+   * The budget is already an edit count, so it only needs flooring. The epsilon keeps a budget
+   * that should land exactly on an integer from being floored down by representation error.
    */
   @Override
   protected long getMaxDistance(double comparatorValue, int length1, int length2) {
@@ -40,10 +35,7 @@ public class GldComparator extends BaseSequenceComparator {
     return (double) distance;
   }
 
-  /**
-   * Distances are whole numbers, so a distance that overran a budget is at least the next integer
-   * above it. That is both a sound and the tightest stand-in.
-   */
+  /** Distances are whole numbers, so one that overran the budget is at least the next integer. */
   @Override
   protected double getExceededComparatorValue(double comparatorValue) {
     return Math.floor(comparatorValue) + 1.0;
@@ -52,8 +44,7 @@ public class GldComparator extends BaseSequenceComparator {
   /**
    * A query within {@code d} edits of a candidate has at most {@link
    * SequenceDistance#getL1BoundFactor()} {@code * d} of its own elements unmatched by that
-   * candidate, disregarding order. So if a prefix of the query that long shares no element with a
-   * candidate, the candidate is too far away, and only that prefix has to generate candidates.
+   * candidate, disregarding order, so only a prefix that long has to generate candidates.
    */
   @Override
   protected double getMinPrefixSumForTermsAndValuesInternal(

@@ -7,8 +7,7 @@ import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 /**
  * A sparse record indexed by its own terms.
  *
- * <p>This is the type the inverted machinery is written against, so the indexed form is the record
- * itself and the validation is what that machinery assumes of it.
+ * <p>The inverted machinery is written against this type, so the indexed form is the record itself.
  */
 final class OrderAgnosticSparseIndexingStrategy implements RecordIndexingStrategy {
 
@@ -19,9 +18,8 @@ final class OrderAgnosticSparseIndexingStrategy implements RecordIndexingStrateg
   }
 
   /**
-   * Validates a record is sparse: one value per term, and terms in ascending order without
-   * repeats. This is what the comparators that score two records by walking them in step require,
-   * and what lets a record's own terms serve as inverted-list keys.
+   * Validates a record is sparse: one value per term, terms ascending without repeats. Comparators
+   * that walk two records in step require this, and it lets a record's terms serve as keys.
    */
   @Override
   public void validateRecordType(LongTermsAndValues termsAndValues, String source) {

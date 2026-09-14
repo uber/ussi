@@ -79,8 +79,8 @@ class SequenceDistanceTest {
   }
 
   /**
-   * Each edit may move at most {@code l1BoundFactor} elements between the two multisets, which is
-   * the property that lets an inverted index over those multisets generate candidates.
+   * Each edit moves at most {@code l1BoundFactor} elements between the multisets, which is what
+   * lets an inverted index over them generate candidates.
    */
   @Test
   void everyEditMovesAtMostTheBoundFactorManyElements() {
@@ -121,10 +121,7 @@ class SequenceDistanceTest {
         "budget of 2");
   }
 
-  /**
-   * A budget of Long.MAX_VALUE is what a similarity threshold of zero produces, and must not
-   * overflow the band offsets.
-   */
+  /** A similarity threshold of zero produces a Long.MAX_VALUE budget, which must not overflow. */
   @Test
   void anUnboundedBudgetAdmitsEveryDistance() {
     for (SequenceDistanceType type : SequenceDistanceType.values()) {
@@ -171,9 +168,8 @@ class SequenceDistanceTest {
   }
 
   /**
-   * The regime the band exists for: sequences far longer than the budget, where the band covers a
-   * sliver of the table and slides left on nearly every row. The tally guards against the test
-   * quietly drifting into the wide-band case, where the band spans the table and never slides.
+   * Sequences far longer than the budget, where the band covers a sliver of the table; the tally
+   * guards against drifting into the wide-band case.
    */
   @Test
   void narrowBandsMatchTheFullTable() {
@@ -211,10 +207,7 @@ class SequenceDistanceTest {
         String.format("Only %d of %d trials had a narrow band.", narrowTrials, totalTrials));
   }
 
-  /**
-   * A record carrying values has sorted, deduplicated terms, so reading them in order would
-   * silently measure something other than the sequence distance.
-   */
+  /** A record with values has sorted, deduplicated terms, so its order is not the sequence's. */
   @Test
   void recordsCarryingValuesAreRejected() {
     SequenceDistance distance =
@@ -263,10 +256,7 @@ class SequenceDistanceTest {
     return elements;
   }
 
-  /**
-   * Copies a sequence and applies a handful of random edits, which keeps the distance small next to
-   * the length however long the sequence is.
-   */
+  /** Applies a handful of random edits, keeping the distance small next to the length. */
   private static long[] fewEditsAway(long[] elements, Random random) {
     List<Long> edited = new ArrayList<>(elements.length);
     for (long element : elements) {
@@ -347,9 +337,8 @@ class SequenceDistanceTest {
   }
 
   /**
-   * The factor scales a comparator's distance budget into the L1 budget candidate generation
-   * prunes on, so a subclass declaring one at or below zero would collapse every budget to zero
-   * and silently stop the index from generating candidates at all.
+   * The factor scales a distance budget into the L1 budget, so a factor at or below zero would
+   * collapse every budget to zero.
    */
   @Test
   void anL1BoundFactorThatCannotScaleABudgetIsRejected() {

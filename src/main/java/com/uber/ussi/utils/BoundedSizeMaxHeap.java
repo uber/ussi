@@ -10,10 +10,7 @@ import java.util.PriorityQueue;
 public final class BoundedSizeMaxHeap<T> {
   private final int maxSize;
   private final Comparator<T> comparator;
-  /*
-   * Elements stay here until the heap is needed, avoiding priority queue cost for small result
-   * sets.
-   */
+  // Elements stay here until the heap is needed, avoiding queue cost for small result sets.
   private final ArrayList<T> unsortedCollection;
   private final PriorityQueue<T> priorityQueue;
 
@@ -60,10 +57,7 @@ public final class BoundedSizeMaxHeap<T> {
     return priorityQueue.toArray(emptyTypeArray);
   }
 
-  /**
-   * Returns the retained elements without sorting them. Use {@link #toSortedList} when order
-   * matters.
-   */
+  /** Returns the retained elements unordered; use {@link #toSortedList} when order matters. */
   public List<T> toList() {
     if (priorityQueue.isEmpty()) {
       return List.copyOf(unsortedCollection);

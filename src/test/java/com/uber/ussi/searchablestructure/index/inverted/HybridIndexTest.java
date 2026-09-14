@@ -216,10 +216,7 @@ class HybridIndexTest {
     assertEquals(0, index.size());
   }
 
-  /**
-   * The hybrid index fans every search out to an exact child and a signature child, so the merge
-   * generator runs both of its scoring paths here and must still agree with the filtered scan.
-   */
+  /** The hybrid fans out to both children, so the merge runs both of its scoring paths. */
   @Test
   void mergeResultsMatchFilteredScanAcrossBothHybridChildren() {
     Random random = new Random(77_213L);

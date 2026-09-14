@@ -5,11 +5,9 @@ package com.uber.ussi.searchablestructure.inverted;
  * Query key data ordered for low-cost prefix candidate generation. Shared by the inverted indexes
  * and the inverted term cache.
  *
- * <p>The prefix is chosen per query, cheapest inverted list first, and is bounded by the uni mass
- * the visited keys accumulate. It is not a prefix under an order fixed over the whole term
- * universe, which is what prefix filtering more usually means, so no order has to be agreed on
- * between a query and the rows it is compared against, and what a key costs can change as the
- * index does without invalidating what is already indexed.
+ * <p>The prefix is chosen per query, cheapest inverted list first, and bounded by the uni mass the
+ * visited keys accumulate. It is not a prefix under a global term order, so a query and the rows it
+ * is compared against need not agree on one and a key's cost can change as the index does.
  */
 public final class KeyAndPrefixFilteringData implements Comparable<KeyAndPrefixFilteringData> {
   private final long key;

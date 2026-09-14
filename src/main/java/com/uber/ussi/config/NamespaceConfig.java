@@ -14,11 +14,8 @@ import javax.annotation.Nullable;
 /**
  * Platform-agnostic USSI namespace configuration.
  *
- * <p>This contains only the fields required by the memory-only index.
- *
- * <p>Validation is split by ownership. This class checks the structural invariants it can see on
- * its own, and each layer contributes a {@link NamespaceConfigValidator} for the params and
- * cross-field rules only that layer knows about.
+ * <p>This class checks the structural invariants it can see on its own; each layer contributes a
+ * {@link NamespaceConfigValidator} for the params and cross-field rules only that layer knows.
  */
 public final class NamespaceConfig {
   private final int minTermsAndValuesLength;
@@ -103,30 +100,25 @@ public final class NamespaceConfig {
     return maxNumSearchableStructures;
   }
 
-  /** Returns the index param at {@code key}, or null when unset. */
   @Nullable
   public String getIndexParam(String key) {
     return NamespaceConfigParams.getParam(indexParams, key);
   }
 
-  /** Returns the cache param at {@code key}, or null when unset. */
   @Nullable
   public String getCacheParam(String key) {
     return NamespaceConfigParams.getParam(cacheParams, key);
   }
 
-  /** Returns the comparator param at {@code key}, or null when unset. */
   @Nullable
   public String getComparatorParam(String key) {
     return NamespaceConfigParams.getParam(comparatorParams, key);
   }
 
-  /** Returns the index param at {@code key} as a double, or {@code defaultValue} when unset. */
   public double readDoubleIndexParam(String key, double defaultValue) {
     return NamespaceConfigParams.readDoubleParam(indexParams, key, defaultValue);
   }
 
-  /** Returns the cache param at {@code key} as a double, or {@code defaultValue} when unset. */
   public double readDoubleCacheParam(String key, double defaultValue) {
     return NamespaceConfigParams.readDoubleParam(cacheParams, key, defaultValue);
   }
@@ -135,12 +127,10 @@ public final class NamespaceConfig {
     return parseCandidateGenerator(indexParams);
   }
 
-  /** Returns the discard scope an index reads, which it takes from the index params. */
   public PopularTermDiscardScope getIndexPopularTermDiscardScope() {
     return parsePopularTermDiscardScope(indexParams);
   }
 
-  /** Returns the discard scope a cache reads, which it takes from the cache params. */
   public PopularTermDiscardScope getCachePopularTermDiscardScope() {
     return parsePopularTermDiscardScope(cacheParams);
   }
@@ -153,7 +143,6 @@ public final class NamespaceConfig {
     }
   }
 
-  /** Returns the structural violations plus those reported by every supplied validator. */
   public List<String> collectViolations(NamespaceConfigValidator... validators) {
     List<String> violations = collectStructuralViolations();
     for (NamespaceConfigValidator validator : validators) {
@@ -254,29 +243,20 @@ public final class NamespaceConfig {
   }
 
   /**
-   * Which phases of a search a discarded high-popularity term is absent from.
-   *
-   * <p>Discarding is governed by {@link Constants#MAX_FRACTION_IDS_PER_KEY}, and this
-   * decides what the discard means once a term qualifies. The two settings differ in which half of
-   * the answer stays exact, so neither is the safe one: the default keeps recall exact with respect
-   * to records the discarded terms have been removed from, while {@link #CANDIDATES_ONLY} keeps the
-   * reported similarities exact with respect to the records as supplied.
+   * Which phases of a search a discarded high-popularity term is absent from. Which terms qualify
+   * for discarding is governed by {@link Constants#MAX_FRACTION_IDS_PER_KEY}.
    */
   public enum PopularTermDiscardScope {
     /**
-     * The term is absent from candidate generation and from verification, so a search reports the
-     * similarity between the records that remain once it is removed from both. Every record within
-     * the threshold of the query, measured that same way, is found.
+     * The term is absent from candidate generation and verification, so a search reports the
+     * similarity between the records with it removed, and recall is exact under that measure.
      */
     CANDIDATES_AND_VERIFICATION("candidates_and_verification"),
 
     /**
-     * The term is absent from candidate generation only, so a search reports the similarity between
-     * the records as supplied, including their discarded terms. Results are not complete: candidate
-     * generation prunes on similarity measured without the discarded terms, and removing a shared
-     * term can only lower that measure, so a record within the threshold of the query can be pruned
-     * before verification ever scores it. How much is lost depends on how much of the similarity
-     * the discarded terms carried.
+     * The term is absent from candidate generation only, so a search reports the similarity
+     * between the records as supplied. Recall is not exact: pruning measures similarity without
+     * the discarded terms, so a record within the threshold can be pruned before verification.
      */
     CANDIDATES_ONLY("candidates_only");
 

@@ -7,8 +7,7 @@ import javax.annotation.Nullable;
 /**
  * Decides whether a generated candidate row is eligible for scoring.
  *
- * <p>Public only so that the inverted indexes in the sibling packages can reach it. Nothing outside
- * this library's inverted implementation should depend on it.
+ * <p>Public only for the sibling inverted index packages.
  */
 @FunctionalInterface
 public interface RowFilter {

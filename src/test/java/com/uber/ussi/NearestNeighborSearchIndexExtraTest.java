@@ -198,21 +198,15 @@ class NearestNeighborSearchIndexExtraTest {
 
   @Test
   void deleteDuringGraduationDoesNotReappearAfterBuildCompletes() {
-    /*
-     * Tombstone replay: a row deleted from a graduating cache while the background index build is
-     * in flight must not reappear in search results after the build completes and the graduating
-     * cache is swapped for the new index.
-     */
+    // Tombstone replay: the delete must survive the graduating cache being swapped for the index.
     CountDownLatch releaseGraduation = new CountDownLatch(1);
     try (NearestNeighborSearchIndex index =
         new NearestNeighborSearchIndex(
             configWithMaxCacheSize(1), blockedSingleThreadExecutor(releaseGraduation))) {
       long rowNum = index.insert(denseVector(1f, 0f), Map.of("city", "sf"));
 
-      // Delete while graduation build is blocked.
       assertTrue(index.delete(rowNum));
 
-      // Let graduation complete. Tombstone replay should apply the delete to the new index.
       releaseGraduation.countDown();
       index.awaitBackgroundTasks();
 
@@ -227,10 +221,7 @@ class NearestNeighborSearchIndexExtraTest {
   @Test
   void deleteDuringConsolidationDoesNotReappearAfterMergeCompletes()
       throws ReflectiveOperationException {
-    /*
-     * Tombstone replay: a row deleted from an immutable index while a background consolidation is
-     * building must not reappear in search results after the merged index replaces the originals.
-     */
+    // Tombstone replay: the delete must survive the merged index replacing the originals.
     try (NearestNeighborSearchIndex index =
         NearestNeighborSearchIndex.create(configWithMaxCacheSize(1))) {
       long first = index.insert(denseVector(1f, 0f), Map.of("city", "sf"));
@@ -238,10 +229,9 @@ class NearestNeighborSearchIndexExtraTest {
       long third = index.insert(denseVector(0.5f, 0.5f), Map.of("city", "sf"));
       index.awaitBackgroundTasks();
 
-      // At this point we should have multiple indexes. Delete a row before consolidation.
       assertTrue(index.delete(first));
 
-      // Force consolidation (it runs if structure count >= maxNumSearchableStructures).
+      // Consolidation runs once the structure count reaches maxNumSearchableStructures.
       invokeConsolidate(index);
 
       SearchResults result =
@@ -256,31 +246,23 @@ class NearestNeighborSearchIndexExtraTest {
 
   @Test
   void updateDuringGraduationMovesLatestVersionToActiveCache() {
-    /*
-     * An update of a row in a graduating cache deletes the old version from the graduating cache,
-     * inserts the new version into the active cache, and after graduation completes only the new
-     * version is visible in search results.
-     */
+    // The update deletes the old version from the graduating cache and inserts the new one.
     CountDownLatch releaseGraduation = new CountDownLatch(1);
     try (NearestNeighborSearchIndex index =
         new NearestNeighborSearchIndex(
             configWithMaxCacheSize(1), blockedSingleThreadExecutor(releaseGraduation))) {
       long rowNum = index.insert(denseVector(1f, 0f), Map.of("city", "sf"));
 
-      // Update while graduation build is blocked.
       assertTrue(index.update(rowNum, denseVector(0f, 1f), Map.of("city", "la")));
 
-      // Let graduation complete.
       releaseGraduation.countDown();
       index.awaitBackgroundTasks();
 
-      // Old version should not be findable.
       SearchResults oldResult =
           index.getNearestNeighborRowNums(
               10, denseVector(1f, 0f), new MetaFilter(Map.of("city", List.of("sf"))));
       assertTrue(oldResult.isEmpty(), "Old version must not appear after graduation.");
 
-      // New version should be findable.
       SearchResults newResult =
           index.getNearestNeighborRowNums(
               10, denseVector(0f, 1f), new MetaFilter(Map.of("city", List.of("la"))));
@@ -780,10 +762,7 @@ class NearestNeighborSearchIndexExtraTest {
 
     invokeConsolidate(index);
 
-    /*
-     * The swap is skipped because the live index set no longer matches the build snapshot, so the
-     * original indexes remain in place.
-     */
+    // The live index set does not match the build snapshot, so the swap is skipped.
     assertEquals(2, indexList.underlyingSize());
   }
 

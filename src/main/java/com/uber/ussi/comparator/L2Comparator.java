@@ -70,10 +70,7 @@ public class L2Comparator extends Comparator {
     MathUtils.StableSumAccumulator sumSquaredL2Distance = new MathUtils.StableSumAccumulator();
     int pointer1 = 0;
     int pointer2 = 0;
-    /*
-     * Dense records have empty terms and align values by position. Sparse records merge their
-     * sorted terms, treating a term missing from either record as having value 0.0.
-     */
+    // Dense records align values by position; sparse merge sorted terms, a missing term is 0.0.
     while (pointer1 < termsAndValues1.valuesLength() || pointer2 < termsAndValues2.valuesLength()) {
       float value1;
       float value2;
@@ -104,10 +101,7 @@ public class L2Comparator extends Comparator {
       partialUni1.add(squaredValue1);
       partialUni2.add(squaredValue2);
       partialConj.add((double) value1 * value2);
-      /*
-       * Position filtering bounds the contribution of all unscanned dimensions. Stop once they
-       * cannot keep the final L2 distance within the threshold required by minSimilarity.
-       */
+      // Position filtering: stop once the unscanned dimensions cannot keep the distance in budget.
       if (!mayPassPositionFilteringInternal(
           partialConj.getSum(),
           partialUni1.getSum(),
@@ -140,8 +134,8 @@ public class L2Comparator extends Comparator {
   }
 
   /**
-   * An L2 distance is defined over either layout: a dense record's values are the vector itself,
-   * and a sparse record's terms name the non-zero coordinates of the same vector.
+   * An L2 distance is defined over either layout: a dense record's values are the vector, and a
+   * sparse record's terms name its non-zero coordinates.
    */
   @Override
   public Set<RecordType> getSupportedRecordTypes() {

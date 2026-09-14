@@ -21,11 +21,7 @@ class ScanCacheTest {
 
   private static final float DELTA = 1e-6f;
 
-  /**
-   * Builds a valid USSI namespace config for an L2 dense-vector cache. Per the ERD, L2 is a
-   * distance comparator, so a Reciprocal comparator-normalizer is used to map the distance into the
-   * [0, 1] similarity range required by the search APIs.
-   */
+  /** L2 is a distance comparator, so a reciprocal normalizer maps it into [0, 1]. */
   private static NamespaceConfig denseL2Config() {
     return NamespaceConfig.builder()
         .minTermsAndValuesLength(0)
@@ -58,7 +54,6 @@ class ScanCacheTest {
 
   @Test
   void insertReturnsSequentialRowNumsStartingFromZero() {
-    // ERD: "The rowNums start from 0, and are incremented with each insertion."
     ScanCache cache = new ScanCache(denseL2Config());
     assertEquals(0, cache.insert(denseVector(1f, 0f), Map.of()));
     assertEquals(1, cache.insert(denseVector(0f, 1f), Map.of()));
@@ -69,10 +64,7 @@ class ScanCacheTest {
   @Test
   void insertThrowsWhenNextRowNumWouldOverflow() {
     ScanCache cache = new ScanCache(denseL2Config());
-    /*
-     * Advance nextRowNum to Long.MAX_VALUE through the public API so the next sequential insert()
-     * overflows, without reaching into private state.
-     */
+    // Advance nextRowNum through the public API so the next insert() overflows.
     cache.insertWithRowNum(Long.MAX_VALUE - 1, denseVector(1f, 0f), Map.of());
 
     assertThrows(IllegalStateException.class, () -> cache.insert(denseVector(0f, 1f), Map.of()));
@@ -137,7 +129,6 @@ class ScanCacheTest {
 
   @Test
   void deleteUnknownRowReturnsFalseWithoutThrowing() {
-    // ERD: "If the delete is unsuccessful ... the API returns false, and no exception is thrown."
     ScanCache cache = new ScanCache(denseL2Config());
     assertFalse(cache.delete(42));
   }
@@ -159,10 +150,7 @@ class ScanCacheTest {
 
   @Test
   void updateReplacesRecord() {
-    /*
-     * ERD: "an update operation is equivalent to a delete followed by an insert with the same
-     * rowNum."
-     */
+    // ERD: an update is a delete followed by an insert with the same rowNum.
     ScanCache cache = new ScanCache(denseL2Config());
     long rowNum = cache.insert(denseVector(1f, 0f), Map.of());
     assertTrue(cache.update(rowNum, denseVector(0f, 1f), Map.of()));
@@ -208,7 +196,6 @@ class ScanCacheTest {
 
   @Test
   void getSimilarRowNumsRespectsMinSimilarity() {
-    // ERD: "searches for all the records similar to the query record by at least minSimilarity".
     ScanCache cache = new ScanCache(denseL2Config());
     long exact = cache.insert(denseVector(1f, 0f), Map.of()); // distance 0    -> similarity 1.0
     long far = cache.insert(denseVector(0f, 1f), Map.of()); //   distance sqrt2 -> similarity ~0.414
@@ -227,7 +214,6 @@ class ScanCacheTest {
 
   @Test
   void metadataFilterRestrictsResults() {
-    // ERD: metadata filtering keeps only rows whose metadata matches the filter.
     ScanCache cache = new ScanCache(denseL2Config());
     long sanFrancisco = cache.insert(denseVector(1f, 0f), Map.of("city", "sf"));
     cache.insert(denseVector(1f, 0f), Map.of("city", "la"));

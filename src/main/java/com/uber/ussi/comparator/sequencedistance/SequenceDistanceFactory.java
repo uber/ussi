@@ -7,9 +7,8 @@ import java.util.Objects;
 /** Creates the edit distances supported by the sequence comparators. */
 public final class SequenceDistanceFactory {
   /**
-   * The edit distance a sequence comparator measures with, which is what the generalized
-   * Levenshtein distance generalizes over. Each permits a different set of edits, so the same pair
-   * of sequences has a different distance under each.
+   * The edit distance a sequence comparator measures with. Each permits a different set of edits,
+   * so the same pair of sequences has a different distance under each.
    */
   public enum SequenceDistanceType {
     /**
@@ -19,9 +18,8 @@ public final class SequenceDistanceFactory {
     DAMERAU_LEVENSHTEIN,
 
     /**
-     * The distance complementing the longest common subsequence (LCS): insertion and deletion of
-     * one element, and nothing else. Rewriting an element costs a deletion and an insertion, so an
-     * LCS distance is never below the Levenshtein distance over the same pair.
+     * Insertion and deletion of one element, and nothing else, complementing the longest common
+     * subsequence (LCS). Rewriting an element costs both, so this is never below Levenshtein.
      */
     LCS,
 

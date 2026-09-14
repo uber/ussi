@@ -11,9 +11,7 @@ public final class RowNumAndSimilarity {
           .reversed()
           .thenComparingLong(RowNumAndSimilarity::getRowNum);
 
-  /**
-   * Heap order: the least desirable retained result compares first, so a bounded heap can evict it.
-   */
+  /** Heap order: the least desirable retained result compares first, so it is evicted first. */
   public static final java.util.Comparator<RowNumAndSimilarity> TOP_RESULTS_HEAP_ORDER =
       java.util.Comparator.comparingDouble(RowNumAndSimilarity::getSimilarity)
           .thenComparing(

@@ -21,9 +21,9 @@ import java.util.Objects;
 /**
  * Writable in-memory searchable structure described by the USSI ERD.
  *
- * <p>This class is not thread-safe on its own. Concurrency is handled by the owning {@link
- * com.uber.ussi.NearestNeighborSearchIndex}, which serializes all access with
- * a single read/write lock (mutations under the write lock, searches under the read lock).
+ * <p>Not thread-safe. The owning {@link com.uber.ussi.NearestNeighborSearchIndex} serializes all
+ * access with a single read/write lock: mutations under the write lock, searches under the read
+ * lock.
  */
 public abstract class Cache implements SearchableStructure {
   protected static final int CACHE_INITIAL_CAPACITY = 10000;
@@ -131,7 +131,6 @@ public abstract class Cache implements SearchableStructure {
    */
   protected void onRowInserted(long rowNum, LongTermsAndValues record) {}
 
-  /** Hook invoked after a row is removed, so subclasses can maintain auxiliary structures. */
   protected void onRowDeleted(long rowNum, LongTermsAndValues record) {}
 
   private void put(long rowNum, LongTermsAndValues record, Map<String, String> metadata) {
@@ -160,7 +159,7 @@ public abstract class Cache implements SearchableStructure {
     return true;
   }
 
-  /** Encodes all non-null metadata keys and values for metadata filter evaluation. */
+  /** Encodes metadata for filter evaluation, dropping entries with a null key or value. */
   private LongMeta toLongMeta(Map<String, String> metadata) {
     if (metadata == null || metadata.isEmpty()) {
       return LongMeta.empty();

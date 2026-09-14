@@ -34,11 +34,8 @@ public final class CacheConfigValidator implements NamespaceConfigValidator {
     if (cacheType != CacheType.INVERTED_TERM) {
       return;
     }
-    /*
-     * The inverted term cache keys its inverted lists by the record's own terms and reads a value
-     * per term, so it stores order-agnostic sparse records. A comparator that cannot read that type
-     * caches through the scan cache instead, which scores every row through the comparator.
-     */
+    // The inverted term cache keys lists by the record's own terms and reads a value per term, so
+    // it stores order-agnostic sparse records.
     Comparator comparator = ComparatorFactory.tryCreateComparator(config);
     if (comparator != null
         && !comparator.getSupportedRecordTypes().contains(RecordType.ORDER_AGNOSTIC_SPARSE)) {
@@ -69,11 +66,7 @@ public final class CacheConfigValidator implements NamespaceConfigValidator {
         1.0);
   }
 
-  /**
-   * A name that is not one of the cache structures is reported here rather than left to {@link
-   * CacheFactory}, which only refuses it once a namespace is being opened. A blank name is the
-   * config's own structural check and is not repeated.
-   */
+  /** A cacheType that is non-blank and names no structure is invalid. */
   private static void collectCacheTypeViolations(NamespaceConfig config, List<String> violations) {
     if (config.getCacheType().isEmpty()) {
       return;

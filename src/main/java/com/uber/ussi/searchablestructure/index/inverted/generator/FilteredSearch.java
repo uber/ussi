@@ -21,12 +21,11 @@ import javax.annotation.Nullable;
 /**
  * Key-major filtered-scan candidate generation over uni-sorted inverted lists.
  *
- * <p>The query's keys are visited cheapest first, and each one's inverted list is narrowed
- * to the rows that length filtering admits. Every candidate is then scored through the comparator,
- * so this generator works for every inverted index type.
+ * <p>The query's keys are visited cheapest first, and each one's inverted list is narrowed to the
+ * rows that length filtering admits. Every candidate is then scored through the comparator, so this
+ * generator works for every inverted index type.
  *
- * <p>Public only so that the inverted indexes in the sibling packages can reach it. Nothing outside
- * this library's inverted implementation should depend on it.
+ * <p>Public only for the sibling inverted index packages.
  */
 public final class FilteredSearch {
   /**
@@ -38,12 +37,8 @@ public final class FilteredSearch {
   private FilteredSearch() {}
 
   /**
-   * Generates and scores candidates for {@code query}.
-   *
-   * @param query the query in verification form, which is the only form the comparator can score.
-   * @param indexedQuery the query in indexed form, which is the form the rows behind {@code
-   *     context}'s uni values are in. Length filtering compares the two uni values, so it has to
-   *     read the query's from the same form, not from {@code query}.
+   * Generates and scores candidates for {@code query}. Length filtering compares uni values, so the
+   * query's is read from {@code indexedQuery}, the form the indexed rows are in.
    */
   public static List<RowNumAndSimilarity> search(
       Comparator comparator,
@@ -87,22 +82,10 @@ public final class FilteredSearch {
   }
 
   /**
-   * Returns the inclusive lower bound of a key's matching row range within
-   * [searchFromIndex, searchToIndex) of rowNums for the given comparatorUniValue and minSimilarity.
-   * Called with (0, rowNums.length) for a key's first window, and with the key's previous
-   * [first, last) range on later calls as minSimilarity rises in {@link CandidateIterator}. This is
-   * sound because a key's matching range only shrinks as minSimilarity rises, never grows.
-   * Tries these tiers, cheapest first.
-   *
-   * <p>Tier 1, O(1). One of the range's endpoints already resolves the search.
-   *
-   * <p>Tier 2, O(1). The endpoints share the same uniValue. Since rowNums is uniValue-sorted, every
-   * row between them shares it too, so tier 1's checks cover the whole range.
-   *
-   * <p>Tier 3. Range smaller than {@link #MIN_NUM_CANDIDATES_FOR_BINARY_SEARCH}. Linear scan from
-   * searchFromIndex.
-   *
-   * <p>Tier 4. Otherwise, binary search.
+   * Returns the inclusive lower bound of a key's matching row range within [searchFromIndex,
+   * searchToIndex). Re-narrowing a key's previous range as minSimilarity rises is sound because a
+   * matching range only ever shrinks. Endpoint checks resolve it in O(1) when they agree, since
+   * rowNums is uni-sorted; otherwise short ranges are scanned and long ones binary searched.
    */
   public static int getFirstMatchingUniValue(
       Comparator comparator,
@@ -153,7 +136,7 @@ public final class FilteredSearch {
 
   /**
    * Returns the exclusive upper bound of a key's matching row range, the mirror of {@link
-   * #getFirstMatchingUniValue} and narrowed by the same tiers.
+   * #getFirstMatchingUniValue} and narrowed the same way.
    */
   public static int getLastMatchingUniValue(
       Comparator comparator,

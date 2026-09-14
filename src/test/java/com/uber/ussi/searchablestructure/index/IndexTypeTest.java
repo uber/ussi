@@ -43,10 +43,7 @@ class IndexTypeTest {
         IndexType.SCAN.getStorableRecordTypes());
   }
 
-  /**
-   * The record type an index stores is the one its structure keeps and its comparator reads, which
-   * leaves exactly one type for every structure that reads a record's layout.
-   */
+  /** The stored type is the one the structure keeps and the comparator reads, leaving one. */
   @Test
   void resolvingRecordTypesLeavesOneTypePerStructureAndComparator() {
     Comparator l2 = comparator("l2", "reciprocal");
@@ -71,10 +68,7 @@ class IndexTypeTest {
         Set.of(), IndexType.INVERTED_SIGNATURE.resolveRecordTypes(comparator("ngld", "complement")));
   }
 
-  /**
-   * The scan structure is the only one left ambiguous, and it scores every row through the
-   * comparator without reading a record's layout, so it never asks which type it holds.
-   */
+  /** The scan structure never reads a record's layout, so it never asks which type it holds. */
   @Test
   void resolvingRecordTypesIsAmbiguousOnlyWhereTheAnswerIsUnused() {
     assertEquals(
@@ -100,8 +94,8 @@ class IndexTypeTest {
   }
 
   /**
-   * A conjunction is a similarity only when the lists carry a record's own values, so it takes a
-   * term-keyed structure and a record type whose terms determine its similarity.
+   * A conjunction is a similarity only when the lists carry a record's own values, so it needs a
+   * term-keyed structure and a type whose terms determine its similarity.
    */
   @Test
   void onlyTermKeyedListsOverSparseRecordsDetermineSimilarity() {

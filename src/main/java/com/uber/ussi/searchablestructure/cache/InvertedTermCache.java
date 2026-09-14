@@ -24,19 +24,16 @@ import javax.annotation.Nullable;
 /**
  * Writable inverted term cache with mutable lists.
  *
- * <p>Inverted lists are mutable and kept in insertion order, unlike the immutable uni-value-sorted
- * inverted lists of the inverted indexes, so candidate generation uses prefix filtering
- * without per-list length bounds. As in those indexes, results are limited to the rows sharing
- * at least one term with the query.
+ * <p>Lists are mutable and kept in insertion order rather than uni-value-sorted, so candidate
+ * generation uses prefix filtering without per-list length bounds, and results are limited to the
+ * rows sharing at least one term with the query.
  *
- * <p>High-popularity terms are filtered dynamically. The cache observes an incrementally changing
- * sample of rows rather than a complete dataset, so each cached row is treated as a Bernoulli trial
- * for containing a term, and a term is excluded from comparisons when the upper bound of the
- * one-sided confidence interval of its true popularity exceeds max_fraction_ids_per_key.
- * This errs on the side of filtering when few rows have been observed, and the decision is
- * reversible: inverted lists and stored rows retain all terms. Popularity decisions are updated
- * incrementally after mutations, with a full reevaluation after the cache shrinks sufficiently to
- * account for the lower denominator across all terms.
+ * <p>High-popularity terms are filtered dynamically. The cache sees an incrementally changing
+ * sample rather than a complete dataset, so each cached row is a Bernoulli trial for containing a
+ * term, and a term is excluded from comparisons when the upper bound of the one-sided confidence
+ * interval of its true popularity exceeds max_fraction_ids_per_key. Decisions are reversible,
+ * since lists and stored rows retain all terms; they are updated incrementally after mutations and
+ * fully reevaluated once the cache shrinks enough for the lower denominator to matter.
  */
 public final class InvertedTermCache extends Cache {
   private static final double MAX_ROWS_RATIO_TO_BRUTE_FORCE_PRE_FILTERING = 0.01;
@@ -140,19 +137,14 @@ public final class InvertedTermCache extends Cache {
     if (discardedTermFreeQuery.termsLength() == 0) {
       return Collections.emptyList();
     }
-    /*
-     * The query is scored in whichever form the discard scope says the rows are scored in, so that
-     * both sides of every comparison carry the same terms, and candidates are always generated
-     * from the discarded-term-free form so that the popular terms' inverted lists go unvisited.
-     */
+    // Score the query in whichever form the rows are scored in, so both sides of a comparison
+    // carry the same terms; candidates always come from the discarded-term-free form.
     LongTermsAndValues verificationQuery =
         popularTermDiscardScope == PopularTermDiscardScope.CANDIDATES_ONLY
             ? record
             : discardedTermFreeQuery;
-    /*
-     * When metadata pre-filtering leaves only a small fraction of the cache, scanning the matching
-     * rows directly is cheaper than candidate generation over inverted lists.
-     */
+    // When pre-filtering leaves only a small fraction of the cache, scanning those rows directly
+    // is cheaper than candidate generation over the inverted lists.
     PreFilteringResult preFiltering =
         metadataFilteringModule.getMatchingRowNumsIfUnderLimit(
             metadataFilter, (int) (size() * MAX_ROWS_RATIO_TO_BRUTE_FORCE_PRE_FILTERING));
@@ -182,14 +174,11 @@ public final class InvertedTermCache extends Cache {
   }
 
   /**
-   * Generates candidates from the inverted lists of the query terms in nondecreasing
-   * prefix cost, stopping once the accumulated uni-transformed prefix mass exceeds the
-   * budget implied by the dynamically tightened similarity threshold.
-   *
-   * @param query the query in verification form, which is the only form the comparator can score.
-   * @param discardedTermFreeQuery the query without its discarded terms, which supplies both the
-   *     inverted lists to visit and the uni value prefix filtering budgets against, since the
-   *     prefix mass accumulates over this form's terms.
+   * Generates candidates from the inverted lists of the query terms in nondecreasing prefix cost,
+   * stopping once the accumulated uni-transformed prefix mass exceeds the budget implied by the
+   * dynamically tightened similarity threshold. Candidates and the budget come from {@code
+   * discardedTermFreeQuery}, whose terms the prefix mass accumulates over, while scoring uses
+   * {@code query}, the only form the comparator can score.
    */
   private List<RowNumAndSimilarity> invertedListSearch(
       LongTermsAndValues query,
@@ -259,9 +248,9 @@ public final class InvertedTermCache extends Cache {
   }
 
   /**
-   * Returns the row in the form the comparator scores it in, or null when the row does not exist or
-   * the discard leaves it with no terms. Unlike the inverted indexes, this form is derived on the
-   * fly because which terms are discarded changes as the cache mutates.
+   * Returns the row in the form the comparator scores it in, or null when the row is absent or the
+   * discard leaves it with no terms. The form is derived per call because which terms are
+   * discarded changes as the cache mutates.
    */
   @Nullable
   private LongTermsAndValues getVerificationRow(long rowNum) {
@@ -280,10 +269,8 @@ public final class InvertedTermCache extends Cache {
       return;
     }
 
-    /*
-     * An insertion cannot make an untouched, unfiltered term more popular. Recheck the inserted
-     * terms for newly-popular terms and the discarded set for those the larger sample readmits.
-     */
+    // An insertion cannot make an untouched, unfiltered term more popular, so recheck only the
+    // inserted terms and the discarded set the larger sample may readmit.
     LongHashSet termsToReevaluate =
         new LongHashSet(discardedTerms.size() + insertedRecord.termsLength());
     for (LongCursor term : discardedTerms) {
@@ -309,11 +296,8 @@ public final class InvertedTermCache extends Cache {
       return;
     }
 
-    /*
-     * Deleted terms may become less popular, while any currently filtered term may be readmitted.
-     * An untouched term can become newly popular as the denominator shrinks; the periodic full
-     * reevaluation above bounds how long such a decision can remain stale.
-     */
+    // An untouched term can still become popular as the denominator shrinks, which the full
+    // reevaluation above bounds the staleness of.
     LongHashSet termsToReevaluate =
         new LongHashSet(discardedTerms.size() + deletedRecord.termsLength());
     for (LongCursor term : discardedTerms) {
@@ -381,10 +365,8 @@ public final class InvertedTermCache extends Cache {
   }
 
   /**
-   * Parses the one-sided confidence of the interval used to declare a term as high-popularity. A
-   * confidence of 0.5 (K-alpha of 0.0) degenerates to comparing the observed popularity against
-   * maxFractionIdsPerKey directly. The [0.5, 1.0] range is enforced by
-   * ProportionConfidenceInterval1Sided.
+   * Parses the one-sided confidence used to declare a term high-popularity. A confidence of 0.5
+   * degenerates to comparing the observed popularity against maxFractionIdsPerKey directly.
    */
   private static double parseMaxFractionIdsPerKeyConfidence(NamespaceConfig namespaceConfig) {
     return namespaceConfig.readDoubleCacheParam(

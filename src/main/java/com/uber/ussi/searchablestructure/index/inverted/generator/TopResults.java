@@ -7,8 +7,7 @@ import com.uber.ussi.utils.BoundedSizeMaxHeap;
 /**
  * The bounded top-results heap shared by the candidate generators.
  *
- * <p>Public only so that the inverted indexes in the sibling packages can reach it. Nothing outside
- * this library's inverted implementation should depend on it.
+ * <p>Public only for the sibling inverted index packages.
  */
 public final class TopResults {
   private TopResults() {}

@@ -6,11 +6,10 @@ import java.util.Arrays;
 /**
  * The uni-sorted rows of one key, with the rows' values at that key alongside.
  *
- * <p>The arrays are owned by the index and must not be mutated. Values are only populated when a
- * candidate generator scores from them, so callers that need them must know they were requested.
+ * <p>The arrays are owned by the index and must not be mutated. Values are populated only when a
+ * candidate generator scores from them.
  *
- * <p>Public only so that the inverted indexes in the sibling packages can reach it. Nothing outside
- * this library's inverted implementation should depend on it.
+ * <p>Public only for the sibling inverted index packages.
  */
 public final class InvertedList {
   private final long[] rowNums;

@@ -25,14 +25,14 @@ import javax.annotation.Nullable;
  * Writable inverted term cache with mutable lists.
  *
  * <p>Inverted lists are mutable and kept in insertion order, unlike the immutable uni-value-sorted
- * inverted lists of the inverted indexes, so candidate generation uses unordered-prefix filtering
+ * inverted lists of the inverted indexes, so candidate generation uses prefix filtering
  * without per-list length bounds. As in those indexes, results are limited to the rows sharing
  * at least one term with the query.
  *
  * <p>High-popularity terms are filtered dynamically. The cache observes an incrementally changing
  * sample of rows rather than a complete dataset, so each cached row is treated as a Bernoulli trial
  * for containing a term, and a term is excluded from comparisons when the upper bound of the
- * one-sided confidence interval of its true popularity exceeds max_fraction_ids_per_sparse_key.
+ * one-sided confidence interval of its true popularity exceeds max_fraction_ids_per_key.
  * This errs on the side of filtering when few rows have been observed, and the decision is
  * reversible: inverted lists and stored rows retain all terms. Popularity decisions are updated
  * incrementally after mutations, with a full reevaluation after the cache shrinks sufficiently to
@@ -41,7 +41,7 @@ import javax.annotation.Nullable;
 public final class InvertedTermCache extends Cache {
   private static final double MAX_ROWS_RATIO_TO_BRUTE_FORCE_PRE_FILTERING = 0.01;
 
-  private final double maxFractionIdsPerSparseKey;
+  private final double maxFractionIdsPerKey;
   private final PopularTermDiscardScope popularTermDiscardScope;
   private final double fullReevaluationCacheSizeDecreaseFraction;
   private final MathUtils.ProportionConfidenceInterval1Sided popularityConfidenceTester;
@@ -52,13 +52,13 @@ public final class InvertedTermCache extends Cache {
 
   public InvertedTermCache(NamespaceConfig namespaceConfig) {
     super(namespaceConfig);
-    this.maxFractionIdsPerSparseKey = parseMaxFractionIdsPerSparseKey(namespaceConfig);
+    this.maxFractionIdsPerKey = parseMaxFractionIdsPerKey(namespaceConfig);
     this.popularTermDiscardScope = namespaceConfig.getCachePopularTermDiscardScope();
     this.fullReevaluationCacheSizeDecreaseFraction =
         parseFullReevaluationCacheSizeDecreaseFraction(namespaceConfig);
     this.popularityConfidenceTester =
         new MathUtils.ProportionConfidenceInterval1Sided(
-            parseMaxFractionIdsPerSparseKeyConfidence(namespaceConfig));
+            parseMaxFractionIdsPerKeyConfidence(namespaceConfig));
     this.termAndRowNumsIndex = new LongObjectHashMap<>(CACHE_INITIAL_CAPACITY);
     this.discardedTerms = new LongHashSet();
   }
@@ -183,7 +183,7 @@ public final class InvertedTermCache extends Cache {
 
   /**
    * Generates candidates from the inverted lists of the query terms in nondecreasing
-   * unordered-prefix cost, stopping once the accumulated uni-transformed prefix mass exceeds the
+   * prefix cost, stopping once the accumulated uni-transformed prefix mass exceeds the
    * budget implied by the dynamically tightened similarity threshold.
    *
    * @param query the query in verification form, which is the only form the comparator can score.
@@ -210,7 +210,7 @@ public final class InvertedTermCache extends Cache {
       if (prefixSumAccumulator.getSum() > maxPrefixSum) {
         break;
       }
-      LongArrayList invertedList = termAndRowNumsIndex.get(term.getSparseKey());
+      LongArrayList invertedList = termAndRowNumsIndex.get(term.getKey());
       int invertedListSize = invertedList == null ? 0 : invertedList.size();
       for (int i = 0; i < invertedListSize; ++i) {
         long rowNum = invertedList.get(i);
@@ -275,7 +275,7 @@ public final class InvertedTermCache extends Cache {
   }
 
   private void updateDiscardedTermsAfterInsertion(LongTermsAndValues insertedRecord) {
-    if (maxFractionIdsPerSparseKey == 1.0) {
+    if (maxFractionIdsPerKey == 1.0) {
       discardedTerms.clear();
       return;
     }
@@ -298,7 +298,7 @@ public final class InvertedTermCache extends Cache {
   }
 
   private void updateDiscardedTermsAfterDeletion(LongTermsAndValues deletedRecord) {
-    if (maxFractionIdsPerSparseKey == 1.0) {
+    if (maxFractionIdsPerKey == 1.0) {
       discardedTerms.clear();
       return;
     }
@@ -347,7 +347,7 @@ public final class InvertedTermCache extends Cache {
     }
     return popularityConfidenceTester.getConfidenceIntervalUpperBound(
             /* numTrials */ numRows, /* numSuccesses */ numRowsWithTerm)
-        > maxFractionIdsPerSparseKey;
+        > maxFractionIdsPerKey;
   }
 
   /** Rebuilds all popularity decisions and resets the exact-evaluation cache-size baseline. */
@@ -355,7 +355,7 @@ public final class InvertedTermCache extends Cache {
     discardedTerms.clear();
     int numRows = size();
     numRowsAtLastExactPopularityEvaluation = numRows;
-    if (numRows == 0 || maxFractionIdsPerSparseKey == 1.0) {
+    if (numRows == 0 || maxFractionIdsPerKey == 1.0) {
       return;
     }
     for (LongObjectCursor<LongArrayList> entry : termAndRowNumsIndex) {
@@ -367,10 +367,10 @@ public final class InvertedTermCache extends Cache {
     return new BoundedSizeMaxHeap<>(maxResults, RowNumAndSimilarity.TOP_RESULTS_HEAP_ORDER);
   }
 
-  private static double parseMaxFractionIdsPerSparseKey(NamespaceConfig namespaceConfig) {
+  private static double parseMaxFractionIdsPerKey(NamespaceConfig namespaceConfig) {
     return namespaceConfig.readDoubleCacheParam(
-        Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY,
-        Constants.DEFAULT_MAX_FRACTION_IDS_PER_SPARSE_KEY);
+        Constants.MAX_FRACTION_IDS_PER_KEY,
+        Constants.DEFAULT_MAX_FRACTION_IDS_PER_KEY);
   }
 
   private static double parseFullReevaluationCacheSizeDecreaseFraction(
@@ -383,12 +383,12 @@ public final class InvertedTermCache extends Cache {
   /**
    * Parses the one-sided confidence of the interval used to declare a term as high-popularity. A
    * confidence of 0.5 (K-alpha of 0.0) degenerates to comparing the observed popularity against
-   * maxFractionIdsPerSparseKey directly. The [0.5, 1.0] range is enforced by
+   * maxFractionIdsPerKey directly. The [0.5, 1.0] range is enforced by
    * ProportionConfidenceInterval1Sided.
    */
-  private static double parseMaxFractionIdsPerSparseKeyConfidence(NamespaceConfig namespaceConfig) {
+  private static double parseMaxFractionIdsPerKeyConfidence(NamespaceConfig namespaceConfig) {
     return namespaceConfig.readDoubleCacheParam(
-        Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY_CONFIDENCE,
-        Constants.DEFAULT_MAX_FRACTION_IDS_PER_SPARSE_KEY_CONFIDENCE);
+        Constants.MAX_FRACTION_IDS_PER_KEY_CONFIDENCE,
+        Constants.DEFAULT_MAX_FRACTION_IDS_PER_KEY_CONFIDENCE);
   }
 }

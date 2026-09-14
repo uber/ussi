@@ -10,7 +10,7 @@ class KeyAndUniTransformedValueTest {
   void accessorsReturnTheKeyAndItsContribution() {
     KeyAndUniTransformedValue keyAndValue = new KeyAndUniTransformedValue(7, 3.0);
 
-    assertEquals(7, keyAndValue.getSparseKey());
+    assertEquals(7, keyAndValue.getKey());
     assertEquals(3.0, keyAndValue.getUniTransformedValue());
   }
 }

@@ -1,4 +1,4 @@
-package com.uber.ussi.searchablestructure.index.inverted.unordered;
+package com.uber.ussi.searchablestructure.index.inverted;
 
 import static com.uber.ussi.TestLongObjectMaps.longObjectMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -12,7 +12,6 @@ import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
-import com.uber.ussi.error.IndexCreationError;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
 import com.uber.ussi.utils.Constants;
 import java.util.Arrays;
@@ -157,7 +156,7 @@ class HybridIndexTest {
                 "minhash",
                 0,
                 1000,
-                Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0.5")),
+                Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0.5")),
             rows,
             longObjectMap());
     LongTermsAndValues query = jaccard(sequentialTerms(300, 1));
@@ -204,7 +203,7 @@ class HybridIndexTest {
         IllegalArgumentException.class,
         () -> index.getSimilarRowNums(1.1f, query, MetaFilter.empty()));
     assertThrows(
-        IndexCreationError.class,
+        IllegalArgumentException.class,
         () -> new HybridIndex(configWithoutSignatures(), longObjectMap(), longObjectMap()));
   }
 
@@ -239,8 +238,8 @@ class HybridIndexTest {
                 0,
                 1000,
                 Map.of(
-                    Constants.SPARSE_CANDIDATE_GENERATOR,
-                    NamespaceConfig.SparseCandidateGenerator.SPARS_MERGE.getParamValue())),
+                    Constants.CANDIDATE_GENERATOR,
+                    NamespaceConfig.CandidateGenerator.SPARS_MERGE.getParamValue())),
             rows,
             longObjectMap());
 
@@ -286,8 +285,8 @@ class HybridIndexTest {
         .minTermsAndValuesLength(minTermsAndValuesLength)
         .maxTermsAndValuesLength(maxTermsAndValuesLength)
         .maxCacheSize(100)
-        .cacheType("generic")
-        .indexType("sparse")
+        .cacheType("scan")
+        .indexType("inverted_hybrid")
         .indexParams(indexParams)
         .comparatorType(comparatorType)
         .comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR_TYPE, signatureGeneratorType))
@@ -302,8 +301,8 @@ class HybridIndexTest {
         .minTermsAndValuesLength(0)
         .maxTermsAndValuesLength(1000)
         .maxCacheSize(100)
-        .cacheType("generic")
-        .indexType("sparse")
+        .cacheType("scan")
+        .indexType("inverted_hybrid")
         .comparatorType("jaccard")
         .comparatorNormalizerType("identity")
         .maxNumSearchableStructures(3)

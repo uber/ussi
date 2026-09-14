@@ -2,7 +2,7 @@
 package com.uber.ussi.searchablestructure.index.inverted.generator;
 
 /**
- * The index state every sparse candidate generator reads while traversing inverted lists.
+ * The index state every candidate generator reads while traversing inverted lists.
  *
  * <p>Public only so that the inverted indexes in the sibling packages can reach it. Nothing outside
  * this library's inverted implementation should depend on it.

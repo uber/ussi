@@ -1,4 +1,4 @@
-package com.uber.ussi.searchablestructure.index.inverted.sequence;
+package com.uber.ussi.searchablestructure.index.inverted;
 
 import static com.uber.ussi.TestLongObjectMaps.longObjectMap;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -26,7 +26,7 @@ import java.util.Map;
 import java.util.Random;
 import org.junit.jupiter.api.Test;
 
-class TermIndexTest {
+class TermIndexOnSequencesTest {
   private static final float DELTA = 1e-6f;
   private static final float[] NO_VALUES = new float[0];
   private static final List<String> COMPARATOR_TYPES = List.of("gld", "ngld");
@@ -42,9 +42,9 @@ class TermIndexTest {
     TermIndex index = new TermIndex(config("ngld"), rows, longObjectMap());
 
     assertEquals(2, index.size());
-    assertEquals(3, index.getNumIndexedSparseKeysForTests());
-    assertArrayEquals(new long[] {7}, index.getRowNumsForSparseKeyForTests(1));
-    assertArrayEquals(new long[] {8, 7}, index.getRowNumsForSparseKeyForTests(2));
+    assertEquals(3, index.getNumIndexedKeysForTests());
+    assertArrayEquals(new long[] {7}, index.getRowNumsForKeyForTests(1));
+    assertArrayEquals(new long[] {8, 7}, index.getRowNumsForKeyForTests(2));
     // The indexed form is the multiset, ascending and distinct, carrying the counts as values.
     assertArrayEquals(new long[] {1, 2}, index.getIndexedRow(7).getTerms());
     assertArrayEquals(new float[] {3.0f, 1.0f}, index.getIndexedRow(7).getValues());
@@ -63,7 +63,7 @@ class TermIndexTest {
       LongObjectHashMap<LongTermsAndValues> rows = randomRows(random, 60);
       TermIndex index = new TermIndex(config(comparatorType), rows, longObjectMap());
       ScanIndex bruteForce =
-          new ScanIndex(config(comparatorType, Map.of(), "generic"), rows, longObjectMap());
+          new ScanIndex(config(comparatorType, Map.of(), "scan"), rows, longObjectMap());
 
       for (int trial = 0; trial < 40; ++trial) {
         LongTermsAndValues query = randomSequence(random);
@@ -90,7 +90,7 @@ class TermIndexTest {
       LongObjectHashMap<LongTermsAndValues> rows = randomRows(random, 40);
       TermIndex index = new TermIndex(config(comparatorType), rows, longObjectMap());
       ScanIndex bruteForce =
-          new ScanIndex(config(comparatorType, Map.of(), "generic"), rows, longObjectMap());
+          new ScanIndex(config(comparatorType, Map.of(), "scan"), rows, longObjectMap());
 
       for (int trial = 0; trial < 25; ++trial) {
         LongTermsAndValues query = randomSequence(random);
@@ -165,15 +165,23 @@ class TermIndexTest {
     assertTrue(error.getMessage().contains("must have no values"), error.getMessage());
   }
 
-  /** Every index validates its config as it is built, so an unreadable pairing never gets built. */
+  /**
+   * The same structure stores sequences only for a comparator that reads them, so pairing it with
+   * one that reads sparse records instead leaves these rows short of the values that type needs.
+   */
   @Test
-  void constructorRejectsAComparatorThatCannotReadSequences() {
+  void sequenceRowsAreRejectedForAComparatorThatReadsSparseRecords() {
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
     rows.put(1, sequence(1, 2));
     NamespaceConfig config = config("jaccard");
 
-    assertThrows(
-        IllegalArgumentException.class, () -> new TermIndex(config, rows, longObjectMap()));
+    IndexCreationError error =
+        assertThrows(
+            IndexCreationError.class, () -> new TermIndex(config, rows, longObjectMap()));
+
+    assertTrue(
+        error.getMessage().contains("must have equal non-empty terms and values lengths"),
+        error.getMessage());
   }
 
   @Test
@@ -187,13 +195,13 @@ class TermIndexTest {
 
     TermIndex index =
         new TermIndex(
-            config("ngld", Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0.75"), "sequence"),
+            config("ngld", Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0.75"), "inverted_term"),
             rows,
             longObjectMap());
 
     // The discarded element keys no list, and the surviving elements still key their own.
-    assertEquals(0, index.getRowNumsForSparseKeyForTests(9).length);
-    long[] rowNumsForElementTwo = index.getRowNumsForSparseKeyForTests(2).clone();
+    assertEquals(0, index.getRowNumsForKeyForTests(9).length);
+    long[] rowNumsForElementTwo = index.getRowNumsForKeyForTests(2).clone();
     Arrays.sort(rowNumsForElementTwo);
     assertArrayEquals(new long[] {1, 2}, rowNumsForElementTwo);
     /*
@@ -227,16 +235,16 @@ class TermIndexTest {
             config(
                 "ngld",
                 Map.of(
-                    Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY,
+                    Constants.MAX_FRACTION_IDS_PER_KEY,
                     "0.75",
                     Constants.POPULAR_TERM_DISCARD_SCOPE,
                     PopularTermDiscardScope.CANDIDATES_ONLY.getParamValue()),
-                "sequence"),
+                "inverted_term"),
             rows,
             longObjectMap());
 
     // Candidate generation is unchanged: the discarded element still keys no list.
-    assertEquals(0, index.getRowNumsForSparseKeyForTests(9).length);
+    assertEquals(0, index.getRowNumsForKeyForTests(9).length);
     assertEquals(2, index.getIndexedRow(1).termsLength());
     /*
      * Scoring is what changes. The sequences keep the discarded element, so rows 1 and 2 are two
@@ -264,7 +272,7 @@ class TermIndexTest {
 
     TermIndex index =
         new TermIndex(
-            config("ngld", Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0.75"), "sequence"),
+            config("ngld", Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0.75"), "inverted_term"),
             rows,
             longObjectMap());
 
@@ -364,7 +372,7 @@ class TermIndexTest {
   }
 
   private static NamespaceConfig config(String comparatorType) {
-    return config(comparatorType, Map.of(), "sequence");
+    return config(comparatorType, Map.of(), "inverted_term");
   }
 
   private static NamespaceConfig config(
@@ -373,7 +381,7 @@ class TermIndexTest {
         .minTermsAndValuesLength(0)
         .maxTermsAndValuesLength(100)
         .maxCacheSize(100)
-        .cacheType("generic")
+        .cacheType("scan")
         .indexType(indexType)
         .indexParams(indexParams)
         .comparatorType(comparatorType)

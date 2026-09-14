@@ -2,61 +2,62 @@
 package com.uber.ussi.searchablestructure.index.inverted;
 
 import com.carrotsearch.hppc.LongObjectHashMap;
-import com.google.common.annotations.VisibleForTesting;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
+import com.uber.ussi.searchablestructure.index.IndexType;
 
 /**
- * Shared implementation for the inverted indexes whose lists are keyed by the terms of the
- * record they index, as opposed to by a signature derived from it. Every inverted index is an
- * inverted index, so it is the source of the keys that separates them.
+ * Inverted index whose lists are keyed by the terms of the record it indexes, as opposed to by a
+ * signature derived from it. Every index in this family keeps inverted lists, so it is the source
+ * of the keys that separates them.
  *
- * <p>Subclasses differ in what they index, not in how they read it: the record reaching these
- * methods is always the indexed form returned by {@link #toIndexedRecord}, so its terms are sorted
- * and distinct and it carries one value per term, whatever type the caller's record had.
+ * <p>The record type decides what those terms are: a sparse record's own terms, keyed with its own
+ * values, so that the terms a query and a candidate share determine their similarity exactly; or
+ * the distinct elements of a sequence, keyed with how often each occurs, which bound how far apart
+ * two sequences can be without saying how far apart they are. Either way the record reaching these
+ * methods is the indexed form, so its terms are sorted and distinct and it carries one value per
+ * term whatever type the caller supplied; see {@link RecordIndexingStrategy}.
  */
-public abstract class BaseTermKeyedIndex extends BaseInvertedIndex {
+public final class TermIndex extends BaseInvertedIndex {
 
-  protected BaseTermKeyedIndex(
+  public TermIndex(
       NamespaceConfig namespaceConfig,
       LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
-      LongObjectHashMap<LongMeta> rowNumToMetaMap,
-      KeyType sparseKeyType) {
-    super(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap, sparseKeyType);
+      LongObjectHashMap<LongMeta> rowNumToMetaMap) {
+    super(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap, IndexType.INVERTED_TERM);
   }
 
   @Override
-  protected final double getMinPrefixSum(double sparseKeysUniValue, double minSimilarity) {
-    return comparator.getMinPrefixSumForTermsAndValues(sparseKeysUniValue, minSimilarity);
+  protected double getMinPrefixSum(double keysUniValue, double minSimilarity) {
+    return comparator.getMinPrefixSumForTermsAndValues(keysUniValue, minSimilarity);
   }
 
   @Override
-  protected final KeyAndUniTransformedValue[] getSparseKeysAndUniTransformedValues(
+  protected KeyAndUniTransformedValue[] getKeysAndUniTransformedValues(
       LongTermsAndValues indexedRecord) {
     int numTerms = indexedRecord.termsLength();
-    KeyAndUniTransformedValue[] sparseKeys = new KeyAndUniTransformedValue[numTerms];
+    KeyAndUniTransformedValue[] keys = new KeyAndUniTransformedValue[numTerms];
     for (int i = 0; i < numTerms; ++i) {
-      sparseKeys[i] =
+      keys[i] =
           new KeyAndUniTransformedValue(
               indexedRecord.getTerm(i),
               comparator.getUniTransformedValue(indexedRecord.getValue(i)));
     }
-    return sparseKeys;
+    return keys;
   }
 
   @Override
-  protected final long[] getSparseKeys(LongTermsAndValues indexedRecord) {
+  protected long[] getKeys(LongTermsAndValues indexedRecord) {
     return indexedRecord.getTerms();
   }
 
   @Override
-  @VisibleForTesting
-  public final float getValueAtSparseKey(LongTermsAndValues indexedRecord, long sparseKey) {
-    int termIndex = indexOfTerm(indexedRecord, sparseKey);
+  protected float getValueAtKey(LongTermsAndValues indexedRecord, long key) {
+    int termIndex = indexOfTerm(indexedRecord, key);
     if (termIndex < 0) {
       throw new IllegalArgumentException(
-          String.format("Sparse key %s is absent from the supplied terms and values.", sparseKey));
+          String.format("Key %s is absent from the supplied terms and values.", key));
     }
     return indexedRecord.getValue(termIndex);
   }

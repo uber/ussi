@@ -5,24 +5,29 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.utils.Constants;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class CacheConfigValidatorTest {
 
   private static final ValidationCase[] VALIDATION_CASES = {
-    new ValidationCase("sparse cache without params", builder -> builder, true),
+    new ValidationCase("inverted term cache without params", builder -> builder, true),
+    /*
+     * The cache structures were renamed after their structure, so the names they were configured
+     * with before no longer resolve and are reported as the typos they now are.
+     */
+    new ValidationCase(
+        "the cache type this vocabulary replaced", builder -> builder.cacheType("sparse"), false),
     new ValidationCase(
         "max fraction at zero",
         builder ->
-            builder.cacheParams(Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0")),
+            builder.cacheParams(Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0")),
         false),
     new ValidationCase(
         "confidence below one half",
         builder ->
             builder.cacheParams(
-                Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY_CONFIDENCE, "0.4")),
+                Map.of(Constants.MAX_FRACTION_IDS_PER_KEY_CONFIDENCE, "0.4")),
         false),
     new ValidationCase(
         "unparseable reevaluation fraction",
@@ -31,18 +36,19 @@ class CacheConfigValidatorTest {
                 Map.of(Constants.FULL_REEVALUATION_CACHE_SIZE_DECREASE_FRACTION, "not-a-number")),
         false),
     new ValidationCase(
-        "generic cache ignores sparse params",
+        "the scan cache ignores inverted-term params",
         builder ->
             builder
-                .cacheType("generic")
-                .cacheParams(Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0")),
+                .cacheType("scan")
+                .cacheParams(Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0")),
         true),
     /*
-     * The sparse cache keys its inverted lists by the record's own terms and reads a value per
-     * term, neither of which an ordered sequence supplies, so such a namespace caches generically.
+     * The inverted term cache keys its inverted lists by the record's own terms and reads a value
+     * per term, neither of which an ordered sequence supplies, so such a namespace caches through
+     * the scan cache.
      */
     new ValidationCase(
-        "sparse cache with a sequence comparator",
+        "inverted term cache with a sequence comparator",
         builder -> builder.comparatorType("ngld").comparatorNormalizerType("complement"),
         false),
     /*
@@ -50,15 +56,15 @@ class CacheConfigValidatorTest {
      * reports the name, so this validator stays quiet rather than reporting a consequence of it.
      */
     new ValidationCase(
-        "sparse cache with a comparator that cannot be created",
+        "inverted term cache with a comparator that cannot be created",
         builder -> builder.comparatorType("cosine"),
         true),
     new ValidationCase(
-        "generic cache with a sequence comparator",
+        "the scan cache with a sequence comparator",
         builder ->
             builder
-                .cacheType("generic")
-                .indexType("sequence")
+                .cacheType("scan")
+                .indexType("inverted_term")
                 .comparatorType("ngld")
                 .comparatorNormalizerType("complement"),
         true),
@@ -67,18 +73,34 @@ class CacheConfigValidatorTest {
   @Test
   void validationCases() {
     for (ValidationCase testCase : VALIDATION_CASES) {
-      List<String> violations = violations(testCase.build(sparseCacheBuilder()));
+      List<String> violations = violations(testCase.build(invertedTermCacheBuilder()));
       assertEquals(testCase.valid, violations.isEmpty(), testCase.name);
     }
   }
 
-  private static NamespaceConfig.Builder sparseCacheBuilder() {
+  @Test
+  void aBlankCacheTypeIsReportedOnlyByTheConfigItself() {
+    List<String> violations = violations(invertedTermCacheBuilder().cacheType("").build());
+
+    assertEquals(List.of("cacheType must be a non-blank string."), violations);
+  }
+
+  @Test
+  void anUnsupportedCacheTypeNamesTheSupportedOnes() {
+    List<String> violations = violations(invertedTermCacheBuilder().cacheType("sparse").build());
+
+    assertEquals(
+        List.of("Unsupported cacheType (sparse). Supported values: scan, inverted_term."),
+        violations);
+  }
+
+  private static NamespaceConfig.Builder invertedTermCacheBuilder() {
     return NamespaceConfig.builder()
         .minTermsAndValuesLength(0)
         .maxTermsAndValuesLength(4)
         .maxCacheSize(10)
-        .cacheType(CacheFactory.CacheType.SPARSE.name().toLowerCase(Locale.ROOT))
-        .indexType("term")
+        .cacheType(CacheFactory.CacheType.INVERTED_TERM.getParamValue())
+        .indexType("inverted_term")
         .comparatorType("jaccard")
         .comparatorNormalizerType("identity")
         .maxNumSearchableStructures(3)

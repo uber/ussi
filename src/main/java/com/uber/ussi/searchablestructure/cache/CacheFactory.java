@@ -5,13 +5,34 @@ import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.error.CacheCreationError;
 import java.util.Locale;
 import java.util.Objects;
+import javax.annotation.Nullable;
 
 /** Factory for the ERD cache new(config) API. */
 public final class CacheFactory {
 
+  /** The cache structures a namespace can be configured with. */
   public enum CacheType {
-    GENERIC,
-    SPARSE
+    /** Sequential scan that scores every row through the comparator. */
+    SCAN,
+
+    /** Mutable inverted lists keyed by the terms of the record itself. */
+    INVERTED_TERM;
+
+    /** Returns the structure of {@code paramValue}, or null if no structure has that name. */
+    @Nullable
+    public static CacheType fromParamValue(String paramValue) {
+      String normalizedParamValue = paramValue.trim().toLowerCase(Locale.ROOT);
+      for (CacheType cacheType : values()) {
+        if (cacheType.getParamValue().equals(normalizedParamValue)) {
+          return cacheType;
+        }
+      }
+      return null;
+    }
+
+    public String getParamValue() {
+      return name().toLowerCase(Locale.ROOT);
+    }
   }
 
   private CacheFactory() {}
@@ -19,14 +40,15 @@ public final class CacheFactory {
   public static Cache createCache(NamespaceConfig namespaceConfig) {
     Objects.requireNonNull(namespaceConfig, "namespaceConfig");
 
-    String cacheType = namespaceConfig.getCacheType().toLowerCase(Locale.ROOT);
-    if (cacheType.equals(CacheType.GENERIC.name().toLowerCase(Locale.ROOT))) {
-      return new ScanCache(namespaceConfig);
+    String configuredCacheType = namespaceConfig.getCacheType();
+    CacheType cacheType = CacheType.fromParamValue(configuredCacheType);
+    if (cacheType == null) {
+      throw new CacheCreationError(
+          String.format("Unsupported cache type (%s).", configuredCacheType));
     }
-    if (cacheType.equals(CacheType.SPARSE.name().toLowerCase(Locale.ROOT))) {
-      return new InvertedTermCache(namespaceConfig);
-    }
-
-    throw new CacheCreationError(String.format("Unsupported cache type (%s).", cacheType));
+    return switch (cacheType) {
+      case SCAN -> new ScanCache(namespaceConfig);
+      case INVERTED_TERM -> new InvertedTermCache(namespaceConfig);
+    };
   }
 }

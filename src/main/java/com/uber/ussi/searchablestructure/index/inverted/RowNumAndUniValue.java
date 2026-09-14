@@ -4,7 +4,7 @@ package com.uber.ussi.searchablestructure.index.inverted;
 /**
  * Build-time inverted-list entry ordered by unilateral value and then row number.
  *
- * <p>The row's value at the sparse key travels with it, so sorting cannot separate the two.
+ * <p>The row's value at the key travels with it, so sorting cannot separate the two.
  */
 final class RowNumAndUniValue implements Comparable<RowNumAndUniValue> {
   private final long rowNum;

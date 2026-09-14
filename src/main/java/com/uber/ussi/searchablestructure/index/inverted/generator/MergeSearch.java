@@ -14,9 +14,9 @@ import java.util.function.LongFunction;
 import javax.annotation.Nullable;
 
 /**
- * Row-major merge candidate generation over uni-sorted sparse inverted lists.
+ * Row-major merge candidate generation over uni-sorted inverted lists.
  *
- * <p>One frontier spans the query's sparse keys and advances them in step, so every inverted-list
+ * <p>One frontier spans the query's keys and advances them in step, so every inverted-list
  * entry of a candidate row arrives together. That lets the merge accumulate a row's conjunction as
  * it goes and abandon the row as soon as no completion of it can reach minSimilarity.
  *
@@ -116,7 +116,7 @@ public final class MergeSearch {
   }
 
   /**
-   * Consumes every frontier head that sits on {@code rowNum}, adding each shared sparse key to
+   * Consumes every frontier head that sits on {@code rowNum}, adding each shared key to
    * {@code conjunction} and recording the key indexes it advanced. Returns false once no completion
    * of the row can reach {@code minSimilarity}, having still consumed the row's whole group.
    *
@@ -229,7 +229,7 @@ public final class MergeSearch {
     double stableSortedUniValue(LongTermsAndValues termsAndValues);
   }
 
-  /** A query sparse key the index knows, paired with the inverted list it probes. */
+  /** A query key the index knows, paired with the inverted list it probes. */
   public static final class QueryKey {
     private final InvertedList invertedList;
     private final float value1;
@@ -322,7 +322,7 @@ public final class MergeSearch {
     }
   }
 
-  /** One candidate row's conjunction, grown one shared sparse key at a time. */
+  /** One candidate row's conjunction, grown one shared key at a time. */
   private static final class Conjunction {
     private double conjunction;
     private double partialUniValue1;

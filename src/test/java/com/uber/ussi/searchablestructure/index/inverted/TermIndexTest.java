@@ -1,4 +1,4 @@
-package com.uber.ussi.searchablestructure.index.inverted.unordered;
+package com.uber.ussi.searchablestructure.index.inverted;
 
 import static com.uber.ussi.TestLongObjectMaps.longObjectMap;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -19,9 +19,7 @@ import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
 import com.uber.ussi.error.IndexCreationError;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.index.Index;
-import com.uber.ussi.searchablestructure.index.inverted.BaseInvertedIndex;
-import com.uber.ussi.searchablestructure.index.inverted.KeyAndUniTransformedValue;
-import com.uber.ussi.searchablestructure.index.inverted.KeyType;
+import com.uber.ussi.searchablestructure.index.IndexType;
 import com.uber.ussi.searchablestructure.index.scan.ScanIndex;
 import com.uber.ussi.searchablestructure.metadata.MetadataFilteringStrategy;
 import com.uber.ussi.utils.Constants;
@@ -51,9 +49,9 @@ class TermIndexTest {
     TermIndex index = new TermIndex(config("jaccard"), rows, longObjectMap());
 
     assertEquals(4, index.size());
-    assertEquals(3, index.getNumIndexedSparseKeysForTests());
-    assertArrayEquals(new long[] {9, 10, 11, 12}, index.getRowNumsForSparseKeyForTests(1));
-    assertArrayEquals(new long[] {11, 12}, index.getRowNumsForSparseKeyForTests(2));
+    assertEquals(3, index.getNumIndexedKeysForTests());
+    assertArrayEquals(new long[] {9, 10, 11, 12}, index.getRowNumsForKeyForTests(1));
+    assertArrayEquals(new long[] {11, 12}, index.getRowNumsForKeyForTests(2));
     assertTrue(index.getAll().containsKey(12));
   }
 
@@ -66,12 +64,12 @@ class TermIndexTest {
     rows.put(4, jaccard(new long[] {5}, 1));
     TermIndex index =
         new TermIndex(
-            config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0.5")),
+            config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0.5")),
             rows,
             longObjectMap());
 
     assertArrayEquals(new long[] {1}, index.getDiscardedTermsForTests());
-    assertArrayEquals(new long[0], index.getRowNumsForSparseKeyForTests(1));
+    assertArrayEquals(new long[0], index.getRowNumsForKeyForTests(1));
     assertArrayEquals(new long[] {2}, index.getVerificationRow(1).getTerms());
     assertArrayEquals(new long[] {1, 2}, index.getAll().get(1).getTerms());
 
@@ -87,13 +85,13 @@ class TermIndexTest {
     LongObjectHashMap<LongTermsAndValues> rows = popularTermRows();
     Map<String, String> params =
         Map.of(
-            Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0.5",
+            Constants.MAX_FRACTION_IDS_PER_KEY, "0.5",
             Constants.POPULAR_TERM_DISCARD_SCOPE, CANDIDATES_ONLY);
     TermIndex index = new TermIndex(config("jaccard", params), rows, longObjectMap());
 
     // Candidate generation is unchanged: the discarded term still keys no list.
     assertArrayEquals(new long[] {1}, index.getDiscardedTermsForTests());
-    assertArrayEquals(new long[0], index.getRowNumsForSparseKeyForTests(1));
+    assertArrayEquals(new long[0], index.getRowNumsForKeyForTests(1));
     // Scoring is what changes: the rows keep the discarded term.
     assertArrayEquals(new long[] {1, 2}, index.getVerificationRow(1).getTerms());
 
@@ -112,7 +110,7 @@ class TermIndexTest {
     LongObjectHashMap<LongTermsAndValues> rows = popularTermRows();
     TermIndex index =
         new TermIndex(
-            config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0.5")),
+            config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0.5")),
             rows,
             longObjectMap());
 
@@ -128,7 +126,7 @@ class TermIndexTest {
     LongObjectHashMap<LongTermsAndValues> rows = popularTermRows();
     Map<String, String> params =
         Map.of(
-            Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0.5",
+            Constants.MAX_FRACTION_IDS_PER_KEY, "0.5",
             Constants.POPULAR_TERM_DISCARD_SCOPE, CANDIDATES_ONLY);
     TermIndex index = new TermIndex(config("jaccard", params), rows, longObjectMap());
 
@@ -146,7 +144,7 @@ class TermIndexTest {
     LongObjectHashMap<LongTermsAndValues> rows = popularTermRows();
     Map<String, String> params =
         Map.of(
-            Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0.5",
+            Constants.MAX_FRACTION_IDS_PER_KEY, "0.5",
             Constants.POPULAR_TERM_DISCARD_SCOPE, CANDIDATES_ONLY);
     TermIndex index = new TermIndex(config("jaccard", params), rows, longObjectMap());
 
@@ -168,11 +166,11 @@ class TermIndexTest {
     LongObjectHashMap<LongTermsAndValues> rows = popularTermRows();
     Map<String, String> params =
         Map.of(
-            Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0.5",
+            Constants.MAX_FRACTION_IDS_PER_KEY, "0.5",
             Constants.POPULAR_TERM_DISCARD_SCOPE, CANDIDATES_ONLY,
-            Constants.SPARSE_CANDIDATE_GENERATOR,
-            NamespaceConfig.SparseCandidateGenerator.SPARS_MERGE.getParamValue());
-    TermIndex index = new TermIndex(config("jaccard", params, "term"), rows, longObjectMap());
+            Constants.CANDIDATE_GENERATOR,
+            NamespaceConfig.CandidateGenerator.SPARS_MERGE.getParamValue());
+    TermIndex index = new TermIndex(config("jaccard", params, "inverted_term"), rows, longObjectMap());
 
     /*
      * A conjunction accumulated from the inverted lists can only report the similarity that
@@ -199,7 +197,7 @@ class TermIndexTest {
 
     TermIndex index =
         new TermIndex(
-            config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0.5")),
+            config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0.5")),
             rows,
             longObjectMap());
 
@@ -251,7 +249,7 @@ class TermIndexTest {
     rows.put(20, jaccard(new long[] {1, 2}, 1, 1));
     rows.put(40, jaccard(new long[] {1, 2, 3, 4}, 1, 1, 1, 1));
     TermIndex index = new TermIndex(config("jaccard"), rows, longObjectMap());
-    long[] invertedList = index.getRowNumsForSparseKeyForTests(1);
+    long[] invertedList = index.getRowNumsForKeyForTests(1);
 
     int first =
         index.getFirstMatchingUniValueForTests(invertedList, 2.0, 0.6, 0, invertedList.length);
@@ -272,7 +270,7 @@ class TermIndexTest {
       rows.put(numTerms, jaccard(sequentialTerms(numTerms), repeatedValue(1.0f, numTerms)));
     }
     TermIndex index = new TermIndex(config("jaccard"), rows, longObjectMap());
-    long[] invertedList = index.getRowNumsForSparseKeyForTests(1);
+    long[] invertedList = index.getRowNumsForKeyForTests(1);
 
     int first =
         index.getFirstMatchingUniValueForTests(invertedList, 40.0, 0.8, 0, invertedList.length);
@@ -442,21 +440,21 @@ class TermIndexTest {
         () ->
             new TermIndex(
                 config(
-                    "jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "not-a-number")),
+                    "jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "not-a-number")),
                 longObjectMap(),
                 longObjectMap()));
     assertThrows(
         IllegalArgumentException.class,
         () ->
             new TermIndex(
-                config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0")),
+                config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0")),
                 longObjectMap(),
                 longObjectMap()));
 
     TermIndex index =
         new TermIndex(
             config("jaccard"), longObjectMap(1, jaccard(new long[] {1}, 1)), longObjectMap());
-    long[] invertedList = index.getRowNumsForSparseKeyForTests(1);
+    long[] invertedList = index.getRowNumsForKeyForTests(1);
     assertThrows(
         IllegalArgumentException.class,
         () ->
@@ -473,7 +471,7 @@ class TermIndexTest {
     rows.put(1, jaccard(new long[] {1}, 1));
     rows.put(2, jaccard(new long[] {1, 2}, 1, 1));
     TermIndex index = new TermIndex(config("jaccard"), rows, longObjectMap());
-    long[] invertedList = index.getRowNumsForSparseKeyForTests(1);
+    long[] invertedList = index.getRowNumsForKeyForTests(1);
 
     assertEquals(
         invertedList.length,
@@ -503,7 +501,7 @@ class TermIndexTest {
   }
 
   @Test
-  void invalidSparseKeyContributionIsRejectedDuringSearch() {
+  void invalidKeyContributionIsRejectedDuringSearch() {
     InvalidContributionInvertedIndex index =
         new InvalidContributionInvertedIndex(
             config("jaccard"), longObjectMap(1, jaccard(new long[] {1}, 1)), longObjectMap());
@@ -536,7 +534,7 @@ class TermIndexTest {
     TermIndex index =
         new TermIndex(
             config("jaccard"), longObjectMap(1, jaccard(new long[] {1}, 1)), longObjectMap());
-    long[] invertedList = index.getRowNumsForSparseKeyForTests(1);
+    long[] invertedList = index.getRowNumsForKeyForTests(1);
     rowNumToUniValues(index).remove(1);
 
     assertThrows(
@@ -546,7 +544,7 @@ class TermIndexTest {
   }
 
   @Test
-  void prefixFilteringUsesTheUniValueOfTheSparseKeyDomain() {
+  void prefixFilteringUsesTheUniValueOfTheKeyDomain() {
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap(1, jaccard(new long[] {7}, 1));
     CapturingInvertedIndex index = new CapturingInvertedIndex(config("jaccard"), rows, longObjectMap());
 
@@ -554,7 +552,7 @@ class TermIndexTest {
         List.of(1L),
         rowNumsNearestFirst(
             index.getNearestNeighborRowNums(1, jaccard(new long[] {7}, 1), MetaFilter.empty())));
-    assertEquals(5.0, index.getLastSparseKeysUniValue(), DELTA);
+    assertEquals(5.0, index.getLastKeysUniValue(), DELTA);
   }
 
   @Test
@@ -564,7 +562,7 @@ class TermIndexTest {
       LongObjectHashMap<LongTermsAndValues> rows = randomRows(random, comparatorType, 80);
       NamespaceConfig config = config(comparatorType);
       TermIndex termIndex = new TermIndex(config, rows, longObjectMap());
-      ScanIndex genericIndex = new ScanIndex(config, rows, longObjectMap());
+      ScanIndex scanIndex = new ScanIndex(config, rows, longObjectMap());
 
       for (int queryIndex = 0; queryIndex < 60; ++queryIndex) {
         LongTermsAndValues query = randomSparseRecord(random, comparatorType);
@@ -572,13 +570,13 @@ class TermIndexTest {
         float minSimilarity = new float[] {0.0f, 0.2f, 0.5f, 0.8f}[random.nextInt(4)];
 
         /*
-         * The generic index scores every row, so its results are restricted to the rows sharing a
-         * term with the query before comparing them against the sparse index results.
+         * The scan index scores every row, so its results are restricted to the rows sharing a
+         * term with the query before comparing them against the term index results.
          */
         assertEquivalent(
             comparatorType + " nearest queryIndex=" + queryIndex + " k=" + k + " query=" + query,
             restrictToRowsSharingATerm(
-                genericIndex.getNearestNeighborRowNums(rows.size(), query, MetaFilter.empty()),
+                scanIndex.getNearestNeighborRowNums(rows.size(), query, MetaFilter.empty()),
                 rows,
                 query,
                 k),
@@ -592,7 +590,7 @@ class TermIndexTest {
                 + " query="
                 + query,
             restrictToRowsSharingATerm(
-                genericIndex.getSimilarRowNums(minSimilarity, query, MetaFilter.empty()),
+                scanIndex.getSimilarRowNums(minSimilarity, query, MetaFilter.empty()),
                 rows,
                 query,
                 rows.size()),
@@ -611,7 +609,7 @@ class TermIndexTest {
       Random random = new Random(826_366L + comparatorType.hashCode());
       LongObjectHashMap<LongTermsAndValues> rows = randomRows(random, comparatorType, 80);
       TermIndex filteredScanIndex =
-          new TermIndex(config(comparatorType, Map.of(), "term"), rows, longObjectMap());
+          new TermIndex(config(comparatorType, Map.of(), "inverted_term"), rows, longObjectMap());
       TermIndex mergeIndex = new TermIndex(mergeConfig(comparatorType), rows, longObjectMap());
 
       for (int queryIndex = 0; queryIndex < 60; ++queryIndex) {
@@ -654,10 +652,10 @@ class TermIndexTest {
                 Index.METADATA_FILTERING_STRATEGY, strategy,
                 Index.MAX_PRE_FILTERING_ROWS_RATIO, "0.9");
         TermIndex filteredScanIndex =
-            new TermIndex(config(comparatorType, strategyParams, "term"), rows, metadata);
+            new TermIndex(config(comparatorType, strategyParams, "inverted_term"), rows, metadata);
         TermIndex mergeIndex =
             new TermIndex(
-                config(comparatorType, withMergeParam(strategyParams), "term"), rows, metadata);
+                config(comparatorType, withMergeParam(strategyParams), "inverted_term"), rows, metadata);
         MetaFilter sf = new MetaFilter(Map.of("city", List.of("sf")));
 
         for (int queryIndex = 0; queryIndex < 20; ++queryIndex) {
@@ -688,7 +686,7 @@ class TermIndexTest {
    * verification rows too.
    */
   @Test
-  void mergeResultsMatchFilteredScanWhenPopularSparseKeysAreDropped() {
+  void mergeResultsMatchFilteredScanWhenPopularKeysAreDropped() {
     Random random = new Random(9_713L);
     LongObjectHashMap<LongTermsAndValues> rows = randomRows(random, "jaccard", 40);
     LongObjectHashMap<LongMeta> metadata = longObjectMap();
@@ -697,14 +695,14 @@ class TermIndexTest {
     }
     Map<String, String> popularityParams =
         Map.of(
-            Constants.MAX_FRACTION_IDS_PER_SPARSE_KEY, "0.2",
+            Constants.MAX_FRACTION_IDS_PER_KEY, "0.2",
             Index.METADATA_FILTERING_STRATEGY, "pre_filtering",
             Index.MAX_PRE_FILTERING_ROWS_RATIO, "0.9");
     TermIndex filteredScanIndex =
-        new TermIndex(config("jaccard", popularityParams, "term"), rows, metadata);
+        new TermIndex(config("jaccard", popularityParams, "inverted_term"), rows, metadata);
     TermIndex mergeIndex =
-        new TermIndex(config("jaccard", withMergeParam(popularityParams), "term"), rows, metadata);
-    assertTrue(mergeIndex.discardsPopularSparseKeys());
+        new TermIndex(config("jaccard", withMergeParam(popularityParams), "inverted_term"), rows, metadata);
+    assertTrue(mergeIndex.discardsPopularKeys());
     assertTrue(mergeIndex.getDiscardedTermsForTests().length > 0);
     MetaFilter sf = new MetaFilter(Map.of("city", List.of("sf")));
 
@@ -728,17 +726,17 @@ class TermIndexTest {
    * insertion point, which would be scored as if the record carried a term it does not.
    */
   @Test
-  void readingAValueAtAnAbsentSparseKeyIsRejected() {
+  void readingAValueAtAnAbsentKeyIsRejected() {
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
     rows.put(1, jaccard(new long[] {2, 4, 6}, 1, 1, 1));
     TermIndex index = new TermIndex(config("jaccard"), rows, longObjectMap());
     LongTermsAndValues record = rows.get(1);
 
-    assertEquals(1.0f, index.getValueAtSparseKey(record, 4), DELTA);
+    assertEquals(1.0f, index.getValueAtKey(record, 4), DELTA);
     for (long absentKey : new long[] {1, 3, 5, 7}) {
       assertThrows(
           IllegalArgumentException.class,
-          () -> index.getValueAtSparseKey(record, absentKey),
+          () -> index.getValueAtKey(record, absentKey),
           "key " + absentKey);
     }
   }
@@ -771,8 +769,8 @@ class TermIndexTest {
   private static Map<String, String> withMergeParam(Map<String, String> indexParams) {
     Map<String, String> merged = new LinkedHashMap<>(indexParams);
     merged.put(
-        Constants.SPARSE_CANDIDATE_GENERATOR,
-        NamespaceConfig.SparseCandidateGenerator.SPARS_MERGE.getParamValue());
+        Constants.CANDIDATE_GENERATOR,
+        NamespaceConfig.CandidateGenerator.SPARS_MERGE.getParamValue());
     return merged;
   }
 
@@ -780,9 +778,9 @@ class TermIndexTest {
     return config(
         comparatorType,
         Map.of(
-            Constants.SPARSE_CANDIDATE_GENERATOR,
-            NamespaceConfig.SparseCandidateGenerator.SPARS_MERGE.getParamValue()),
-        "term");
+            Constants.CANDIDATE_GENERATOR,
+            NamespaceConfig.CandidateGenerator.SPARS_MERGE.getParamValue()),
+        "inverted_term");
   }
 
   private static NamespaceConfig config(String comparatorType) {
@@ -790,7 +788,7 @@ class TermIndexTest {
   }
 
   private static NamespaceConfig config(String comparatorType, Map<String, String> indexParams) {
-    return config(comparatorType, indexParams, "sparse");
+    return config(comparatorType, indexParams, "inverted_term");
   }
 
   private static NamespaceConfig config(
@@ -799,7 +797,7 @@ class TermIndexTest {
         .minTermsAndValuesLength(0)
         .maxTermsAndValuesLength(100)
         .maxCacheSize(100)
-        .cacheType("generic")
+        .cacheType("scan")
         .indexType(indexType)
         .indexParams(indexParams)
         .comparatorType(comparatorType)
@@ -952,28 +950,23 @@ class TermIndexTest {
   }
 
   private static final class CapturingInvertedIndex extends BaseInvertedIndex {
-    private double lastSparseKeysUniValue;
+    private double lastKeysUniValue;
 
     private CapturingInvertedIndex(
         NamespaceConfig namespaceConfig,
         LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
         LongObjectHashMap<LongMeta> rowNumToMetaMap) {
-      super(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap, KeyType.EXACT_TERM);
+      super(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap, IndexType.INVERTED_TERM);
     }
 
     @Override
-    protected void validateRecordType(LongTermsAndValues termsAndValues, String source) {
-      validateSparseRecordType(termsAndValues, source);
-    }
-
-    @Override
-    protected double getMinPrefixSum(double sparseKeysUniValue, double minSimilarity) {
-      lastSparseKeysUniValue = sparseKeysUniValue;
+    protected double getMinPrefixSum(double keysUniValue, double minSimilarity) {
+      lastKeysUniValue = keysUniValue;
       return Double.POSITIVE_INFINITY;
     }
 
     @Override
-    protected KeyAndUniTransformedValue[] getSparseKeysAndUniTransformedValues(
+    protected KeyAndUniTransformedValue[] getKeysAndUniTransformedValues(
         LongTermsAndValues termsAndValues) {
       return new KeyAndUniTransformedValue[] {
         new KeyAndUniTransformedValue(termsAndValues.getTerm(0), 5.0)
@@ -981,17 +974,17 @@ class TermIndexTest {
     }
 
     @Override
-    protected long[] getSparseKeys(LongTermsAndValues termsAndValues) {
+    protected long[] getKeys(LongTermsAndValues termsAndValues) {
       return termsAndValues.getTerms();
     }
 
     @Override
-    protected float getValueAtSparseKey(LongTermsAndValues termsAndValues, long sparseKey) {
+    protected float getValueAtKey(LongTermsAndValues termsAndValues, long key) {
       return termsAndValues.getValue(0);
     }
 
-    private double getLastSparseKeysUniValue() {
-      return lastSparseKeysUniValue;
+    private double getLastKeysUniValue() {
+      return lastKeysUniValue;
     }
   }
 
@@ -1000,21 +993,16 @@ class TermIndexTest {
         NamespaceConfig namespaceConfig,
         LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
         LongObjectHashMap<LongMeta> rowNumToMetaMap) {
-      super(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap, KeyType.EXACT_TERM);
+      super(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap, IndexType.INVERTED_TERM);
     }
 
     @Override
-    protected void validateRecordType(LongTermsAndValues termsAndValues, String source) {
-      validateSparseRecordType(termsAndValues, source);
-    }
-
-    @Override
-    protected double getMinPrefixSum(double sparseKeysUniValue, double minSimilarity) {
+    protected double getMinPrefixSum(double keysUniValue, double minSimilarity) {
       return Double.POSITIVE_INFINITY;
     }
 
     @Override
-    protected KeyAndUniTransformedValue[] getSparseKeysAndUniTransformedValues(
+    protected KeyAndUniTransformedValue[] getKeysAndUniTransformedValues(
         LongTermsAndValues termsAndValues) {
       return new KeyAndUniTransformedValue[] {
         new KeyAndUniTransformedValue(termsAndValues.getTerm(0), Double.NaN)
@@ -1022,12 +1010,12 @@ class TermIndexTest {
     }
 
     @Override
-    protected long[] getSparseKeys(LongTermsAndValues termsAndValues) {
+    protected long[] getKeys(LongTermsAndValues termsAndValues) {
       return termsAndValues.getTerms();
     }
 
     @Override
-    protected float getValueAtSparseKey(LongTermsAndValues termsAndValues, long sparseKey) {
+    protected float getValueAtKey(LongTermsAndValues termsAndValues, long key) {
       return termsAndValues.getValue(0);
     }
   }

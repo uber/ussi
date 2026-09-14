@@ -5,7 +5,7 @@ import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
 
 /**
- * The bounded top-results heap shared by the sparse candidate generators.
+ * The bounded top-results heap shared by the candidate generators.
  *
  * <p>Public only so that the inverted indexes in the sibling packages can reach it. Nothing outside
  * this library's inverted implementation should depend on it.

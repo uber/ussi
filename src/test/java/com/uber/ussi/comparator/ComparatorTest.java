@@ -106,8 +106,8 @@ class ComparatorTest {
     NamespaceConfig config =
         NamespaceConfig.builder()
             .maxCacheSize(10)
-            .cacheType("generic")
-            .indexType("dense")
+            .cacheType("scan")
+            .indexType("matrix")
             .comparatorType("l2")
             .comparatorNormalizerType("reciprocal")
             .maxNumSearchableStructures(3)

@@ -5,7 +5,7 @@ import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import java.io.Serializable;
 import java.util.Objects;
 
-/** Generates deterministic sparse keys whose collisions estimate record similarity. */
+/** Generates deterministic keys whose collisions estimate record similarity. */
 public abstract class SignatureGenerator implements Serializable {
   private final boolean weighted;
   private final double comparisonValueApproximationSafetyMargin;

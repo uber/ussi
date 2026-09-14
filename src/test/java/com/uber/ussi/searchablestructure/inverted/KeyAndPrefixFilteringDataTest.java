@@ -26,7 +26,7 @@ class KeyAndPrefixFilteringDataTest {
   void accessorsReturnTheKeyItsRowCountAndItsContribution() {
     KeyAndPrefixFilteringData data = new KeyAndPrefixFilteringData(2, 1, 1.0);
 
-    assertEquals(2, data.getSparseKey());
+    assertEquals(2, data.getKey());
     assertEquals(1, data.getNumRows());
     assertEquals(1.0, data.getUniTransformedValue());
   }

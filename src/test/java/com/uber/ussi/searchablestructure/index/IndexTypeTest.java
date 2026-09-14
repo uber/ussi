@@ -32,7 +32,10 @@ class IndexTypeTest {
     assertNull(ConfigVocabulary.fromParamValue(IndexType.class, "hnsw"));
   }
 
-  /** A structure that keys its lists by a record's own terms stores either type that has terms. */
+  /**
+   * An inverted structure stores either type that has terms, whether it keys its lists by those
+   * terms or by signatures drawn from them.
+   */
   @Test
   void storableRecordTypesAreTheTypesTheStructureKeeps() {
     assertEquals(Set.of(RecordType.ORDER_AGNOSTIC_DENSE), IndexType.MATRIX.getStorableRecordTypes());
@@ -40,8 +43,11 @@ class IndexTypeTest {
         Set.of(RecordType.ORDER_AGNOSTIC_SPARSE, RecordType.SEQUENCE),
         IndexType.INVERTED_TERM.getStorableRecordTypes());
     assertEquals(
-        Set.of(RecordType.ORDER_AGNOSTIC_SPARSE),
+        Set.of(RecordType.ORDER_AGNOSTIC_SPARSE, RecordType.SEQUENCE),
         IndexType.INVERTED_SIGNATURE.getStorableRecordTypes());
+    assertEquals(
+        Set.of(RecordType.ORDER_AGNOSTIC_SPARSE, RecordType.SEQUENCE),
+        IndexType.INVERTED_HYBRID.getStorableRecordTypes());
     assertEquals(
         Set.of(
             RecordType.ORDER_AGNOSTIC_DENSE, RecordType.ORDER_AGNOSTIC_SPARSE, RecordType.SEQUENCE),
@@ -65,12 +71,14 @@ class IndexTypeTest {
     assertEquals(Set.of(RecordType.SEQUENCE), IndexType.INVERTED_TERM.resolveRecordTypes(ngld));
   }
 
-  /** A comparator reading nothing a structure keeps is a pairing with no record type at all. */
+  /**
+   * A comparator reading nothing a structure keeps is a pairing with no record type at all. Only
+   * the matrix structure leaves one now: it is the one that stores neither type having terms.
+   */
   @Test
   void resolvingRecordTypesIsEmptyForAnImpossiblePairing() {
     assertEquals(Set.of(), IndexType.MATRIX.resolveRecordTypes(comparator("ngld", "complement")));
-    assertEquals(
-        Set.of(), IndexType.INVERTED_SIGNATURE.resolveRecordTypes(comparator("ngld", "complement")));
+    assertEquals(Set.of(), IndexType.MATRIX.resolveRecordTypes(comparator("gld", "reciprocal")));
   }
 
   /** The scan structure never reads a record's type, so it never asks which type it holds. */

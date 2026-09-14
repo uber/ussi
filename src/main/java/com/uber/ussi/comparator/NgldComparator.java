@@ -2,8 +2,10 @@
 package com.uber.ussi.comparator;
 
 import com.uber.ussi.comparator.sequencedistance.SequenceDistance;
+import com.uber.ussi.comparator.signaturegenerator.SignatureGenerator;
 import com.uber.ussi.comparatornormalizer.ComparatorNormalizer;
 import com.uber.ussi.utils.MathUtils;
+import javax.annotation.Nullable;
 
 /**
  * The normalized generalized Levenshtein distance (NGLD) between two sequences: the edit count
@@ -22,8 +24,11 @@ public class NgldComparator extends BaseSequenceComparator {
   /** The largest normalized distance there is, reached when every element has to be edited. */
   private static final double MAX_NORMALIZED_DISTANCE = 1.0;
 
-  NgldComparator(ComparatorNormalizer comparatorNormalizer, SequenceDistance sequenceDistance) {
-    super(comparatorNormalizer, sequenceDistance);
+  NgldComparator(
+      ComparatorNormalizer comparatorNormalizer,
+      SequenceDistance sequenceDistance,
+      @Nullable SignatureGenerator signatureGenerator) {
+    super(comparatorNormalizer, sequenceDistance, signatureGenerator);
   }
 
   /**
@@ -79,10 +84,19 @@ public class NgldComparator extends BaseSequenceComparator {
   @Override
   protected double getMinPrefixSumForTermsAndValuesInternal(
       double uniValue, double comparatorValue) {
-    double boundedValue = getBoundedComparatorValue(comparatorValue);
-    double unmatchedFraction =
-        getSequenceDistance().getL1BoundFactor() * boundedValue / (2.0 - boundedValue);
+    double unmatchedFraction = getMaxUnmatchedFraction(uniValue, comparatorValue);
     return Math.min(uniValue, uniValue * 2.0 * unmatchedFraction / (1.0 + unmatchedFraction));
+  }
+
+  /**
+   * A normalized distance is already a share of the sequences' combined length, so the threshold
+   * gives one directly and the record's own length says nothing extra. Inverting the
+   * normalization turns the threshold into {@code d / totalLength}, which the L1 bound scales.
+   */
+  @Override
+  protected double getMaxUnmatchedFraction(double recordUniValue, double comparatorValue) {
+    double boundedValue = getBoundedComparatorValue(comparatorValue);
+    return getSequenceDistance().getL1BoundFactor() * boundedValue / (2.0 - boundedValue);
   }
 
   /**

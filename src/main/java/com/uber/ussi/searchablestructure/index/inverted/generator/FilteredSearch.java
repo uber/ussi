@@ -186,8 +186,13 @@ public final class FilteredSearch {
   }
 
   public interface Context extends SearchContext {
-    /** Returns the highest prefix cost a key may carry and still admit candidates. */
-    double getMinPrefixSum(double keysUniValue, double minSimilarity);
+    /**
+     * Returns the highest prefix cost a key may carry and still admit candidates. Keys are
+     * not always the record's own terms, so a structure whose bound is stated over terms reads
+     * {@code recordUniValue} rather than {@code keysUniValue}.
+     */
+    double getMinPrefixSum(
+        double keysUniValue, double recordUniValue, double minSimilarity);
 
     /** Returns the uni-sorted inverted list of a key, empty when the key is unindexed. */
     long[] getRowNums(long key);
@@ -234,7 +239,8 @@ public final class FilteredSearch {
       this.comparatorUniValue = comparatorUniValue;
       this.generatedRowNums = new LongHashSet();
       this.minSimilarity = minSimilarity;
-      this.maxPrefixSum = context.getMinPrefixSum(keysUniValue, minSimilarity);
+      this.maxPrefixSum =
+          context.getMinPrefixSum(keysUniValue, comparatorUniValue, minSimilarity);
       this.prefixSumAccumulator = new MathUtils.StableSumAccumulator();
       this.currentKeyPrefixSum = 0.0;
       this.keyIndex = -1;
@@ -254,7 +260,8 @@ public final class FilteredSearch {
         return;
       }
       this.minSimilarity = minSimilarity;
-      this.maxPrefixSum = context.getMinPrefixSum(keysUniValue, minSimilarity);
+      this.maxPrefixSum =
+          context.getMinPrefixSum(keysUniValue, comparatorUniValue, minSimilarity);
       if (keyIndex < 0 || currentRowStartIndex >= currentRowEndIndex) {
         return;
       }

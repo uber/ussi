@@ -2,6 +2,7 @@
 package com.uber.ussi.comparator;
 
 import com.uber.ussi.comparator.sequencedistance.SequenceDistance;
+import com.uber.ussi.comparator.signaturegenerator.SignatureGenerator;
 import com.uber.ussi.comparatornormalizer.ComparatorNormalizer;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.RecordType;
@@ -9,6 +10,7 @@ import com.uber.ussi.error.ArraysSizeMismatchError;
 import com.uber.ussi.utils.MathUtils;
 import java.util.Objects;
 import java.util.Set;
+import javax.annotation.Nullable;
 
 /**
  * Shared implementation for the comparators reporting an edit distance, with length and prefix
@@ -19,18 +21,21 @@ import java.util.Set;
  * <p>A sequence record carries its elements, in order and with repeats, in its terms and has no
  * values, so its Uni value is its length. Candidate generation instead indexes the element
  * multiset as a sparse record whose counts sum to that same length, so both forms agree on the Uni
- * value.
+ * value. A signature-keyed structure draws its signatures from that same multiset, which is why
+ * these comparators generate signatures at all despite measuring order.
  *
  * <p>Merging cannot generate candidates here: the shared elements bound an order-sensitive
  * distance without determining it, so these searches generate candidates and then verify them.
  */
-abstract class BaseSequenceComparator extends Comparator {
+abstract class BaseSequenceComparator extends SignatureComparator {
 
   private final SequenceDistance sequenceDistance;
 
   BaseSequenceComparator(
-      ComparatorNormalizer comparatorNormalizer, SequenceDistance sequenceDistance) {
-    super(comparatorNormalizer);
+      ComparatorNormalizer comparatorNormalizer,
+      SequenceDistance sequenceDistance,
+      @Nullable SignatureGenerator signatureGenerator) {
+    super(comparatorNormalizer, signatureGenerator);
     this.sequenceDistance = Objects.requireNonNull(sequenceDistance, "sequenceDistance is null.");
   }
 
@@ -43,6 +48,30 @@ abstract class BaseSequenceComparator extends Comparator {
    * for sequences of the given lengths. A negative result means no distance can.
    */
   protected abstract long getMaxDistance(double comparatorValue, int length1, int length2);
+
+  /**
+   * Returns the largest share of two sequences' combined length that the elements one holds and
+   * the other does not can take up, for a candidate clearing {@code comparatorValue}. A share of
+   * 1.0 or more is one that guarantees nothing.
+   */
+  protected abstract double getMaxUnmatchedFraction(double recordUniValue, double comparatorValue);
+
+  /**
+   * An edit changes one element, so two sequences within {@code d} edits have element multisets
+   * within {@code l1BoundFactor * d} of each other. Write that L1 distance as a share {@code u} of
+   * the sequences' combined length: the shared counts then come to {@code (1 - u) / 2} of that
+   * length and the combined counts to {@code (1 + u) / 2}, so the multiset similarity the
+   * signatures collide at is at least the ratio of the two. The lengths cancel, which is what lets
+   * one share stand for every candidate the threshold admits.
+   */
+  @Override
+  protected final double getMinSharedSignatureFraction(
+      double recordUniValue, double comparatorValue) {
+    double unmatchedFraction = getMaxUnmatchedFraction(recordUniValue, comparatorValue);
+    return unmatchedFraction >= 1.0
+        ? 0.0
+        : (1.0 - unmatchedFraction) / (1.0 + unmatchedFraction);
+  }
 
   protected abstract double getComparatorValue(long distance, int length1, int length2);
 

@@ -33,12 +33,13 @@ public enum IndexType implements ConfigVocabulary {
 
   /**
    * Inverted lists keyed by similarity-preserving signatures, which only a comparator with a
-   * configured signature generator can produce.
+   * configured signature generator can produce. A sequence's signatures are drawn from its element
+   * multiset, the same form the term-keyed lists index it as.
    */
-  INVERTED_SIGNATURE(RecordType.ORDER_AGNOSTIC_SPARSE),
+  INVERTED_SIGNATURE(RecordType.SEQUENCE, RecordType.ORDER_AGNOSTIC_SPARSE),
 
   /** Term-keyed lists for the short rows and signature-keyed lists for the long ones. */
-  INVERTED_HYBRID(RecordType.ORDER_AGNOSTIC_SPARSE);
+  INVERTED_HYBRID(RecordType.SEQUENCE, RecordType.ORDER_AGNOSTIC_SPARSE);
 
   private final Set<RecordType> storableRecordTypes;
 

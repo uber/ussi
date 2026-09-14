@@ -2,8 +2,10 @@
 package com.uber.ussi.comparator;
 
 import com.uber.ussi.comparator.sequencedistance.SequenceDistance;
+import com.uber.ussi.comparator.signaturegenerator.SignatureGenerator;
 import com.uber.ussi.comparatornormalizer.ComparatorNormalizer;
 import com.uber.ussi.utils.MathUtils;
+import javax.annotation.Nullable;
 
 /**
  * The number of single-element edits that turn one sequence into the other, the raw generalized
@@ -17,8 +19,11 @@ import com.uber.ussi.utils.MathUtils;
  */
 public class GldComparator extends BaseSequenceComparator {
 
-  GldComparator(ComparatorNormalizer comparatorNormalizer, SequenceDistance sequenceDistance) {
-    super(comparatorNormalizer, sequenceDistance);
+  GldComparator(
+      ComparatorNormalizer comparatorNormalizer,
+      SequenceDistance sequenceDistance,
+      @Nullable SignatureGenerator signatureGenerator) {
+    super(comparatorNormalizer, sequenceDistance, signatureGenerator);
   }
 
   /**
@@ -53,5 +58,27 @@ public class GldComparator extends BaseSequenceComparator {
       throw new IllegalArgumentException("comparatorValue must be at least 0.0.");
     }
     return Math.min(uniValue, getSequenceDistance().getL1BoundFactor() * comparatorValue);
+  }
+
+  /**
+   * An edit count is a number of elements rather than a share of anything, so expressing it as one
+   * takes the shortest combined length a candidate can have. Length filtering admits only
+   * candidates within the budget's worth of elements of the query, so the shortest runs {@code
+   * recordUniValue - comparatorValue} elements and cannot run shorter than empty.
+   *
+   * <p>Signature keys are why this detour is needed: over terms the keys are the elements
+   * themselves, so the budget counts them directly and no length comes into it.
+   */
+  @Override
+  protected double getMaxUnmatchedFraction(double recordUniValue, double comparatorValue) {
+    if (comparatorValue < 0.0) {
+      throw new IllegalArgumentException("comparatorValue must be at least 0.0.");
+    }
+    double minTotalLength = Math.max(recordUniValue, 2.0 * recordUniValue - comparatorValue);
+    if (minTotalLength <= 0.0) {
+      return 1.0;
+    }
+    return Math.min(
+        1.0, getSequenceDistance().getL1BoundFactor() * comparatorValue / minTotalLength);
   }
 }

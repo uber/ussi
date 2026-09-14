@@ -169,7 +169,15 @@ class SparseComparatorTest {
     assertTrue(comparator.supportsSignatures());
     assertEquals(1.0, comparator.getSignatureUniTransformedValue(), 0.0);
     assertEquals(
-        60.0 + MathUtils.EPSILON_12, comparator.getMinPrefixSumForSignatures(100, 0.5), 0.0);
+        60.0 + MathUtils.EPSILON_12,
+        comparator.getMinPrefixSumForSignatures(100, /* recordUniValue */ 8.0, 0.5),
+        0.0);
+    // The threshold is already the share the signatures collide at, so the record's own Uni value
+    // adds nothing to it.
+    assertEquals(
+        60.0 + MathUtils.EPSILON_12,
+        comparator.getMinPrefixSumForSignatures(100, /* recordUniValue */ 4096.0, 0.5),
+        0.0);
     assertEquals(16, comparator.getSignatures(sparse(comparator, new long[] {1L}, 1f), 16).length);
   }
 
@@ -213,7 +221,7 @@ class SparseComparatorTest {
 
     assertThrows(
         UnsupportedOperationException.class,
-        () -> comparator.getMinPrefixSumForSignatures(10, 0.5));
+        () -> comparator.getMinPrefixSumForSignatures(10, 4.0, 0.5));
     assertThrows(UnsupportedOperationException.class, () -> comparator.getSignatures(values, 10));
   }
 
@@ -240,15 +248,14 @@ class SparseComparatorTest {
                 new IdentityComparatorNormalizer());
 
     assertThrows(
-        IllegalArgumentException.class, () -> comparator.getMinPrefixSumForSignatures(-1, 0.5));
-    assertThrows(
-        IllegalArgumentException.class, () -> comparator.getMinPrefixSumForSignatures(10, -0.1));
+        IllegalArgumentException.class,
+        () -> comparator.getMinPrefixSumForSignatures(-1, 4.0, 0.5));
     assertThrows(
         IllegalArgumentException.class,
-        () -> comparator.getMinPrefixSumForSignaturesInternal(-1, 0.5));
+        () -> comparator.getMinPrefixSumForSignatures(10, 4.0, -0.1));
     assertThrows(
         IllegalArgumentException.class,
-        () -> comparator.getMinPrefixSumForSignaturesInternal(10, -0.1));
+        () -> comparator.getMinSharedSignatureFraction(4.0, -0.1));
   }
 
   @Test

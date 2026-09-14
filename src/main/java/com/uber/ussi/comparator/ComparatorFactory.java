@@ -42,14 +42,16 @@ public class ComparatorFactory {
       case RUZICKA ->
           new RuzickaComparator(
               comparatorNormalizer, createSignatureGenerator(comparatorParams, type));
-      case GLD -> {
-        rejectSignatureGeneration(type, comparatorParams);
-        yield new GldComparator(comparatorNormalizer, createSequenceDistance(comparatorParams));
-      }
-      case NGLD -> {
-        rejectSignatureGeneration(type, comparatorParams);
-        yield new NgldComparator(comparatorNormalizer, createSequenceDistance(comparatorParams));
-      }
+      case GLD ->
+          new GldComparator(
+              comparatorNormalizer,
+              createSequenceDistance(comparatorParams),
+              createSignatureGenerator(comparatorParams, type));
+      case NGLD ->
+          new NgldComparator(
+              comparatorNormalizer,
+              createSequenceDistance(comparatorParams),
+              createSignatureGenerator(comparatorParams, type));
     };
   }
 

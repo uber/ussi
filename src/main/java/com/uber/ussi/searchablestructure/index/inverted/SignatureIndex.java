@@ -26,9 +26,11 @@ public final class SignatureIndex extends BaseInvertedIndex {
   }
 
   @Override
-  protected double getMinPrefixSum(double keysUniValue, double minSimilarity) {
+  protected double getMinPrefixSum(
+      double keysUniValue, double recordUniValue, double minSimilarity) {
     return getSignatureComparator()
-        .getMinPrefixSumForSignatures((int) Math.ceil(keysUniValue), minSimilarity);
+        .getMinPrefixSumForSignatures(
+            (int) Math.ceil(keysUniValue), recordUniValue, minSimilarity);
   }
 
   @Override

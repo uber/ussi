@@ -927,7 +927,8 @@ class TermIndexTest {
     }
 
     @Override
-    protected double getMinPrefixSum(double keysUniValue, double minSimilarity) {
+    protected double getMinPrefixSum(
+        double keysUniValue, double recordUniValue, double minSimilarity) {
       lastKeysUniValue = keysUniValue;
       return Double.POSITIVE_INFINITY;
     }
@@ -964,7 +965,8 @@ class TermIndexTest {
     }
 
     @Override
-    protected double getMinPrefixSum(double keysUniValue, double minSimilarity) {
+    protected double getMinPrefixSum(
+        double keysUniValue, double recordUniValue, double minSimilarity) {
       return Double.POSITIVE_INFINITY;
     }
 

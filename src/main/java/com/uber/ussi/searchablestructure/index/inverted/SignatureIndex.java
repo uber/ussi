@@ -28,7 +28,7 @@ public final class SignatureIndex extends BaseInvertedIndex {
   @Override
   protected double getMinPrefixSum(
       double keysUniValue, double recordUniValue, double minSimilarity) {
-    return getSignatureComparator()
+    return getSignatureKeyingStrategy()
         .getMinPrefixSumForSignatures(
             (int) Math.ceil(keysUniValue), recordUniValue, minSimilarity);
   }
@@ -40,7 +40,7 @@ public final class SignatureIndex extends BaseInvertedIndex {
     KeyAndUniTransformedValue[] keysAndValues =
         new KeyAndUniTransformedValue[keys.length];
     double signatureUniTransformedValue =
-        getSignatureComparator().getSignatureUniTransformedValue();
+        getSignatureKeyingStrategy().getSignatureUniTransformedValue();
     for (int i = 0; i < keys.length; ++i) {
       keysAndValues[i] =
           new KeyAndUniTransformedValue(keys[i], signatureUniTransformedValue);
@@ -58,7 +58,8 @@ public final class SignatureIndex extends BaseInvertedIndex {
       return new long[0];
     }
     return LongHashSet.from(
-            getSignatureComparator().getSignatures(indexedRecord, Constants.NUM_SIGNATURES_PER_ID))
+            getSignatureKeyingStrategy()
+                .getSignatures(indexedRecord, Constants.NUM_SIGNATURES_PER_ID))
         .toArray();
   }
 
@@ -70,6 +71,6 @@ public final class SignatureIndex extends BaseInvertedIndex {
 
   @Override
   protected float getValueAtKey(LongTermsAndValues indexedRecord, long key) {
-    return (float) getSignatureComparator().getSignatureUniTransformedValue();
+    return (float) getSignatureKeyingStrategy().getSignatureUniTransformedValue();
   }
 }

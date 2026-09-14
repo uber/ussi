@@ -142,14 +142,20 @@ so it sits beside both. Mutable `ScanCache` and `InvertedTermCache` live under
 
 ### Comparators
 
-Comparator implementations live under `com.uber.ussi.comparator`, with the two
-pieces that only a comparator composes in sub-packages of their own:
+Comparator implementations live under `com.uber.ussi.comparator`, with two
+pieces in sub-packages of their own:
 
 - `comparator.sequencedistance`: the edit distances the `gld` and `ngld`
   comparators measure with, sharing the banded dynamic program in
   `SequenceDistance`.
 - `comparator.signaturegenerator`: the MinHash and consistent weighted sampling
-  generators every comparator but `l2` draws signatures from.
+  generators, which a namespace names through a comparator param because which
+  of them says anything depends on the measure, but which no comparator holds.
+  Drawing signatures belongs to the structure keyed by them, so a comparator
+  contributes only `SignatureBounded`: the share of a record's signatures a
+  qualifying candidate has to collide on. That is a property of the measure and
+  holds whether or not any structure is keyed by signatures, which is why the
+  same comparator serves a scan unchanged.
 
 Normalizers are separate, under `com.uber.ussi.comparatornormalizer`, because a
 namespace configures one independently of its comparator.

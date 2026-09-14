@@ -152,7 +152,7 @@ class ComparatorTest {
 
   @Test
   void l2DoesNotExposeSignatureCapability() {
-    assertTrue(!(l2Comparator() instanceof SignatureComparator));
+    assertTrue(!(l2Comparator() instanceof SignatureBounded));
   }
 
   @Test

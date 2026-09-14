@@ -31,27 +31,15 @@ public class ComparatorFactory {
       throw new ComparatorCreationError(
           ConfigVocabulary.unsupported("comparatorType", comparatorType, ComparatorType.class));
     }
+    validateSignatureGeneration(comparatorParams, type);
     return switch (type) {
-      case L2 -> {
-        rejectSignatureGeneration(type, comparatorParams);
-        yield new L2Comparator(comparatorNormalizer);
-      }
-      case JACCARD ->
-          new JaccardComparator(
-              comparatorNormalizer, createSignatureGenerator(comparatorParams, type));
-      case RUZICKA ->
-          new RuzickaComparator(
-              comparatorNormalizer, createSignatureGenerator(comparatorParams, type));
+      case L2 -> new L2Comparator(comparatorNormalizer);
+      case JACCARD -> new JaccardComparator(comparatorNormalizer);
+      case RUZICKA -> new RuzickaComparator(comparatorNormalizer);
       case GLD ->
-          new GldComparator(
-              comparatorNormalizer,
-              createSequenceDistance(comparatorParams),
-              createSignatureGenerator(comparatorParams, type));
+          new GldComparator(comparatorNormalizer, createSequenceDistance(comparatorParams));
       case NGLD ->
-          new NgldComparator(
-              comparatorNormalizer,
-              createSequenceDistance(comparatorParams),
-              createSignatureGenerator(comparatorParams, type));
+          new NgldComparator(comparatorNormalizer, createSequenceDistance(comparatorParams));
     };
   }
 
@@ -97,26 +85,49 @@ public class ComparatorFactory {
     }
   }
 
-  private static void rejectSignatureGeneration(
-      ComparatorType comparatorType, Map<String, String> comparatorParams) {
-    if (hasSignatureGeneratorType(comparatorParams)) {
-      throw new ComparatorCreationError(
-          String.format("%s does not support signature generation.", comparatorType.name()));
-    }
-  }
-
-  private static boolean hasSignatureGeneratorType(Map<String, String> comparatorParams) {
-    return NamespaceConfigParams.getParam(comparatorParams, Constants.SIGNATURE_GENERATOR)
-        != null;
-  }
-
+  /**
+   * Returns the configured signature generator, or null when the comparator params name none.
+   *
+   * <p>The comparator does not hold one: the same comparator serves a structure that keys by
+   * signatures and one that has none, so the structure that needs signatures creates this.
+   */
   @Nullable
-  private static SignatureGenerator createSignatureGenerator(
+  public static SignatureGenerator createSignatureGenerator(NamespaceConfig namespaceConfig)
+      throws ComparatorCreationError {
+    ComparatorType comparatorType =
+        ConfigVocabulary.fromParamValue(ComparatorType.class, namespaceConfig.getComparatorType());
+    if (comparatorType == null) {
+      throw new ComparatorCreationError(
+          ConfigVocabulary.unsupported(
+              "comparatorType", namespaceConfig.getComparatorType(), ComparatorType.class));
+    }
+    SignatureGeneratorType type =
+        resolveSignatureGeneratorType(namespaceConfig.getComparatorParams(), comparatorType);
+    return type == null ? null : SignatureGeneratorFactory.createSignatureGenerator(type);
+  }
+
+  /**
+   * Rejects a signature generator the comparator cannot have. Creating the comparator does not
+   * create the generator, but a param naming one this comparator cannot supply is a config error
+   * whatever structure the namespace ends up with, so it is reported when the param is read.
+   */
+  private static void validateSignatureGeneration(
+      Map<String, String> comparatorParams, ComparatorType comparatorType) {
+    resolveSignatureGeneratorType(comparatorParams, comparatorType);
+  }
+
+  /** Returns the configured generator type, or null when the params name none. */
+  @Nullable
+  private static SignatureGeneratorType resolveSignatureGeneratorType(
       Map<String, String> comparatorParams, ComparatorType comparatorType) {
     String configuredType =
         NamespaceConfigParams.getParam(comparatorParams, Constants.SIGNATURE_GENERATOR);
     if (configuredType == null || configuredType.trim().isEmpty()) {
       return null;
+    }
+    if (comparatorType.getSupportedSignatureGeneratorTypes().isEmpty()) {
+      throw new ComparatorCreationError(
+          String.format("%s does not support signature generation.", comparatorType.name()));
     }
     SignatureGeneratorType type =
         ConfigVocabulary.fromParamValue(SignatureGeneratorType.class, configuredType);
@@ -130,6 +141,6 @@ public class ComparatorFactory {
           String.format(
               "Signature generator type %s is not supported by this comparator.", configuredType));
     }
-    return SignatureGeneratorFactory.createSignatureGenerator(type);
+    return type;
   }
 }

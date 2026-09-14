@@ -2,10 +2,8 @@
 package com.uber.ussi.comparator;
 
 import com.uber.ussi.comparator.sequencedistance.SequenceDistance;
-import com.uber.ussi.comparator.signaturegenerator.SignatureGenerator;
 import com.uber.ussi.comparatornormalizer.ComparatorNormalizer;
 import com.uber.ussi.utils.MathUtils;
-import javax.annotation.Nullable;
 
 /**
  * The normalized generalized Levenshtein distance (NGLD) between two sequences: the edit count
@@ -25,10 +23,8 @@ public class NgldComparator extends BaseSequenceComparator {
   private static final double MAX_NORMALIZED_DISTANCE = 1.0;
 
   NgldComparator(
-      ComparatorNormalizer comparatorNormalizer,
-      SequenceDistance sequenceDistance,
-      @Nullable SignatureGenerator signatureGenerator) {
-    super(comparatorNormalizer, sequenceDistance, signatureGenerator);
+      ComparatorNormalizer comparatorNormalizer, SequenceDistance sequenceDistance) {
+    super(comparatorNormalizer, sequenceDistance);
   }
 
   /**

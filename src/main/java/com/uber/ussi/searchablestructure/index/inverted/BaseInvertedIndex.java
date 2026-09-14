@@ -8,7 +8,6 @@ import com.carrotsearch.hppc.LongObjectHashMap;
 import com.carrotsearch.hppc.cursors.LongCursor;
 import com.carrotsearch.hppc.cursors.LongIntCursor;
 import com.carrotsearch.hppc.cursors.LongObjectCursor;
-import com.uber.ussi.comparator.SignatureComparator;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.config.NamespaceConfig.CandidateGeneratorType;
 import com.uber.ussi.config.NamespaceConfig.PopularTermDiscardScope;
@@ -57,7 +56,7 @@ abstract class BaseInvertedIndex extends Index {
   private static final long[] EMPTY_ROW_NUMS = new long[0];
   private static final float[] EMPTY_VALUES = new float[0];
 
-  @Nullable private final SignatureComparator signatureComparator;
+  @Nullable private final SignatureKeyingStrategy signatureKeyingStrategy;
   private final RecordIndexingStrategy recordIndexingStrategy;
   private final CandidateGeneratorType candidateGeneratorType;
   private final PopularTermDiscardScope popularTermDiscardScope;
@@ -77,13 +76,14 @@ abstract class BaseInvertedIndex extends Index {
       LongObjectHashMap<LongMeta> rowNumToMetaMap,
       IndexType indexType) {
     super(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);
-    this.signatureComparator =
-        comparator instanceof SignatureComparator ? (SignatureComparator) comparator : null;
-    if (indexType.requiresSignatureSupport()
-        && (signatureComparator == null || !signatureComparator.supportsSignatures())) {
-      throw new IndexCreationError(
-          "A signature-based index requires a comparator with a configured signature generator.");
-    }
+    // Null exactly when the structure keys by terms, which is a property of the index type and
+    // not of what the comparator happens to support. Created here because the constructor derives
+    // keys below, and eagerly so that an empty structure is rejected on the same grounds as a
+    // populated one.
+    this.signatureKeyingStrategy =
+        indexType.requiresSignatureSupport()
+            ? SignatureKeyingStrategy.create(namespaceConfig, comparator)
+            : null;
     RecordType recordType = resolveRecordType(indexType);
     this.recordIndexingStrategy =
         RecordIndexingStrategyFactory.createRecordIndexingStrategy(recordType);
@@ -114,6 +114,12 @@ abstract class BaseInvertedIndex extends Index {
             this::getMatchingRowNumsIfUnderPreFilteringLimit,
             this::getPostFilteringMaxResults,
             this::matchesMetaFilter);
+  }
+
+  /** Returns the keying strategy of a structure whose index type keys its lists by signatures. */
+  protected final SignatureKeyingStrategy getSignatureKeyingStrategy() {
+    return Objects.requireNonNull(
+        signatureKeyingStrategy, "This index does not key its lists by signatures.");
   }
 
   protected abstract double getMinPrefixSum(
@@ -163,11 +169,6 @@ abstract class BaseInvertedIndex extends Index {
               "%s has uniValue %s, expected %s for the configured comparator.",
               source, actualUniValue, expectedUniValue));
     }
-  }
-
-  protected final SignatureComparator getSignatureComparator() {
-    return Objects.requireNonNull(
-        signatureComparator, "This index does not have a signature-capable comparator.");
   }
 
   @Override

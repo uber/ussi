@@ -4,7 +4,7 @@ package com.uber.ussi.searchablestructure.index;
 import com.uber.ussi.comparator.Comparator;
 import com.uber.ussi.comparator.ComparatorFactory;
 import com.uber.ussi.comparator.ComparatorType;
-import com.uber.ussi.comparator.SignatureComparator;
+import com.uber.ussi.comparator.SignatureBounded;
 import com.uber.ussi.config.ConfigViolations;
 import com.uber.ussi.config.ConfigVocabulary;
 import com.uber.ussi.config.NamespaceConfig;
@@ -122,8 +122,8 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
     if (comparator == null || comparatorType == null) {
       return;
     }
-    if (comparator instanceof SignatureComparator signatureComparator
-        && signatureComparator.supportsSignatures()) {
+    if (comparator instanceof SignatureBounded
+        && ComparatorFactory.createSignatureGenerator(config) != null) {
       return;
     }
     // A comparator that generates no signatures needs a different structure, not another param.

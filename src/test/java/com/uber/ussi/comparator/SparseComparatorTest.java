@@ -145,7 +145,7 @@ class SparseComparatorTest {
           }
         };
     JaccardComparator outOfRangeJaccard =
-        new JaccardComparator(outOfRangeNormalizer, /* signatureGenerator */ null);
+        new JaccardComparator(outOfRangeNormalizer);
     assertFalse(outOfRangeJaccard.mayPassNumTermsFiltering(query, 0, 1, 0.5));
   }
 
@@ -157,33 +157,20 @@ class SparseComparatorTest {
         2.0 + MathUtils.EPSILON_12, comparator.getMinPrefixSumForTermsAndValues(4.0, 0.5), 0.0);
   }
 
+  /**
+   * These measures are themselves the multiset similarity the signatures collide at, so the
+   * threshold needs no conversion and the record's own Uni value says nothing extra.
+   */
   @Test
-  void signaturePrefixUsesGeneratorSafetyMargin() {
-    SignatureComparator comparator =
-        (SignatureComparator)
-            ComparatorFactory.createComparator(
-                "jaccard",
-                Map.of(Constants.SIGNATURE_GENERATOR, "minhash"),
-                new IdentityComparatorNormalizer());
+  void theSharedSignatureBoundIsTheThresholdItself() {
+    BaseRuzickaComparator comparator = (BaseRuzickaComparator) comparator("jaccard");
 
-    assertTrue(comparator.supportsSignatures());
-    assertEquals(1.0, comparator.getSignatureUniTransformedValue(), 0.0);
-    assertEquals(
-        60.0 + MathUtils.EPSILON_12,
-        comparator.getMinPrefixSumForSignatures(100, /* recordUniValue */ 8.0, 0.5),
-        0.0);
-    // The threshold is already the share the signatures collide at, so the record's own Uni value
-    // adds nothing to it.
-    assertEquals(
-        60.0 + MathUtils.EPSILON_12,
-        comparator.getMinPrefixSumForSignatures(100, /* recordUniValue */ 4096.0, 0.5),
-        0.0);
-    assertEquals(16, comparator.getSignatures(sparse(comparator, new long[] {1L}, 1f), 16).length);
+    assertEquals(0.5, comparator.getMinSharedSignatureFraction(8.0, 0.5), 0.0);
+    assertEquals(0.5, comparator.getMinSharedSignatureFraction(4096.0, 0.5), 0.0);
   }
 
   @Test
   void comparatorFactoryValidatesSignatureCompatibility() {
-    assertFalse(((SignatureComparator) comparator("jaccard")).supportsSignatures());
     assertThrows(
         ComparatorCreationError.class,
         () ->
@@ -215,44 +202,9 @@ class SparseComparatorTest {
   }
 
   @Test
-  void comparatorsWithoutSignatureGeneratorsRejectSignatureOperations() {
-    SignatureComparator comparator = (SignatureComparator) comparator("jaccard");
-    LongTermsAndValues values = sparse(comparator, new long[] {1L}, 1f);
+  void theSharedSignatureBoundRejectsANegativeThreshold() {
+    BaseRuzickaComparator comparator = (BaseRuzickaComparator) comparator("ruzicka");
 
-    assertThrows(
-        UnsupportedOperationException.class,
-        () -> comparator.getMinPrefixSumForSignatures(10, 4.0, 0.5));
-    assertThrows(UnsupportedOperationException.class, () -> comparator.getSignatures(values, 10));
-  }
-
-  @Test
-  void baseSparseComparatorConstructorLeavesSignaturesDisabled() {
-    BaseRuzickaComparator comparator =
-        new BaseRuzickaComparator(new IdentityComparatorNormalizer()) {
-          @Override
-          public double getUniTransformedValue(float value) {
-            return Math.abs(value);
-          }
-        };
-
-    assertFalse(comparator.supportsSignatures());
-  }
-
-  @Test
-  void signaturePrefixValidatesArguments() {
-    BaseRuzickaComparator comparator =
-        (BaseRuzickaComparator)
-            ComparatorFactory.createComparator(
-                "ruzicka",
-                Map.of(Constants.SIGNATURE_GENERATOR, "icws"),
-                new IdentityComparatorNormalizer());
-
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> comparator.getMinPrefixSumForSignatures(-1, 4.0, 0.5));
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> comparator.getMinPrefixSumForSignatures(10, 4.0, -0.1));
     assertThrows(
         IllegalArgumentException.class,
         () -> comparator.getMinSharedSignatureFraction(4.0, -0.1));

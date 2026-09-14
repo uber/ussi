@@ -3,12 +3,10 @@ package com.uber.ussi.searchablestructure.index.inverted;
 
 import com.carrotsearch.hppc.LongObjectHashMap;
 import com.carrotsearch.hppc.cursors.LongObjectCursor;
-import com.uber.ussi.comparator.SignatureComparator;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
-import com.uber.ussi.error.IndexCreationError;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.index.Index;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
@@ -17,6 +15,18 @@ import java.util.List;
 
 /** Hybrid inverted index using exact keys for short rows and signatures for long rows. */
 public final class HybridIndex extends Index {
+
+  /**
+   * The largest term count a row can have and still be keyed by its own terms. Above it a row is
+   * keyed by signatures instead.
+   *
+   * <p>It is the signature count because that is where signatures stop being a saving: a row with
+   * fewer terms than that would be replaced by more signatures than it had terms, costing list
+   * entries and buying no pruning. The two quantities are derived separately and happen to
+   * coincide, so the cutoff names itself rather than reading as a signature count here.
+   */
+  private static final int MAX_NUM_TERMS_FOR_TERM_KEYS = Constants.NUM_SIGNATURES_PER_ID;
+
   private final TermIndex termIndex;
   private final SignatureIndex signatureIndex;
   private final boolean termPopularityFilteringEnabled;
@@ -26,22 +36,19 @@ public final class HybridIndex extends Index {
       LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
       LongObjectHashMap<LongMeta> rowNumToMetaMap) {
     super(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);
-    if (!(comparator instanceof SignatureComparator)
-        || !((SignatureComparator) comparator).supportsSignatures()) {
-      throw new IndexCreationError(
-          "HybridIndex requires a comparator with a configured signature generator.");
-    }
     LongObjectHashMap<LongTermsAndValues> exactRows = new LongObjectHashMap<>();
     LongObjectHashMap<LongTermsAndValues> signatureRows = new LongObjectHashMap<>();
     for (LongObjectCursor<LongTermsAndValues> entry : rowNumToTermsAndValuesMap) {
-      if (entry.value.termsLength() <= Constants.NUM_SIGNATURES_PER_ID) {
+      if (entry.value.termsLength() <= MAX_NUM_TERMS_FOR_TERM_KEYS) {
         exactRows.put(entry.key, entry.value);
       } else {
         signatureRows.put(entry.key, entry.value);
       }
     }
-    this.termIndex = new TermIndex(namespaceConfig, exactRows, rowNumToMetaMap);
+    // The signature half is built first so a comparator without a generator is rejected before
+    // the term half is populated.
     this.signatureIndex = new SignatureIndex(namespaceConfig, signatureRows, rowNumToMetaMap);
+    this.termIndex = new TermIndex(namespaceConfig, exactRows, rowNumToMetaMap);
     this.termPopularityFilteringEnabled = termIndex.discardsPopularTerms();
   }
 
@@ -52,7 +59,7 @@ public final class HybridIndex extends Index {
       throw new IllegalArgumentException("k must be greater than 0.");
     }
     int maxResults = Math.min(k, namespaceConfig.getMaxNumSimilarities());
-    boolean queryUsesExactIndex = record.termsLength() <= Constants.NUM_SIGNATURES_PER_ID;
+    boolean queryUsesExactIndex = record.termsLength() <= MAX_NUM_TERMS_FOR_TERM_KEYS;
     Index firstIndex = queryUsesExactIndex ? termIndex : signatureIndex;
     Index secondIndex = queryUsesExactIndex ? signatureIndex : termIndex;
     boolean secondIndexIsExact = !queryUsesExactIndex;
@@ -122,8 +129,8 @@ public final class HybridIndex extends Index {
     if (termPopularityFilteringEnabled) {
       return true;
     }
-    int minNumTerms = exactIndex ? 0 : Constants.NUM_SIGNATURES_PER_ID + 1;
-    int maxNumTerms = exactIndex ? Constants.NUM_SIGNATURES_PER_ID : Integer.MAX_VALUE;
+    int minNumTerms = exactIndex ? 0 : MAX_NUM_TERMS_FOR_TERM_KEYS + 1;
+    int maxNumTerms = exactIndex ? MAX_NUM_TERMS_FOR_TERM_KEYS : Integer.MAX_VALUE;
     return comparator.mayPassNumTermsFiltering(query, minNumTerms, maxNumTerms, minSimilarity);
   }
 

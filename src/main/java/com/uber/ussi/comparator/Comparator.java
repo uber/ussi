@@ -67,6 +67,17 @@ public abstract class Comparator implements Serializable {
         compare(termsAndValues1, termsAndValues2, minSimilarity));
   }
 
+  /**
+   * Returns the value this comparator reports at {@code normalizedSimilarityValue}, the inverse of
+   * what {@link #getSimilarity} returns. A threshold reaches the API as a similarity and every
+   * bound is expressed in the comparator's own units, so anything deriving a bound outside this
+   * class converts it here rather than holding the normalizer.
+   */
+  public final double toComparatorValue(double normalizedSimilarityValue) {
+    return comparatorNormalizer.normalizedSimilarityValueToComparatorValue(
+        normalizedSimilarityValue);
+  }
+
   public abstract double getUniTransformedValue(float value);
 
   /**

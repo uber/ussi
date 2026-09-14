@@ -2,10 +2,8 @@
 package com.uber.ussi.comparator;
 
 import com.uber.ussi.comparator.sequencedistance.SequenceDistance;
-import com.uber.ussi.comparator.signaturegenerator.SignatureGenerator;
 import com.uber.ussi.comparatornormalizer.ComparatorNormalizer;
 import com.uber.ussi.utils.MathUtils;
-import javax.annotation.Nullable;
 
 /**
  * The number of single-element edits that turn one sequence into the other, the raw generalized
@@ -20,10 +18,8 @@ import javax.annotation.Nullable;
 public class GldComparator extends BaseSequenceComparator {
 
   GldComparator(
-      ComparatorNormalizer comparatorNormalizer,
-      SequenceDistance sequenceDistance,
-      @Nullable SignatureGenerator signatureGenerator) {
-    super(comparatorNormalizer, sequenceDistance, signatureGenerator);
+      ComparatorNormalizer comparatorNormalizer, SequenceDistance sequenceDistance) {
+    super(comparatorNormalizer, sequenceDistance);
   }
 
   /**

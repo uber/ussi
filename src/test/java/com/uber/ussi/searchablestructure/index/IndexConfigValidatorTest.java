@@ -3,12 +3,11 @@ package com.uber.ussi.searchablestructure.index;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import com.uber.ussi.comparator.ComparatorFactory;
+import com.uber.ussi.comparator.ComparatorType;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.config.NamespaceConfig.CandidateGenerator;
 import com.uber.ussi.utils.Constants;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -38,23 +37,23 @@ class IndexConfigValidatorTest {
         "spars merge on the scan structure",
         builder ->
             builder
-                .indexType(lowerCase(IndexType.SCAN))
+                .indexType(IndexType.SCAN.getParamValue())
                 .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, sparsMerge())),
         false),
     new ValidationCase(
         "spars merge with l2 on the signature structure",
         builder ->
             builder
-                .indexType(lowerCase(IndexType.INVERTED_SIGNATURE))
-                .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.L2))
+                .indexType(IndexType.INVERTED_SIGNATURE.getParamValue())
+                .comparatorType(ComparatorType.L2.getParamValue())
                 .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, sparsMerge())),
         false),
     new ValidationCase(
         "spars merge with l2 on the term structure",
         builder ->
             builder
-                .indexType(lowerCase(IndexType.INVERTED_TERM))
-                .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.L2))
+                .indexType(IndexType.INVERTED_TERM.getParamValue())
+                .comparatorType(ComparatorType.L2.getParamValue())
                 .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, sparsMerge())),
         true),
     // Sequence comparators need the ordered sequence, not just shared keys, so merge never applies.
@@ -62,16 +61,16 @@ class IndexConfigValidatorTest {
         "spars merge with ngld on the term structure",
         builder ->
             builder
-                .indexType(lowerCase(IndexType.INVERTED_TERM))
-                .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.NGLD))
+                .indexType(IndexType.INVERTED_TERM.getParamValue())
+                .comparatorType(ComparatorType.NGLD.getParamValue())
                 .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, sparsMerge())),
         false),
     new ValidationCase(
         "spars merge with gld on the hybrid structure",
         builder ->
             builder
-                .indexType(lowerCase(IndexType.INVERTED_HYBRID))
-                .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.GLD))
+                .indexType(IndexType.INVERTED_HYBRID.getParamValue())
+                .comparatorType(ComparatorType.GLD.getParamValue())
                 .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, sparsMerge())),
         false),
     // Ruzicka scores a row from the keys it shares with the query, so merge stays available.
@@ -79,8 +78,8 @@ class IndexConfigValidatorTest {
         "spars merge with ruzicka on the term structure",
         builder ->
             builder
-                .indexType(lowerCase(IndexType.INVERTED_TERM))
-                .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.RUZICKA))
+                .indexType(IndexType.INVERTED_TERM.getParamValue())
+                .comparatorType(ComparatorType.RUZICKA.getParamValue())
                 .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, sparsMerge())),
         true),
     // A sequence has no values, so only the term structure, which keys the element multiset, and
@@ -89,38 +88,38 @@ class IndexConfigValidatorTest {
         "ngld on the term structure",
         builder ->
             builder
-                .indexType(lowerCase(IndexType.INVERTED_TERM))
-                .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.NGLD)),
+                .indexType(IndexType.INVERTED_TERM.getParamValue())
+                .comparatorType(ComparatorType.NGLD.getParamValue()),
         true),
     new ValidationCase(
         "gld on the scan structure",
         builder ->
             builder
-                .indexType(lowerCase(IndexType.SCAN))
-                .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.GLD)),
+                .indexType(IndexType.SCAN.getParamValue())
+                .comparatorType(ComparatorType.GLD.getParamValue()),
         true),
     new ValidationCase(
         "ngld on the signature structure",
         builder ->
             builder
-                .indexType(lowerCase(IndexType.INVERTED_SIGNATURE))
-                .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.NGLD)),
+                .indexType(IndexType.INVERTED_SIGNATURE.getParamValue())
+                .comparatorType(ComparatorType.NGLD.getParamValue()),
         false),
     // Discarding a popular element drops it from the sequences too, so the pairing stays valid.
     new ValidationCase(
         "the term structure discarding popular elements",
         builder ->
             builder
-                .indexType(lowerCase(IndexType.INVERTED_TERM))
-                .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.NGLD))
+                .indexType(IndexType.INVERTED_TERM.getParamValue())
+                .comparatorType(ComparatorType.NGLD.getParamValue())
                 .indexParams(Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "0.05")),
         true),
     new ValidationCase(
         "the term structure keeping every element",
         builder ->
             builder
-                .indexType(lowerCase(IndexType.INVERTED_TERM))
-                .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.NGLD))
+                .indexType(IndexType.INVERTED_TERM.getParamValue())
+                .comparatorType(ComparatorType.NGLD.getParamValue())
                 .indexParams(Map.of(Constants.MAX_FRACTION_IDS_PER_KEY, "1.0")),
         true),
     // L2 reads both dense and sparse records, so no structure here can turn it away.
@@ -128,22 +127,22 @@ class IndexConfigValidatorTest {
         "l2 on the term structure",
         builder ->
             builder
-                .indexType(lowerCase(IndexType.INVERTED_TERM))
-                .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.L2)),
+                .indexType(IndexType.INVERTED_TERM.getParamValue())
+                .comparatorType(ComparatorType.L2.getParamValue()),
         true),
     new ValidationCase(
         "the matrix structure with a comparator that cannot read dense records",
         builder ->
             builder
-                .indexType(lowerCase(IndexType.MATRIX))
-                .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.JACCARD)),
+                .indexType(IndexType.MATRIX.getParamValue())
+                .comparatorType(ComparatorType.JACCARD.getParamValue()),
         false),
     new ValidationCase(
         "the matrix structure with a comparator that can",
         builder ->
             builder
-                .indexType(lowerCase(IndexType.MATRIX))
-                .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.L2)),
+                .indexType(IndexType.MATRIX.getParamValue())
+                .comparatorType(ComparatorType.L2.getParamValue()),
         true),
   };
 
@@ -188,8 +187,8 @@ class IndexConfigValidatorTest {
   void mergeWithASequenceComparatorIsRejectedForBeingUnsupported() {
     NamespaceConfig config =
         validBuilder()
-            .indexType(lowerCase(IndexType.INVERTED_TERM))
-            .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.NGLD))
+            .indexType(IndexType.INVERTED_TERM.getParamValue())
+            .comparatorType(ComparatorType.NGLD.getParamValue())
             .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, sparsMerge()))
             .build();
 
@@ -207,8 +206,8 @@ class IndexConfigValidatorTest {
   void validateThrowsForTheMatrixStructureWithAComparatorThatCannotReadDenseRecords() {
     NamespaceConfig config =
         validBuilder()
-            .indexType(lowerCase(IndexType.MATRIX))
-            .comparatorType(lowerCase(ComparatorFactory.COMPARATOR_TYPE.JACCARD))
+            .indexType(IndexType.MATRIX.getParamValue())
+            .comparatorType(ComparatorType.JACCARD.getParamValue())
             .build();
     assertThrows(
         IllegalArgumentException.class, () -> config.validate(IndexConfigValidator.getInstance()));
@@ -236,7 +235,7 @@ class IndexConfigValidatorTest {
   void aComparatorThatCannotBeCreatedIsLeftToTheComparatorValidator() {
     NamespaceConfig unknownType =
         validBuilder()
-            .indexType(lowerCase(IndexType.INVERTED_SIGNATURE))
+            .indexType(IndexType.INVERTED_SIGNATURE.getParamValue())
             .comparatorType("cosine")
             .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, sparsMerge()))
             .build();
@@ -244,12 +243,12 @@ class IndexConfigValidatorTest {
     Map<String, String> unbuildableParams = Map.of(Constants.SIGNATURE_GENERATOR_TYPE, "superhash");
     NamespaceConfig unbuildableOnMatrixStructure =
         validBuilder()
-            .indexType(lowerCase(IndexType.MATRIX))
+            .indexType(IndexType.MATRIX.getParamValue())
             .comparatorParams(unbuildableParams)
             .build();
     NamespaceConfig unbuildableWithMerge =
         validBuilder()
-            .indexType(lowerCase(IndexType.INVERTED_SIGNATURE))
+            .indexType(IndexType.INVERTED_SIGNATURE.getParamValue())
             .comparatorParams(unbuildableParams)
             .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, sparsMerge()))
             .build();
@@ -279,10 +278,6 @@ class IndexConfigValidatorTest {
 
   private static String sparsMerge() {
     return CandidateGenerator.SPARS_MERGE.getParamValue();
-  }
-
-  private static String lowerCase(Enum<?> value) {
-    return value.name().toLowerCase(Locale.ROOT);
   }
 
   @FunctionalInterface

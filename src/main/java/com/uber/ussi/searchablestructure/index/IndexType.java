@@ -2,11 +2,10 @@
 package com.uber.ussi.searchablestructure.index;
 
 import com.uber.ussi.comparator.Comparator;
+import com.uber.ussi.config.ConfigVocabulary;
 import com.uber.ussi.entity.termsandvalues.RecordType;
 import java.util.EnumSet;
-import java.util.Locale;
 import java.util.Set;
-import javax.annotation.Nullable;
 
 /**
  * The index structures a namespace can be configured with, each paired with the record types it can
@@ -15,7 +14,7 @@ import javax.annotation.Nullable;
  * <p>A namespace names only the structure: the record type is the one the structure stores and the
  * configured comparator reads; see {@link #resolveRecordTypes}.
  */
-public enum IndexType {
+public enum IndexType implements ConfigVocabulary {
   /**
    * Sequential scan that scores every row through the comparator, so it never reads a record's
    * layout itself and stores whichever type the comparator reads.
@@ -44,21 +43,6 @@ public enum IndexType {
 
   IndexType(RecordType... storableRecordTypes) {
     this.storableRecordTypes = Set.of(storableRecordTypes);
-  }
-
-  @Nullable
-  public static IndexType fromParamValue(String paramValue) {
-    String normalizedParamValue = paramValue.trim().toLowerCase(Locale.ROOT);
-    for (IndexType indexType : values()) {
-      if (indexType.getParamValue().equals(normalizedParamValue)) {
-        return indexType;
-      }
-    }
-    return null;
-  }
-
-  public String getParamValue() {
-    return name().toLowerCase(Locale.ROOT);
   }
 
   public Set<RecordType> getStorableRecordTypes() {

@@ -9,102 +9,48 @@ import com.uber.ussi.comparator.signaturegenerator.SignatureGeneratorFactory;
 import com.uber.ussi.comparator.signaturegenerator.SignatureGeneratorFactory.SignatureGeneratorType;
 import com.uber.ussi.comparatornormalizer.ComparatorNormalizer;
 import com.uber.ussi.comparatornormalizer.ComparatorNormalizerFactory;
+import com.uber.ussi.config.ConfigVocabulary;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.config.NamespaceConfigParams;
 import com.uber.ussi.error.ComparatorCreationError;
 import com.uber.ussi.utils.Constants;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import javax.annotation.Nullable;
 
 public class ComparatorFactory {
 
   private ComparatorFactory() {}
 
-  public enum COMPARATOR_TYPE {
-    GLD,
-    JACCARD,
-    L2,
-    NGLD,
-    RUZICKA
-  }
-
-  public static boolean isSupportedComparatorType(String comparatorType) {
-    if (comparatorType == null) {
-      return false;
-    }
-    for (COMPARATOR_TYPE supportedType : COMPARATOR_TYPE.values()) {
-      if (supportedType.name().equalsIgnoreCase(comparatorType.trim())) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /** Returns whether the comparator type compares sequences of elements rather than values. */
-  static boolean isSequenceComparatorType(String comparatorType) {
-    String trimmedComparatorType = comparatorType.trim();
-    return COMPARATOR_TYPE.GLD.name().equalsIgnoreCase(trimmedComparatorType)
-        || COMPARATOR_TYPE.NGLD.name().equalsIgnoreCase(trimmedComparatorType);
-  }
-
-  /**
-   * Returns the signature generators the comparator type accepts, empty when it cannot generate
-   * signatures at all. This is the single source of truth for both creation and config validation.
-   */
-  public static Set<SignatureGeneratorType> getSupportedSignatureGeneratorTypes(
-      String comparatorType) {
-    String trimmedComparatorType = comparatorType.trim();
-    if (COMPARATOR_TYPE.JACCARD.name().equalsIgnoreCase(trimmedComparatorType)) {
-      return Set.of(SignatureGeneratorType.MINHASH);
-    }
-    if (COMPARATOR_TYPE.RUZICKA.name().equalsIgnoreCase(trimmedComparatorType)) {
-      return Set.of(
-          SignatureGeneratorType.I2CWS,
-          SignatureGeneratorType.ICWS,
-          SignatureGeneratorType.PCWS,
-          SignatureGeneratorType.SCWS);
-    }
-    return Set.of();
-  }
-
   public static Comparator createComparator(
       String comparatorType,
       Map<String, String> comparatorParams,
       ComparatorNormalizer comparatorNormalizer)
       throws ComparatorCreationError {
-    String comparatorTypeLowerCase = comparatorType.toLowerCase(Locale.ROOT);
-    if (comparatorTypeLowerCase.equals(COMPARATOR_TYPE.L2.name().toLowerCase(Locale.ROOT))) {
-      if (hasSignatureGeneratorType(comparatorParams)) {
-        throw new ComparatorCreationError("L2 does not support signature generation.");
+    ComparatorType type = ConfigVocabulary.fromParamValue(ComparatorType.class, comparatorType);
+    if (type == null) {
+      throw new ComparatorCreationError(
+          ConfigVocabulary.unsupported("comparatorType", comparatorType, ComparatorType.class));
+    }
+    return switch (type) {
+      case L2 -> {
+        rejectSignatureGeneration(type, comparatorParams);
+        yield new L2Comparator(comparatorNormalizer);
       }
-      return new L2Comparator(comparatorNormalizer);
-    }
-    if (comparatorTypeLowerCase.equals(COMPARATOR_TYPE.JACCARD.name().toLowerCase(Locale.ROOT))) {
-      return new JaccardComparator(
-          comparatorNormalizer,
-          createSignatureGenerator(comparatorParams, comparatorTypeLowerCase));
-    }
-    if (comparatorTypeLowerCase.equals(COMPARATOR_TYPE.RUZICKA.name().toLowerCase(Locale.ROOT))) {
-      return new RuzickaComparator(
-          comparatorNormalizer,
-          createSignatureGenerator(comparatorParams, comparatorTypeLowerCase));
-    }
-    if (isSequenceComparatorType(comparatorTypeLowerCase)) {
-      if (hasSignatureGeneratorType(comparatorParams)) {
-        throw new ComparatorCreationError(
-            String.format(
-                "%s does not support signature generation.",
-                comparatorTypeLowerCase.toUpperCase(Locale.ROOT)));
+      case JACCARD ->
+          new JaccardComparator(
+              comparatorNormalizer, createSignatureGenerator(comparatorParams, type));
+      case RUZICKA ->
+          new RuzickaComparator(
+              comparatorNormalizer, createSignatureGenerator(comparatorParams, type));
+      case GLD -> {
+        rejectSignatureGeneration(type, comparatorParams);
+        yield new GldComparator(comparatorNormalizer, createSequenceDistance(comparatorParams));
       }
-      SequenceDistance sequenceDistance = createSequenceDistance(comparatorParams);
-      return comparatorTypeLowerCase.equals(COMPARATOR_TYPE.GLD.name().toLowerCase(Locale.ROOT))
-          ? new GldComparator(comparatorNormalizer, sequenceDistance)
-          : new NgldComparator(comparatorNormalizer, sequenceDistance);
-    }
-    throw new ComparatorCreationError(
-        String.format("Unsupported Comparator type (%s).", comparatorTypeLowerCase));
+      case NGLD -> {
+        rejectSignatureGeneration(type, comparatorParams);
+        yield new NgldComparator(comparatorNormalizer, createSequenceDistance(comparatorParams));
+      }
+    };
   }
 
   public static Comparator createComparator(NamespaceConfig namespaceConfig)
@@ -149,6 +95,14 @@ public class ComparatorFactory {
     }
   }
 
+  private static void rejectSignatureGeneration(
+      ComparatorType comparatorType, Map<String, String> comparatorParams) {
+    if (hasSignatureGeneratorType(comparatorParams)) {
+      throw new ComparatorCreationError(
+          String.format("%s does not support signature generation.", comparatorType.name()));
+    }
+  }
+
   private static boolean hasSignatureGeneratorType(Map<String, String> comparatorParams) {
     return NamespaceConfigParams.getParam(comparatorParams, Constants.SIGNATURE_GENERATOR_TYPE)
         != null;
@@ -156,20 +110,20 @@ public class ComparatorFactory {
 
   @Nullable
   private static SignatureGenerator createSignatureGenerator(
-      Map<String, String> comparatorParams, String comparatorType) {
+      Map<String, String> comparatorParams, ComparatorType comparatorType) {
     String configuredType =
         NamespaceConfigParams.getParam(comparatorParams, Constants.SIGNATURE_GENERATOR_TYPE);
     if (configuredType == null || configuredType.trim().isEmpty()) {
       return null;
     }
-    SignatureGeneratorType type;
-    try {
-      type = SignatureGeneratorType.valueOf(configuredType.trim().toUpperCase(Locale.ROOT));
-    } catch (IllegalArgumentException e) {
+    SignatureGeneratorType type =
+        ConfigVocabulary.fromParamValue(SignatureGeneratorType.class, configuredType);
+    if (type == null) {
       throw new ComparatorCreationError(
-          String.format("Unsupported signature generator type (%s).", configuredType));
+          ConfigVocabulary.unsupported(
+              Constants.SIGNATURE_GENERATOR_TYPE, configuredType, SignatureGeneratorType.class));
     }
-    if (!getSupportedSignatureGeneratorTypes(comparatorType).contains(type)) {
+    if (!comparatorType.getSupportedSignatureGeneratorTypes().contains(type)) {
       throw new ComparatorCreationError(
           String.format(
               "Signature generator type %s is not supported by this comparator.", configuredType));

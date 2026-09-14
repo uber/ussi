@@ -2,6 +2,7 @@
 package com.uber.ussi.searchablestructure.index;
 
 import com.carrotsearch.hppc.LongObjectHashMap;
+import com.uber.ussi.config.ConfigVocabulary;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
@@ -25,10 +26,10 @@ public final class IndexFactory {
     Objects.requireNonNull(namespaceConfig, "namespaceConfig");
 
     String configuredIndexType = namespaceConfig.getIndexType();
-    IndexType indexType = IndexType.fromParamValue(configuredIndexType);
+    IndexType indexType = ConfigVocabulary.fromParamValue(IndexType.class, configuredIndexType);
     if (indexType == null) {
       throw new IndexCreationError(
-          String.format("Unsupported index type (%s).", configuredIndexType));
+          ConfigVocabulary.unsupported("indexType", configuredIndexType, IndexType.class));
     }
     return switch (indexType) {
       case SCAN -> new ScanIndex(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);

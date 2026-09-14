@@ -4,15 +4,13 @@ package com.uber.ussi.searchablestructure.cache;
 import com.uber.ussi.comparator.Comparator;
 import com.uber.ussi.comparator.ComparatorFactory;
 import com.uber.ussi.config.ConfigViolations;
+import com.uber.ussi.config.ConfigVocabulary;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.config.NamespaceConfigValidator;
 import com.uber.ussi.entity.termsandvalues.RecordType;
-import com.uber.ussi.searchablestructure.cache.CacheFactory.CacheType;
 import com.uber.ussi.utils.Constants;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
-import java.util.stream.Collectors;
 
 /** Reports the cache types and cache params that no cache could be built from. */
 public final class CacheConfigValidator implements NamespaceConfigValidator {
@@ -26,7 +24,7 @@ public final class CacheConfigValidator implements NamespaceConfigValidator {
 
   @Override
   public void collectViolations(NamespaceConfig config, List<String> violations) {
-    CacheType cacheType = CacheType.fromParamValue(config.getCacheType());
+    CacheType cacheType = ConfigVocabulary.fromParamValue(CacheType.class, config.getCacheType());
     if (cacheType == null) {
       collectCacheTypeViolations(config, violations);
       return;
@@ -72,11 +70,6 @@ public final class CacheConfigValidator implements NamespaceConfigValidator {
       return;
     }
     violations.add(
-        String.format(
-            "Unsupported cacheType (%s). Supported values: %s.",
-            config.getCacheType(),
-            Arrays.stream(CacheType.values())
-                .map(CacheType::getParamValue)
-                .collect(Collectors.joining(", "))));
+        ConfigVocabulary.unsupported("cacheType", config.getCacheType(), CacheType.class));
   }
 }

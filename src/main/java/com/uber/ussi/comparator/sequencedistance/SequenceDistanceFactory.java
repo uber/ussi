@@ -1,7 +1,8 @@
 /* AUTHOR: Ahmed Metwally (ametwally@uber.com) */
 package com.uber.ussi.comparator.sequencedistance;
 
-import java.util.Locale;
+import com.uber.ussi.config.ConfigVocabulary;
+import com.uber.ussi.utils.Constants;
 import java.util.Objects;
 
 /** Creates the edit distances supported by the sequence comparators. */
@@ -10,7 +11,7 @@ public final class SequenceDistanceFactory {
    * The edit distance a sequence comparator measures with. Each permits a different set of edits,
    * so the same pair of sequences has a different distance under each.
    */
-  public enum SequenceDistanceType {
+  public enum SequenceDistanceType implements ConfigVocabulary {
     /**
      * Levenshtein plus transposition of two adjacent elements, so a pair of elements in the wrong
      * order costs one edit rather than two.
@@ -31,12 +32,13 @@ public final class SequenceDistanceFactory {
 
   public static SequenceDistance createSequenceDistance(String sequenceDistanceType) {
     Objects.requireNonNull(sequenceDistanceType, "sequenceDistanceType");
-    SequenceDistanceType type;
-    try {
-      type = SequenceDistanceType.valueOf(sequenceDistanceType.trim().toUpperCase(Locale.ROOT));
-    } catch (IllegalArgumentException e) {
+    SequenceDistanceType type =
+        ConfigVocabulary.fromParamValue(SequenceDistanceType.class, sequenceDistanceType);
+    if (type == null) {
       throw new IllegalArgumentException(
-          String.format("Unsupported sequence distance type (%s).", sequenceDistanceType), e);
+          ConfigVocabulary.unsupported(
+              Constants.SEQUENCE_DISTANCE_TYPE, sequenceDistanceType,
+              SequenceDistanceType.class));
     }
     return createSequenceDistance(type);
   }

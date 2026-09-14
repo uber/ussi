@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.uber.ussi.comparator.Comparator;
 import com.uber.ussi.comparator.ComparatorFactory;
+import com.uber.ussi.config.ConfigVocabulary;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.termsandvalues.RecordType;
 import java.util.Set;
@@ -18,13 +19,15 @@ class IndexTypeTest {
   void paramValuesAreTheLowercasedNames() {
     assertEquals("scan", IndexType.SCAN.getParamValue());
     assertEquals("inverted_term", IndexType.INVERTED_TERM.getParamValue());
-    assertEquals(IndexType.MATRIX, IndexType.fromParamValue("matrix"));
-    assertEquals(IndexType.INVERTED_HYBRID, IndexType.fromParamValue(" INVERTED_Hybrid "));
+    assertEquals(IndexType.MATRIX, ConfigVocabulary.fromParamValue(IndexType.class, "matrix"));
+    assertEquals(
+        IndexType.INVERTED_HYBRID,
+        ConfigVocabulary.fromParamValue(IndexType.class, " INVERTED_Hybrid "));
   }
 
   @Test
   void anUnknownParamValueHasNoIndexType() {
-    assertNull(IndexType.fromParamValue("hnsw"));
+    assertNull(ConfigVocabulary.fromParamValue(IndexType.class, "hnsw"));
   }
 
   /** A structure that keys its lists by a record's own terms stores either type that has terms. */

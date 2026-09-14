@@ -3,15 +3,16 @@ package com.uber.ussi.searchablestructure.index;
 
 import com.uber.ussi.comparator.Comparator;
 import com.uber.ussi.comparator.ComparatorFactory;
+import com.uber.ussi.comparator.ComparatorType;
 import com.uber.ussi.comparator.SignatureComparator;
 import com.uber.ussi.config.ConfigViolations;
+import com.uber.ussi.config.ConfigVocabulary;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.config.NamespaceConfig.CandidateGenerator;
 import com.uber.ussi.config.NamespaceConfigValidator;
 import com.uber.ussi.entity.termsandvalues.RecordType;
 import com.uber.ussi.searchablestructure.metadata.MetadataFilteringStrategy;
 import com.uber.ussi.utils.Constants;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -33,7 +34,7 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
 
   @Override
   public void collectViolations(NamespaceConfig config, List<String> violations) {
-    IndexType indexType = IndexType.fromParamValue(config.getIndexType());
+    IndexType indexType = ConfigVocabulary.fromParamValue(IndexType.class, config.getIndexType());
     collectIndexTypeViolations(config, indexType, violations);
     ConfigViolations.checkDoubleInRange(
         violations,
@@ -53,9 +54,11 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
           0.0,
           1.0);
     }
+    ComparatorType comparatorType =
+        ConfigVocabulary.fromParamValue(ComparatorType.class, config.getComparatorType());
     RecordType recordType = resolveRecordType(config, indexType, violations);
-    collectSignatureSupportViolations(config, indexType, violations);
-    collectCandidateGeneratorViolations(config, indexType, recordType, violations);
+    collectSignatureSupportViolations(config, indexType, comparatorType, violations);
+    collectCandidateGeneratorViolations(config, indexType, comparatorType, recordType, violations);
   }
 
   /** An indexType that is non-blank and names no structure is invalid. */
@@ -65,22 +68,20 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
       return;
     }
     violations.add(
-        String.format(
-            "Unsupported indexType (%s). Supported values: %s.",
-            config.getIndexType(),
-            Arrays.stream(IndexType.values())
-                .map(IndexType::getParamValue)
-                .collect(Collectors.joining(", "))));
+        ConfigVocabulary.unsupported("indexType", config.getIndexType(), IndexType.class));
   }
 
   /** A signature-keyed structure is invalid with a comparator that generates no signatures. */
   private static void collectSignatureSupportViolations(
-      NamespaceConfig config, IndexType indexType, List<String> violations) {
+      NamespaceConfig config,
+      IndexType indexType,
+      @Nullable ComparatorType comparatorType,
+      List<String> violations) {
     if (!indexType.requiresSignatureSupport()) {
       return;
     }
     Comparator comparator = ComparatorFactory.tryCreateComparator(config);
-    if (comparator == null) {
+    if (comparator == null || comparatorType == null) {
       return;
     }
     if (comparator instanceof SignatureComparator signatureComparator
@@ -88,8 +89,7 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
       return;
     }
     // A comparator that generates no signatures needs a different structure, not another param.
-    if (ComparatorFactory.getSupportedSignatureGeneratorTypes(config.getComparatorType())
-        .isEmpty()) {
+    if (comparatorType.getSupportedSignatureGeneratorTypes().isEmpty()) {
       violations.add(
           String.format(
               "indexType %s keys its lists by signatures, which comparatorType %s cannot generate.",
@@ -110,11 +110,10 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
     if (rawValue == null || rawValue.trim().isEmpty()) {
       return;
     }
-    try {
-      MetadataFilteringStrategy.fromIndexParam(rawValue);
-    } catch (IllegalArgumentException e) {
+    if (ConfigVocabulary.fromParamValue(MetadataFilteringStrategy.class, rawValue) == null) {
       violations.add(
-          String.format("Unsupported %s (%s).", Index.METADATA_FILTERING_STRATEGY, rawValue));
+          ConfigVocabulary.unsupported(
+              Index.METADATA_FILTERING_STRATEGY, rawValue, MetadataFilteringStrategy.class));
     }
   }
 
@@ -153,6 +152,7 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
   private static void collectCandidateGeneratorViolations(
       NamespaceConfig config,
       IndexType indexType,
+      @Nullable ComparatorType comparatorType,
       @Nullable RecordType recordType,
       List<String> violations) {
     CandidateGenerator candidateGenerator;
@@ -173,7 +173,7 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
               Constants.CANDIDATE_GENERATOR, mergeParamValue, indexType.getParamValue()));
       return;
     }
-    if (!ComparatorFactory.isSupportedComparatorType(config.getComparatorType())) {
+    if (comparatorType == null) {
       // The rules below need a known comparator; ComparatorConfigValidator reports the name.
       return;
     }
@@ -187,8 +187,7 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
     }
     if (recordType != null
         && !indexType.conjunctionDeterminesSimilarity(recordType)
-        && ComparatorFactory.getSupportedSignatureGeneratorTypes(config.getComparatorType())
-            .isEmpty()) {
+        && comparatorType.getSupportedSignatureGeneratorTypes().isEmpty()) {
       violations.add(
           String.format(
               "%s=%s is not supported with comparatorType %s for indexType %s.",

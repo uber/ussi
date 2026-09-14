@@ -1,29 +1,28 @@
 package com.uber.ussi.searchablestructure.metadata;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
+import com.uber.ussi.config.ConfigVocabulary;
 import org.junit.jupiter.api.Test;
 
 class MetadataFilteringStrategyTest {
 
   @Test
-  void fromIndexParamAcceptsUnderscoreSeparatedValues() {
+  void paramValuesAreUnderscoreSeparated() {
     assertEquals(
         MetadataFilteringStrategy.IN_FILTERING,
-        MetadataFilteringStrategy.fromIndexParam("in_filtering"));
+        ConfigVocabulary.fromParamValue(MetadataFilteringStrategy.class, "in_filtering"));
     assertEquals(
         MetadataFilteringStrategy.PRE_FILTERING,
-        MetadataFilteringStrategy.fromIndexParam("pre_filtering"));
+        ConfigVocabulary.fromParamValue(MetadataFilteringStrategy.class, "pre_filtering"));
     assertEquals(
         MetadataFilteringStrategy.POST_FILTERING,
-        MetadataFilteringStrategy.fromIndexParam("post_filtering"));
+        ConfigVocabulary.fromParamValue(MetadataFilteringStrategy.class, " Post_Filtering "));
   }
 
   @Test
-  void fromIndexParamRejectsHyphenatedValues() {
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> MetadataFilteringStrategy.fromIndexParam("post-filtering"));
+  void aHyphenatedParamValueHasNoStrategy() {
+    assertNull(ConfigVocabulary.fromParamValue(MetadataFilteringStrategy.class, "post-filtering"));
   }
 }

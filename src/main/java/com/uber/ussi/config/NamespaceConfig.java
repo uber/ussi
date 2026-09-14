@@ -205,86 +205,54 @@ public final class NamespaceConfig {
     if (NamespaceConfigParams.isBlank(rawValue)) {
       return PopularTermDiscardScope.CANDIDATES_AND_VERIFICATION;
     }
-    String normalizedValue = rawValue.trim().toLowerCase(Locale.ROOT);
-    for (PopularTermDiscardScope scope : PopularTermDiscardScope.values()) {
-      if (scope.paramValue.equals(normalizedValue)) {
-        return scope;
-      }
+    PopularTermDiscardScope scope =
+        ConfigVocabulary.fromParamValue(PopularTermDiscardScope.class, rawValue);
+    if (scope == null) {
+      throw new IllegalArgumentException(
+          ConfigVocabulary.unsupported(
+              Constants.POPULAR_TERM_DISCARD_SCOPE, rawValue, PopularTermDiscardScope.class));
     }
-    throw new IllegalArgumentException(
-        String.format(
-            "Unsupported %s (%s). Supported values: %s, %s.",
-            Constants.POPULAR_TERM_DISCARD_SCOPE,
-            rawValue,
-            PopularTermDiscardScope.CANDIDATES_AND_VERIFICATION.getParamValue(),
-            PopularTermDiscardScope.CANDIDATES_ONLY.getParamValue()));
+    return scope;
   }
 
-  private static CandidateGenerator parseCandidateGenerator(
-      Map<String, String> indexParams) {
-    String rawValue =
-        NamespaceConfigParams.getParam(indexParams, Constants.CANDIDATE_GENERATOR);
+  private static CandidateGenerator parseCandidateGenerator(Map<String, String> indexParams) {
+    String rawValue = NamespaceConfigParams.getParam(indexParams, Constants.CANDIDATE_GENERATOR);
     if (NamespaceConfigParams.isBlank(rawValue)) {
       return CandidateGenerator.SPARS;
     }
-    String normalizedValue = rawValue.trim().toLowerCase(Locale.ROOT);
-    for (CandidateGenerator generator : CandidateGenerator.values()) {
-      if (generator.paramValue.equals(normalizedValue)) {
-        return generator;
-      }
+    CandidateGenerator generator =
+        ConfigVocabulary.fromParamValue(CandidateGenerator.class, rawValue);
+    if (generator == null) {
+      throw new IllegalArgumentException(
+          ConfigVocabulary.unsupported(
+              Constants.CANDIDATE_GENERATOR, rawValue, CandidateGenerator.class));
     }
-    throw new IllegalArgumentException(
-        String.format(
-            "Unsupported %s (%s). Supported values: %s, %s.",
-            Constants.CANDIDATE_GENERATOR,
-            rawValue,
-            CandidateGenerator.SPARS.getParamValue(),
-            CandidateGenerator.SPARS_MERGE.getParamValue()));
+    return generator;
   }
 
   /**
    * Which phases of a search a discarded high-popularity term is absent from. Which terms qualify
    * for discarding is governed by {@link Constants#MAX_FRACTION_IDS_PER_KEY}.
    */
-  public enum PopularTermDiscardScope {
+  public enum PopularTermDiscardScope implements ConfigVocabulary {
     /**
      * The term is absent from candidate generation and verification, so a search reports the
      * similarity between the records with it removed, and recall is exact under that measure.
      */
-    CANDIDATES_AND_VERIFICATION("candidates_and_verification"),
+    CANDIDATES_AND_VERIFICATION,
 
     /**
      * The term is absent from candidate generation only, so a search reports the similarity
      * between the records as supplied. Recall is not exact: pruning measures similarity without
      * the discarded terms, so a record within the threshold can be pruned before verification.
      */
-    CANDIDATES_ONLY("candidates_only");
-
-    private final String paramValue;
-
-    PopularTermDiscardScope(String paramValue) {
-      this.paramValue = paramValue;
-    }
-
-    public String getParamValue() {
-      return paramValue;
-    }
+    CANDIDATES_ONLY
   }
 
   /** Candidate-generation algorithm for the immutable inverted indexes. */
-  public enum CandidateGenerator {
-    SPARS("spars"),
-    SPARS_MERGE("spars_merge");
-
-    private final String paramValue;
-
-    CandidateGenerator(String paramValue) {
-      this.paramValue = paramValue;
-    }
-
-    public String getParamValue() {
-      return paramValue;
-    }
+  public enum CandidateGenerator implements ConfigVocabulary {
+    SPARS,
+    SPARS_MERGE
   }
 
   public static Builder builder() {

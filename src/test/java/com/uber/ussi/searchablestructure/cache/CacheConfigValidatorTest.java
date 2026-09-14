@@ -88,7 +88,7 @@ class CacheConfigValidatorTest {
         .minTermsAndValuesLength(0)
         .maxTermsAndValuesLength(4)
         .maxCacheSize(10)
-        .cacheType(CacheFactory.CacheType.INVERTED_TERM.getParamValue())
+        .cacheType(CacheType.INVERTED_TERM.getParamValue())
         .indexType("inverted_term")
         .comparatorType("jaccard")
         .comparatorNormalizerType("identity")

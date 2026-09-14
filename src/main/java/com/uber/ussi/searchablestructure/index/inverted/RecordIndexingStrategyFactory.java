@@ -3,7 +3,6 @@ package com.uber.ussi.searchablestructure.index.inverted;
 
 import com.uber.ussi.entity.termsandvalues.RecordType;
 import com.uber.ussi.error.IndexCreationError;
-import java.util.Locale;
 
 /** Factory pairing a record type with how an inverted index stores it. */
 final class RecordIndexingStrategyFactory {
@@ -24,8 +23,7 @@ final class RecordIndexingStrategyFactory {
       case ORDER_AGNOSTIC_DENSE ->
           throw new IndexCreationError(
               String.format(
-                  "No inverted index stores %s records.",
-                  recordType.name().toLowerCase(Locale.ROOT)));
+                  "No inverted index stores %s records.", recordType.getDisplayName()));
     };
   }
 }

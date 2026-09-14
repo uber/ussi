@@ -7,6 +7,7 @@ import com.carrotsearch.hppc.cursors.LongObjectCursor;
 import com.uber.ussi.comparator.Comparator;
 import com.uber.ussi.comparator.ComparatorConfigValidator;
 import com.uber.ussi.comparator.ComparatorFactory;
+import com.uber.ussi.config.ConfigVocabulary;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.meta.MetaFilter;
@@ -163,6 +164,13 @@ public abstract class Index implements SearchableStructure, AutoCloseable {
     if (rawValue == null || rawValue.trim().isEmpty()) {
       return MetadataFilteringStrategy.AUTO;
     }
-    return MetadataFilteringStrategy.fromIndexParam(rawValue);
+    MetadataFilteringStrategy strategy =
+        ConfigVocabulary.fromParamValue(MetadataFilteringStrategy.class, rawValue);
+    if (strategy == null) {
+      throw new IllegalArgumentException(
+          ConfigVocabulary.unsupported(
+              METADATA_FILTERING_STRATEGY, rawValue, MetadataFilteringStrategy.class));
+    }
+    return strategy;
   }
 }

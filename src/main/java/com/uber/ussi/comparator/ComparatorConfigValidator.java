@@ -2,16 +2,14 @@
 package com.uber.ussi.comparator;
 
 import com.uber.ussi.comparator.signaturegenerator.SignatureGeneratorFactory.SignatureGeneratorType;
-import com.uber.ussi.comparatornormalizer.ComparatorNormalizerFactory.COMPARATOR_NORMALIZER_TYPE;
+import com.uber.ussi.comparatornormalizer.ComparatorNormalizerType;
+import com.uber.ussi.config.ConfigVocabulary;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.config.NamespaceConfigValidator;
 import com.uber.ussi.error.ComparatorCreationError;
 import com.uber.ussi.utils.Constants;
-import java.util.Arrays;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /** Reports the comparator params that {@link ComparatorFactory} would reject. */
 public final class ComparatorConfigValidator implements NamespaceConfigValidator {
@@ -27,42 +25,42 @@ public final class ComparatorConfigValidator implements NamespaceConfigValidator
   public void collectViolations(NamespaceConfig config, List<String> violations) {
     collectComparatorNormalizerTypeViolations(config, violations);
     // Every check below asks what a named comparator supports, which an unknown name cannot answer.
-    if (!ComparatorFactory.isSupportedComparatorType(config.getComparatorType())) {
+    ComparatorType comparatorType =
+        ConfigVocabulary.fromParamValue(ComparatorType.class, config.getComparatorType());
+    if (comparatorType == null) {
       violations.add(
-          String.format("Unsupported comparator type (%s).", config.getComparatorType()));
+          ConfigVocabulary.unsupported(
+              "comparatorType", config.getComparatorType(), ComparatorType.class));
       return;
     }
-    collectSequenceDistanceTypeViolations(config, violations);
-    collectSignatureGeneratorTypeViolations(config, violations);
+    collectSequenceDistanceTypeViolations(config, comparatorType, violations);
+    collectSignatureGeneratorTypeViolations(config, comparatorType, violations);
   }
 
   /** A comparator scores through its normalizer, so an unknown one leaves no comparator. */
   private static void collectComparatorNormalizerTypeViolations(
       NamespaceConfig config, List<String> violations) {
     String rawType = config.getComparatorNormalizerType();
-    if (rawType.isEmpty() || COMPARATOR_NORMALIZER_TYPE.fromParamValue(rawType) != null) {
+    if (rawType.isEmpty()
+        || ConfigVocabulary.fromParamValue(ComparatorNormalizerType.class, rawType) != null) {
       return;
     }
     violations.add(
-        String.format(
-            "Unsupported comparatorNormalizerType (%s). Supported values: %s.",
-            rawType,
-            Arrays.stream(COMPARATOR_NORMALIZER_TYPE.values())
-                .map(COMPARATOR_NORMALIZER_TYPE::getParamValue)
-                .collect(Collectors.joining(", "))));
+        ConfigVocabulary.unsupported(
+            "comparatorNormalizerType", rawType, ComparatorNormalizerType.class));
   }
 
   private static void collectSequenceDistanceTypeViolations(
-      NamespaceConfig config, List<String> violations) {
+      NamespaceConfig config, ComparatorType comparatorType, List<String> violations) {
     String rawType = config.getComparatorParam(Constants.SEQUENCE_DISTANCE_TYPE);
     if (rawType == null || rawType.trim().isEmpty()) {
       return;
     }
-    if (!ComparatorFactory.isSequenceComparatorType(config.getComparatorType())) {
+    if (!comparatorType.comparesSequences()) {
       violations.add(
           String.format(
               "%s does not compare sequences, so it has no sequence distance type.",
-              config.getComparatorType().toUpperCase(Locale.ROOT)));
+              comparatorType.name()));
       return;
     }
     try {
@@ -73,26 +71,24 @@ public final class ComparatorConfigValidator implements NamespaceConfigValidator
   }
 
   private static void collectSignatureGeneratorTypeViolations(
-      NamespaceConfig config, List<String> violations) {
+      NamespaceConfig config, ComparatorType comparatorType, List<String> violations) {
     String rawType = config.getComparatorParam(Constants.SIGNATURE_GENERATOR_TYPE);
     if (rawType == null || rawType.trim().isEmpty()) {
       return;
     }
     Set<SignatureGeneratorType> supportedTypes =
-        ComparatorFactory.getSupportedSignatureGeneratorTypes(config.getComparatorType());
+        comparatorType.getSupportedSignatureGeneratorTypes();
     if (supportedTypes.isEmpty()) {
       violations.add(
-          String.format(
-              "%s does not support signature generation.",
-              config.getComparatorType().toUpperCase(Locale.ROOT)));
+          String.format("%s does not support signature generation.", comparatorType.name()));
       return;
     }
-    SignatureGeneratorType signatureGeneratorType;
-    try {
-      signatureGeneratorType =
-          SignatureGeneratorType.valueOf(rawType.trim().toUpperCase(Locale.ROOT));
-    } catch (IllegalArgumentException e) {
-      violations.add(String.format("Unsupported signature generator type (%s).", rawType));
+    SignatureGeneratorType signatureGeneratorType =
+        ConfigVocabulary.fromParamValue(SignatureGeneratorType.class, rawType);
+    if (signatureGeneratorType == null) {
+      violations.add(
+          ConfigVocabulary.unsupported(
+              Constants.SIGNATURE_GENERATOR_TYPE, rawType, SignatureGeneratorType.class));
       return;
     }
     if (!supportedTypes.contains(signatureGeneratorType)) {

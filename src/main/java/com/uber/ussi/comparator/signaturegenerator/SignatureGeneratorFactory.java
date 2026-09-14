@@ -1,12 +1,13 @@
 /* AUTHOR: Shijie Lu (shijie@uber.com), Shalini Kedlaya (skedlaya@uber.com), Ahmed Metwally (ametwally@uber.com) */
 package com.uber.ussi.comparator.signaturegenerator;
 
-import java.util.Locale;
+import com.uber.ussi.config.ConfigVocabulary;
+import com.uber.ussi.utils.Constants;
 import java.util.Objects;
 
 /** Creates the signature generators supported by the signature-keyed index types. */
 public final class SignatureGeneratorFactory {
-  public enum SignatureGeneratorType {
+  public enum SignatureGeneratorType implements ConfigVocabulary {
     I2CWS,
     ICWS,
     MINHASH,
@@ -18,12 +19,13 @@ public final class SignatureGeneratorFactory {
 
   public static SignatureGenerator createSignatureGenerator(String signatureGeneratorType) {
     Objects.requireNonNull(signatureGeneratorType, "signatureGeneratorType");
-    SignatureGeneratorType type;
-    try {
-      type = SignatureGeneratorType.valueOf(signatureGeneratorType.trim().toUpperCase(Locale.ROOT));
-    } catch (IllegalArgumentException e) {
+    SignatureGeneratorType type =
+        ConfigVocabulary.fromParamValue(SignatureGeneratorType.class, signatureGeneratorType);
+    if (type == null) {
       throw new IllegalArgumentException(
-          String.format("Unsupported signature generator type (%s).", signatureGeneratorType), e);
+          ConfigVocabulary.unsupported(
+              Constants.SIGNATURE_GENERATOR_TYPE, signatureGeneratorType,
+              SignatureGeneratorType.class));
     }
     return createSignatureGenerator(type);
   }

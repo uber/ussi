@@ -1,11 +1,12 @@
 package com.uber.ussi.comparator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.uber.ussi.comparator.sequencedistance.SequenceDistance;
+import com.uber.ussi.config.ConfigVocabulary;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
@@ -16,6 +17,8 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class ComparatorConfigValidatorTest {
+  private static final String UNSUPPORTED_COMPARATOR_TYPE =
+      "Unsupported comparatorType (cosine). Supported values: gld, jaccard, l2, ngld, ruzicka.";
 
   private static final ValidationCase[] VALIDATION_CASES = {
     new ValidationCase("no signature param", builder -> builder, true, null),
@@ -42,7 +45,7 @@ class ComparatorConfigValidatorTest {
         "unknown comparator type",
         builder -> builder.comparatorType("cosine"),
         false,
-        "Unsupported comparator type (cosine)."),
+        UNSUPPORTED_COMPARATOR_TYPE),
     // Only the unknown name is reported, not what it cannot support.
     new ValidationCase(
         "unknown comparator type carrying a signature param",
@@ -51,7 +54,7 @@ class ComparatorConfigValidatorTest {
                 .comparatorType("cosine")
                 .comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR_TYPE, "minhash")),
         false,
-        "Unsupported comparator type (cosine)."),
+        UNSUPPORTED_COMPARATOR_TYPE),
     new ValidationCase(
         "sequence distance type for ngld",
         builder ->
@@ -105,7 +108,7 @@ class ComparatorConfigValidatorTest {
         "unsupported comparator normalizer type on an unknown comparator",
         builder -> builder.comparatorType("cosine").comparatorNormalizerType("softmax"),
         false,
-        "Unsupported comparator type (cosine)."),
+        UNSUPPORTED_COMPARATOR_TYPE),
   };
 
   @Test
@@ -144,10 +147,12 @@ class ComparatorConfigValidatorTest {
 
   /** A config carries whatever string the caller set, including none at all. */
   @Test
-  void aBlankOrMissingComparatorTypeIsNotASupportedType() {
-    assertFalse(ComparatorFactory.isSupportedComparatorType(null));
-    assertFalse(ComparatorFactory.isSupportedComparatorType(""));
-    assertTrue(ComparatorFactory.isSupportedComparatorType(" Jaccard "));
+  void aBlankOrMissingComparatorTypeNamesNoComparator() {
+    assertNull(ConfigVocabulary.fromParamValue(ComparatorType.class, null));
+    assertNull(ConfigVocabulary.fromParamValue(ComparatorType.class, ""));
+    assertEquals(
+        ComparatorType.JACCARD,
+        ConfigVocabulary.fromParamValue(ComparatorType.class, " Jaccard "));
   }
 
   private static NamespaceConfig.Builder validBuilder() {

@@ -122,7 +122,7 @@ abstract class BaseInvertedIndex extends Index {
         signatureKeyingStrategy, "This index does not key its lists by signatures.");
   }
 
-  protected abstract double getMinPrefixSum(
+  protected abstract double getMaxPrefixSum(
       double keysUniValue, double recordUniValue, double minSimilarity);
 
   /** Returns each key of {@code indexedRecord} with the Uni value it contributes. */
@@ -617,9 +617,9 @@ abstract class BaseInvertedIndex extends Index {
     }
 
     @Override
-    public double getMinPrefixSum(
+    public double getMaxPrefixSum(
         double keysUniValue, double recordUniValue, double minSimilarity) {
-      return BaseInvertedIndex.this.getMinPrefixSum(
+      return BaseInvertedIndex.this.getMaxPrefixSum(
           keysUniValue, recordUniValue, minSimilarity);
     }
 

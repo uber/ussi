@@ -64,11 +64,15 @@ final class SignatureKeyingStrategy {
    * Returns the prefix of a record's signatures that has to generate candidates: the Uni value
    * over signatures that a qualifying candidate may leave unshared, out of {@code numSignatures}.
    *
-   * <p>A generator only estimates the similarity its signatures collide at, so the smallest share
-   * a qualifying candidate can collide on is relaxed by the generator's safety margin first. That
-   * lengthens the prefix, buying back the recall the estimate would otherwise cost.
+   * <p>Signature keys are always bounded by a share, every signature standing for one draw, so
+   * this is the share shape over a Uni value of {@code numSignatures}. Two things distinguish it
+   * from the same shape over terms. A generator only estimates the similarity its signatures
+   * collide at, so the share is relaxed by its safety margin first, which lengthens the prefix and
+   * buys back the recall the estimate would otherwise cost. And a prefix is rounded up to whole
+   * signatures, since half a draw cannot be visited; rounding cannot overrun {@code numSignatures}
+   * because the shape caps the prefix at the Uni value it is given.
    */
-  double getMinPrefixSumForSignatures(
+  double getMaxPrefixSumForSignatures(
       int numSignatures, double recordUniValue, double minSimilarity) {
     if (numSignatures < 0) {
       throw new IllegalArgumentException("numSignatures must be at least 0.");
@@ -81,8 +85,8 @@ final class SignatureKeyingStrategy {
         signatureBound.getMinSharedSignatureFraction(
                 recordUniValue, comparator.fromSimilarity(minSimilarity))
             - signatureGenerator.getComparisonValueApproximationSafetyMargin();
-    double unsharedFraction = 1.0 - Math.min(1.0, Math.max(0.0, minSharedSignatureFraction));
-    return Math.min(numSignatures, Math.ceil(numSignatures * unsharedFraction))
+    return Math.ceil(
+            Comparator.maxPrefixSumFromSharedFraction(numSignatures, minSharedSignatureFraction))
         + MathUtils.EPSILON_12;
   }
 }

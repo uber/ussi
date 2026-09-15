@@ -396,10 +396,10 @@ class SequenceComparatorTest {
       BaseSequenceComparator comparator =
           (BaseSequenceComparator) createComparator(comparatorType, "reciprocal", "levenshtein");
 
-      assertEquals(0.0, comparator.getMinPrefixSumForTermsAndValuesInternal(4.0, 0.0), EPSILON_9);
+      assertEquals(0.0, comparator.getMaxPrefixSumForTermsAndValuesInternal(4.0, 0.0), EPSILON_9);
       assertThrows(
           IllegalArgumentException.class,
-          () -> comparator.getMinPrefixSumForTermsAndValuesInternal(4.0, -1.0),
+          () -> comparator.getMaxPrefixSumForTermsAndValuesInternal(4.0, -1.0),
           comparatorType);
     }
   }

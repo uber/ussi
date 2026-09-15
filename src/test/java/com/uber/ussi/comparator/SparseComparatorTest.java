@@ -154,7 +154,7 @@ class SparseComparatorTest {
     Comparator comparator = comparator("jaccard");
 
     assertEquals(
-        2.0 + MathUtils.EPSILON_12, comparator.getMinPrefixSumForTermsAndValues(4.0, 0.5), 0.0);
+        2.0 + MathUtils.EPSILON_12, comparator.getMaxPrefixSumForTermsAndValues(4.0, 0.5), 0.0);
   }
 
   /**
@@ -224,7 +224,7 @@ class SparseComparatorTest {
 
     assertThrows(
         IllegalArgumentException.class,
-        () -> comparator.getMinPrefixSumForTermsAndValuesInternal(1.0, -0.1));
+        () -> comparator.getMaxPrefixSumForTermsAndValuesInternal(1.0, -0.1));
   }
 
   /** No magnitude means an empty union, which no ratio is defined over, so they are identical. */

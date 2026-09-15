@@ -7,21 +7,15 @@ import java.util.Objects;
 
 /** Generates deterministic keys whose collisions estimate record similarity. */
 public abstract class SignatureGenerator implements Serializable {
-  private final boolean weighted;
   private final double comparisonValueApproximationSafetyMargin;
 
-  protected SignatureGenerator(boolean weighted, double comparisonValueApproximationSafetyMargin) {
+  protected SignatureGenerator(double comparisonValueApproximationSafetyMargin) {
     if (comparisonValueApproximationSafetyMargin < 0.0
         || comparisonValueApproximationSafetyMargin > 1.0) {
       throw new IllegalArgumentException(
           "comparisonValueApproximationSafetyMargin must be in [0.0, 1.0].");
     }
-    this.weighted = weighted;
     this.comparisonValueApproximationSafetyMargin = comparisonValueApproximationSafetyMargin;
-  }
-
-  public final boolean isWeighted() {
-    return weighted;
   }
 
   public final double getComparisonValueApproximationSafetyMargin() {

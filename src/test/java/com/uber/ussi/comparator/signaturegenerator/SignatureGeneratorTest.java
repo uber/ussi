@@ -18,11 +18,11 @@ class SignatureGeneratorTest {
 
   @Test
   void factoryCreatesEverySupportedGenerator() {
-    assertGenerator(SignatureGeneratorType.MINHASH, false, 0.1);
-    assertGenerator(SignatureGeneratorType.I2CWS, true, 0.1);
-    assertGenerator(SignatureGeneratorType.ICWS, true, 0.1);
-    assertGenerator(SignatureGeneratorType.PCWS, true, 0.15);
-    assertGenerator(SignatureGeneratorType.SCWS, true, 0.1);
+    assertGenerator(SignatureGeneratorType.MINHASH, 0.1);
+    assertGenerator(SignatureGeneratorType.I2CWS, 0.1);
+    assertGenerator(SignatureGeneratorType.ICWS, 0.1);
+    assertGenerator(SignatureGeneratorType.PCWS, 0.15);
+    assertGenerator(SignatureGeneratorType.SCWS, 0.1);
     assertTrue(
         SignatureGeneratorFactory.createSignatureGenerator("minhash")
             instanceof MinHashSignatureGenerator);
@@ -124,10 +124,8 @@ class SignatureGeneratorTest {
     assertNotEquals(0L, first.longHashCode());
   }
 
-  private static void assertGenerator(
-      SignatureGeneratorType type, boolean weighted, double safetyMargin) {
+  private static void assertGenerator(SignatureGeneratorType type, double safetyMargin) {
     SignatureGenerator generator = SignatureGeneratorFactory.createSignatureGenerator(type);
-    assertEquals(weighted, generator.isWeighted());
     assertEquals(safetyMargin, generator.getComparisonValueApproximationSafetyMargin(), 0.0);
   }
 
@@ -160,7 +158,7 @@ class SignatureGeneratorTest {
 
   private static final class TestSignatureGenerator extends SignatureGenerator {
     private TestSignatureGenerator(double safetyMargin) {
-      super(/* weighted */ false, safetyMargin);
+      super(safetyMargin);
     }
 
     @Override

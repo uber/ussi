@@ -81,11 +81,6 @@ public final class ScanIndex extends Index {
     return metadataFilteredSearchExecutor.getResolvedMetadataFilteringStrategyForLastSearch();
   }
 
-  @Override
-  protected boolean supportsInFiltering() {
-    return true;
-  }
-
   private List<RowNumAndSimilarity> searchAllRows(
       LongTermsAndValues requestTermsAndValues,
       @Nullable MetaFilter metadataFilter,

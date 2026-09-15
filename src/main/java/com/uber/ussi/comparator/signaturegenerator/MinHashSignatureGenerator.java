@@ -10,7 +10,7 @@ final class MinHashSignatureGenerator extends SignatureGenerator {
   private static final int PRIME_MERSENNE_8 = (1 << 31) - 1;
 
   MinHashSignatureGenerator() {
-    super(/* weighted */ false, /* comparisonValueApproximationSafetyMargin */ 0.1);
+    super(/* comparisonValueApproximationSafetyMargin */ 0.1);
   }
 
   @Override

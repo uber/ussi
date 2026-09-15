@@ -29,7 +29,6 @@ class ScanIndexTest {
     ScanIndex index = new ScanIndex(config(), rows(), metadata());
 
     assertEquals(3, index.size());
-    assertTrue(index.supportsInFiltering());
     assertTrue(index.getAll().containsKey(10));
     assertTrue(index.getAll().containsKey(11));
     assertTrue(index.getAll().containsKey(12));

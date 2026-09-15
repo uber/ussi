@@ -23,9 +23,11 @@ final class OpenBlasMatrixDotProductScorer implements MatrixDotProductScorer {
   static IntSupplier blasThreadCountSupplier = openblas_nolapack::blas_get_num_threads;
   static IntConsumer blasThreadCountSetter = openblas_nolapack::blas_set_num_threads;
 
+  // One entry per native binary carried as a runtime dependency; isAvailable still probes the load.
   private static final boolean IS_SUPPORTED_PLATFORM =
       (Utils.isRunningOnLinux() && Utils.isRunningOnArm())
           || (Utils.isRunningOnLinux() && Utils.isRunningOnX86())
+          || (Utils.isRunningOnMacOs() && Utils.isRunningOnArm())
           || (Utils.isRunningOnMacOs() && Utils.isRunningOnX86());
   private static final Object OPENBLAS_GEMV_LOCK = new Object();
   private static final int GEMV_NUM_THREADS =
@@ -50,6 +52,11 @@ final class OpenBlasMatrixDotProductScorer implements MatrixDotProductScorer {
 
   static boolean isAvailable() {
     return isAvailable(IS_SUPPORTED_PLATFORM, blasNativeLoadProbe);
+  }
+
+  /** Whether a native binary is carried for this platform, which is short of it having loaded. */
+  static boolean isSupportedPlatform() {
+    return IS_SUPPORTED_PLATFORM;
   }
 
   static boolean isAvailable(boolean isSupportedPlatform, Runnable nativeLoadProbe) {

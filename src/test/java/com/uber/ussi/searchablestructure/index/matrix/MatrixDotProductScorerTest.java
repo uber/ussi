@@ -81,9 +81,30 @@ class MatrixDotProductScorerTest {
     java.util.Random random = new java.util.Random(seed);
     float[] rowMajorValues = new float[numRows * dimension];
     for (int i = 0; i < rowMajorValues.length; ++i) {
-      rowMajorValues[i] = (random.nextFloat() - 0.5f) / dimension;
+      rowMajorValues[i] = random.nextFloat() - 0.5f;
     }
+    normalizeRows(rowMajorValues, numRows, dimension);
     return new EmbeddingData(rowMajorValues, numRows, dimension);
+  }
+
+  /**
+   * Embeddings of this kind arrive unit-normalized, and the scale matters to what the comparison
+   * above can catch: a row against itself then scores 1, where {@link #DELTA} is a real constraint.
+   * Values small enough to keep every dot product well under the tolerance would agree whatever the
+   * kernels computed.
+   */
+  private static void normalizeRows(float[] rowMajorValues, int numRows, int dimension) {
+    for (int row = 0; row < numRows; ++row) {
+      int offset = row * dimension;
+      double squaredNorm = 0.0d;
+      for (int i = 0; i < dimension; ++i) {
+        squaredNorm += (double) rowMajorValues[offset + i] * rowMajorValues[offset + i];
+      }
+      float norm = (float) Math.sqrt(squaredNorm);
+      for (int i = 0; i < dimension; ++i) {
+        rowMajorValues[offset + i] /= norm;
+      }
+    }
   }
 
   private static final class EmbeddingData {

@@ -28,9 +28,15 @@ java_library(
     plugins = [":lombok_processor"],
     visibility = ["//visibility:public"],
     runtime_deps = [
+        # Native javacpp binaries, which every openblas pointer allocation needs first.
+        "@maven//:org_bytedeco_javacpp_linux_arm64",
+        "@maven//:org_bytedeco_javacpp_linux_x86_64",
+        "@maven//:org_bytedeco_javacpp_macosx_arm64",
+        "@maven//:org_bytedeco_javacpp_macosx_x86_64",
         # Native openblas binaries, loaded by javacpp at runtime.
         "@maven//:org_bytedeco_openblas_linux_arm64",
         "@maven//:org_bytedeco_openblas_linux_x86_64",
+        "@maven//:org_bytedeco_openblas_macosx_arm64",
         "@maven//:org_bytedeco_openblas_macosx_x86_64",
     ],
     deps = [

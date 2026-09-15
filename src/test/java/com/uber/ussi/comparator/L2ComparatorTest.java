@@ -31,6 +31,42 @@ class L2ComparatorTest {
     return LongTermsAndValuesTestFactory.create(terms, values, comparator.computeUniValue(values));
   }
 
+  /**
+   * A structure that multiplies a matrix holds no record to compare, only a dot product and what
+   * it precomputed per row, so the similarity it derives from those has to be the one comparing
+   * the records themselves gives.
+   */
+  @Test
+  void similarityFromDotProductAgreesWithComparingTheRecords() {
+    // The records are deliberately not orthogonal, so the dot product's own weight is exercised.
+    float[] values1 = {3f, 1f, -2f, 0.5f};
+    float[] values2 = {1f, 2f, 2f, 4f};
+    double uniValue1 = comparator.computeUniValue(values1);
+    double uniValue2 = comparator.computeUniValue(values2);
+    double dotProduct = 0.0;
+    for (int i = 0; i < values1.length; ++i) {
+      dotProduct += (double) values1[i] * values2[i];
+    }
+
+    Assertions.assertEquals(
+        comparator.getSimilarity(
+            denseVector(values1, uniValue1), denseVector(values2, uniValue2), 0.0),
+        comparator.similarityFromDotProduct(dotProduct, uniValue1, uniValue2),
+        MathUtils.EPSILON_9);
+  }
+
+  /** A record compared with itself is at no distance, whatever round-off the expansion leaves. */
+  @Test
+  void similarityFromDotProductScoresARecordAgainstItselfAsIdentical() {
+    float[] values = {3f, 1f, -2f, 0.5f};
+    double uniValue = comparator.computeUniValue(values);
+
+    Assertions.assertEquals(
+        1.0,
+        comparator.similarityFromDotProduct(uniValue, uniValue, uniValue),
+        MathUtils.EPSILON_9);
+  }
+
   @Test
   void mayPassPositionFilteringInternalRejectsInvalidPartialUni1() {
     assertThrows(

@@ -201,7 +201,7 @@ class SequenceComparatorTest {
   void sequenceComparatorsAcceptWeightedGeneratorsOnly() {
     for (String comparatorType : List.of("gld", "ngld")) {
       assertInstanceOf(
-          SignatureBounded.class,
+          KeyShareBounded.class,
           ComparatorFactory.createComparator(
               comparatorType,
               Map.of(ConfigKeys.SIGNATURE_GENERATOR, "icws"),
@@ -228,28 +228,28 @@ class SequenceComparatorTest {
    * similarity at {@code (1 - u) / (1 + u)}, which is the rate the signatures collide at.
    */
   @Test
-  void theSharedSignatureBoundFollowsFromTheMultisetBound() {
+  void theSharedKeyBoundFollowsFromTheMultisetBound() {
     // A normalized distance is already a share, so the budget gives u without any length: under
     // levenshtein u = 2 * 0.2 / (2 - 0.2) = 2/9, leaving (1 - 2/9) / (1 + 2/9) = 7/11.
     BaseSequenceComparator ngld =
         (BaseSequenceComparator) createComparator("ngld", "complement", "levenshtein");
-    assertEquals(7.0 / 11.0, ngld.getMinSharedSignatureFraction(6.0, 0.2), EPSILON_9);
+    assertEquals(7.0 / 11.0, ngld.getMinSharedKeyFraction(6.0, 0.2), EPSILON_9);
 
     // An LCS edit moves one element rather than two, so the bound collapses to 1 - the budget,
     // the same shape Ruzicka's threshold already has.
     BaseSequenceComparator lcs =
         (BaseSequenceComparator) createComparator("ngld", "complement", "lcs");
-    assertEquals(0.8, lcs.getMinSharedSignatureFraction(6.0, 0.2), EPSILON_9);
+    assertEquals(0.8, lcs.getMinSharedKeyFraction(6.0, 0.2), EPSILON_9);
 
     // An edit count is not a share, so it takes the shortest candidate length filtering admits:
     // a 10-element query within 1 edit pairs with 9 elements at least, so u = 2 * 1 / 19.
     BaseSequenceComparator gld =
         (BaseSequenceComparator) createComparator("gld", "reciprocal", "levenshtein");
-    assertEquals(17.0 / 21.0, gld.getMinSharedSignatureFraction(10.0, 1.0), EPSILON_9);
+    assertEquals(17.0 / 21.0, gld.getMinSharedKeyFraction(10.0, 1.0), EPSILON_9);
 
     // A budget that outruns the query guarantees no overlap at all.
-    assertEquals(0.0, gld.getMinSharedSignatureFraction(10.0, 40.0), EPSILON_9);
-    assertEquals(0.0, ngld.getMinSharedSignatureFraction(6.0, 1.0), EPSILON_9);
+    assertEquals(0.0, gld.getMinSharedKeyFraction(10.0, 40.0), EPSILON_9);
+    assertEquals(0.0, ngld.getMinSharedKeyFraction(6.0, 1.0), EPSILON_9);
   }
 
   @Test

@@ -153,8 +153,8 @@ class ComparatorTest {
   }
 
   @Test
-  void l2DoesNotExposeSignatureCapability() {
-    assertTrue(!(l2Comparator() instanceof SignatureBounded));
+  void l2BoundsNoShareOfItsKeys() {
+    assertTrue(!(l2Comparator() instanceof KeyShareBounded));
   }
 
   /**
@@ -173,7 +173,7 @@ class ComparatorTest {
   void aMeasureCapsThePrefixByAShareOfItsKeysOrByCountingThem() {
     for (String comparatorType : List.of("jaccard", "ruzicka", "ngld")) {
       Comparator comparator = comparator(comparatorType);
-      SignatureBounded bounded = (SignatureBounded) comparator;
+      KeyShareBounded bounded = (KeyShareBounded) comparator;
       for (double comparatorValue : List.of(0.0, 0.05, 0.25, 0.5, 0.9, 1.0)) {
         for (double uniValue : List.of(1.0, 5.0, 17.0, 1000.0)) {
           String where = comparatorType + " at " + comparatorValue + " over " + uniValue;
@@ -182,7 +182,7 @@ class ComparatorTest {
 
           assertEquals(
               Comparator.maxPrefixSumFromSharedFraction(
-                  uniValue, bounded.getMinSharedSignatureFraction(uniValue, comparatorValue)),
+                  uniValue, bounded.getMinSharedKeyFraction(uniValue, comparatorValue)),
               cap,
               EPSILON_9,
               where);

@@ -12,7 +12,7 @@ import java.util.Set;
  * Shared Jaccard/Ruzicka implementation with length and position filtering. A negatively weighted
  * element is treated as the corresponding negative element with a positive weight.
  */
-abstract class BaseRuzickaComparator extends Comparator implements SignatureBounded {
+abstract class BaseRuzickaComparator extends Comparator implements KeyShareBounded {
 
   BaseRuzickaComparator(ComparatorNormalizer comparatorNormalizer) {
     super(comparatorNormalizer);
@@ -121,15 +121,15 @@ abstract class BaseRuzickaComparator extends Comparator implements SignatureBoun
   protected double getMaxPrefixSumForTermsAndValuesInternal(
       double uniValue, double comparatorValue) {
     return maxPrefixSumFromSharedFraction(
-        uniValue, getMinSharedSignatureFraction(uniValue, comparatorValue));
+        uniValue, getMinSharedKeyFraction(uniValue, comparatorValue));
   }
 
   /**
-   * These measures are themselves the multiset similarity the signatures collide at, so the
-   * threshold needs no conversion and the record's own Uni value says nothing extra.
+   * These measures are themselves the multiset similarity the keys are shared at, so the threshold
+   * needs no conversion and the record's own Uni value says nothing extra.
    */
   @Override
-  public double getMinSharedSignatureFraction(double recordUniValue, double comparatorValue) {
+  public double getMinSharedKeyFraction(double recordUniValue, double comparatorValue) {
     if (comparatorValue < 0.0) {
       throw new IllegalArgumentException("comparatorValue must be at least 0.0.");
     }

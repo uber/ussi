@@ -6,7 +6,7 @@ package com.uber.ussi.entity.termsandvalues;
  * it reads and a searchable structure declares which one it stores, so the two are paired by
  * agreeing on a type. Sparse and dense name how a record's coordinates are addressed, by its own
  * terms or by position, not how many are populated. Both are order-agnostic, and a sequence is
- * the only type whose element order carries meaning.
+ * the only type whose term order carries meaning.
  */
 public enum RecordType {
   /** No terms, and the values are a vector of a fixed dimension. */
@@ -15,7 +15,7 @@ public enum RecordType {
   /** Terms in ascending order without repeats, and one value per term. */
   SPARSE("sparse"),
 
-  /** Terms in the order the elements arrived, repeats included, and no values. */
+  /** Terms in the order they arrived, repeats included, and no values. */
   SEQUENCE("sequence");
 
   private final String displayName;

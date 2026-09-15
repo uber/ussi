@@ -12,7 +12,7 @@ import com.uber.ussi.searchablestructure.index.IndexType;
  * it.
  *
  * <p>The record type decides what those terms are: a sparse record's own terms and values, whose
- * conjunction is the similarity exactly; or a sequence's distinct elements and their counts, which
+ * conjunction is the similarity exactly; or a sequence's distinct terms and their counts, which
  * only bound it. See {@link RecordIndexingStrategy}.
  */
 public final class TermIndex extends BaseInvertedIndex {

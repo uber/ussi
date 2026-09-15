@@ -29,7 +29,7 @@ class ComparatorTypeTest {
   /**
    * A generator has to collide at the similarity the comparator's own threshold bounds. Jaccard
    * reads a record's distinct terms, so an unweighted generator serves it; the rest read counts,
-   * whether a sparse record's values or how often a sequence repeats an element.
+   * whether a sparse record's values or how often a sequence repeats a term.
    */
   @Test
   void supportedSignatureGeneratorTypesAreTheOnesTheComparatorAccepts() {

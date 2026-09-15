@@ -82,7 +82,7 @@ class IndexConfigValidatorTest {
                 .comparatorType(ComparatorType.RUZICKA.getParamValue())
                 .indexParams(Map.of(ConfigKeys.CANDIDATE_GENERATOR, sparsMerge())),
         true),
-    // A sequence has no values, so only the term structure, which keys the element multiset, and
+    // A sequence has no values, so only the term structure, which keys the term multiset, and
     // the scan structure, which never reads terms, can hold one.
     new ValidationCase(
         "ngld on the term structure",
@@ -105,9 +105,9 @@ class IndexConfigValidatorTest {
                 .indexType(IndexType.INVERTED_SIGNATURE.getParamValue())
                 .comparatorType(ComparatorType.NGLD.getParamValue()),
         false),
-    // Discarding a popular element drops it from the sequences too, so the pairing stays valid.
+    // Discarding a popular term drops it from the sequences too, so the pairing stays valid.
     new ValidationCase(
-        "the term structure discarding popular elements",
+        "the term structure discarding popular terms",
         builder ->
             builder
                 .indexType(IndexType.INVERTED_TERM.getParamValue())
@@ -115,7 +115,7 @@ class IndexConfigValidatorTest {
                 .indexParams(Map.of(ConfigKeys.MAX_FRACTION_IDS_PER_TERM, "0.05")),
         true),
     new ValidationCase(
-        "the term structure keeping every element",
+        "the term structure keeping every term",
         builder ->
             builder
                 .indexType(IndexType.INVERTED_TERM.getParamValue())

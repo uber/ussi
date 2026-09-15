@@ -27,13 +27,13 @@ public enum IndexType implements ConfigVocabulary {
 
   /**
    * Inverted lists keyed by the terms of the record itself: a sparse record's own terms carrying
-   * its own values, or the distinct elements of a sequence carrying how often each occurs.
+   * its own values, or the distinct terms of a sequence carrying how often each occurs.
    */
   INVERTED_TERM(RecordType.SEQUENCE, RecordType.SPARSE),
 
   /**
    * Inverted lists keyed by similarity-preserving signatures, which only a comparator with a
-   * configured signature generator can produce. A sequence's signatures are drawn from its element
+   * configured signature generator can produce. A sequence's signatures are drawn from its term
    * multiset, the same form the term-keyed lists index it as.
    */
   INVERTED_SIGNATURE(RecordType.SEQUENCE, RecordType.SPARSE),
@@ -88,7 +88,7 @@ public enum IndexType implements ConfigVocabulary {
   /**
    * Returns whether the conjunction a merge accumulates is a candidate's similarity rather than a
    * bound on it. It is only when the lists carry a record's own terms and values; a sequence's
-   * elements are keyed without the order its similarity depends on, so they only bound it.
+   * terms are keyed without the order its similarity depends on, so they only bound it.
    */
   public boolean conjunctionDeterminesSimilarity(RecordType recordType) {
     return this == INVERTED_TERM && recordType == RecordType.SPARSE;

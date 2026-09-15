@@ -21,7 +21,7 @@ import java.util.Random;
 import org.junit.jupiter.api.Test;
 
 /**
- * Sequences reaching the signature-keyed lists. A sequence's signatures are drawn from its element
+ * Sequences reaching the signature-keyed lists. A sequence's signatures are drawn from its term
  * multiset, so candidates come from the multiset bound the term-keyed lists already use, only
  * estimated rather than computed; the edit distance still verifies order on every survivor.
  */
@@ -95,7 +95,7 @@ class SignatureIndexOnSequencesTest {
         LongTermsAndValues query = query(random, bases, trial);
         for (float minSimilarity : MIN_SIMILARITIES.get(comparatorType)) {
           List<Long> qualifying =
-              rowNumsSharingAnElement(
+              rowNumsSharingAnTerm(
                   bruteForce.getSimilarRowNums(minSimilarity, query, null), rows, query);
           LongHashSet found =
               LongHashSet.from(
@@ -119,7 +119,7 @@ class SignatureIndexOnSequencesTest {
     }
   }
 
-  /** An exact match shares every element at the same count, so its signatures all collide. */
+  /** An exact match shares every term at the same count, so its signatures all collide. */
   @Test
   void anIdenticalSequenceIsFoundThroughItsSignatures() {
     for (String comparatorType : COMPARATOR_TYPES) {
@@ -137,11 +137,11 @@ class SignatureIndexOnSequencesTest {
   }
 
   /**
-   * The hybrid structure routes by element count, so a corpus straddling the cutoff exercises both
+   * The hybrid structure routes by term count, so a corpus straddling the cutoff exercises both
    * halves at once and every row still has to come back scored exactly.
    */
   @Test
-  void theHybridStructureRoutesSequencesByElementCount() {
+  void theHybridStructureRoutesSequencesByTermCount() {
     Random random = new Random(31_337L);
     long[] shortBase = sequence(random, 20).getTerms();
     long[] longBase = sequence(random, SignatureIndex.NUM_SIGNATURES_PER_ROW + 40).getTerms();
@@ -185,16 +185,16 @@ class SignatureIndexOnSequencesTest {
   }
 
   /** Disjoint multisets draw no shared sample, so the lists cannot reach those rows at all. */
-  private static List<Long> rowNumsSharingAnElement(
+  private static List<Long> rowNumsSharingAnTerm(
       List<RowNumAndSimilarity> results,
       LongObjectHashMap<LongTermsAndValues> rows,
       LongTermsAndValues query) {
-    LongHashSet queryElements = LongHashSet.from(query.getTerms());
+    LongHashSet queryTerms = LongHashSet.from(query.getTerms());
     List<Long> rowNums = new ArrayList<>(results.size());
     for (RowNumAndSimilarity result : results) {
       LongTermsAndValues row = rows.get(result.getRowNum());
       for (int index = 0; index < row.termsLength(); ++index) {
-        if (queryElements.contains(row.getTerm(index))) {
+        if (queryTerms.contains(row.getTerm(index))) {
           rowNums.add(result.getRowNum());
           break;
         }
@@ -233,31 +233,31 @@ class SignatureIndexOnSequencesTest {
 
   /** Applies {@code numEdits} substitutions, insertions, and deletions at random positions. */
   private static LongTermsAndValues perturbed(Random random, long[] base, int numEdits) {
-    List<Long> elements = new ArrayList<>(base.length + numEdits);
-    for (long element : base) {
-      elements.add(element);
+    List<Long> terms = new ArrayList<>(base.length + numEdits);
+    for (long term : base) {
+      terms.add(term);
     }
     for (int edit = 0; edit < numEdits; ++edit) {
-      int position = random.nextInt(elements.size());
+      int position = random.nextInt(terms.size());
       switch (random.nextInt(3)) {
-        case 0 -> elements.set(position, (long) random.nextInt(ALPHABET_SIZE));
-        case 1 -> elements.add(position, (long) random.nextInt(ALPHABET_SIZE));
-        default -> elements.remove(position);
+        case 0 -> terms.set(position, (long) random.nextInt(ALPHABET_SIZE));
+        case 1 -> terms.add(position, (long) random.nextInt(ALPHABET_SIZE));
+        default -> terms.remove(position);
       }
     }
-    long[] perturbed = new long[elements.size()];
+    long[] perturbed = new long[terms.size()];
     for (int index = 0; index < perturbed.length; ++index) {
-      perturbed[index] = elements.get(index);
+      perturbed[index] = terms.get(index);
     }
     return LongTermsAndValuesTestFactory.create(perturbed, NO_VALUES, perturbed.length);
   }
 
   private static LongTermsAndValues sequence(Random random, int length) {
-    long[] elements = new long[length];
-    for (int index = 0; index < elements.length; ++index) {
-      elements[index] = random.nextInt(ALPHABET_SIZE);
+    long[] terms = new long[length];
+    for (int index = 0; index < terms.length; ++index) {
+      terms[index] = random.nextInt(ALPHABET_SIZE);
     }
-    return LongTermsAndValuesTestFactory.create(elements, NO_VALUES, elements.length);
+    return LongTermsAndValuesTestFactory.create(terms, NO_VALUES, terms.length);
   }
 
   private static NamespaceConfig config(String comparatorType) {

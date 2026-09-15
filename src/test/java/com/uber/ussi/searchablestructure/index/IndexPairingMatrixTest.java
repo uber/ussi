@@ -363,13 +363,13 @@ class IndexPairingMatrixTest {
         : sparseRecord(random, comparator, length);
   }
 
-  /** A sequence carries its elements in order, with repeats, and holds no values. */
+  /** A sequence carries its terms in order, with repeats, and holds no values. */
   private static LongTermsAndValues sequence(Random random, int length) {
-    long[] elements = new long[length];
-    for (int index = 0; index < elements.length; ++index) {
-      elements[index] = random.nextInt(16);
+    long[] terms = new long[length];
+    for (int index = 0; index < terms.length; ++index) {
+      terms[index] = random.nextInt(16);
     }
-    return LongTermsAndValuesTestFactory.create(elements, NO_VALUES, elements.length);
+    return LongTermsAndValuesTestFactory.create(terms, NO_VALUES, terms.length);
   }
 
   /**

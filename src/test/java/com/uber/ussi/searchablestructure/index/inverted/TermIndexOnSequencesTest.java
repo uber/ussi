@@ -33,9 +33,9 @@ class TermIndexOnSequencesTest {
   private static final float[] MIN_SIMILARITIES = {0.0f, 0.25f, 0.5f, 0.75f, 0.9f};
 
   @Test
-  void theInvertedListsAreKeyedByDistinctElementsWhileScoringKeepsTheSequences() {
+  void theInvertedListsAreKeyedByDistinctTermsWhileScoringKeepsTheSequences() {
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
-    // Element 1 occurs three times in one row, so it keys one list entry, not three.
+    // Term 1 occurs three times in one row, so it keys one list entry, not three.
     rows.put(7, sequence(1, 1, 2, 1));
     rows.put(8, sequence(2, 3));
 
@@ -69,7 +69,7 @@ class TermIndexOnSequencesTest {
         LongTermsAndValues query = randomSequence(random);
         for (float minSimilarity : MIN_SIMILARITIES) {
           List<RowNumAndSimilarity> expected =
-              restrictToRowsSharingAnElement(
+              restrictToRowsSharingAnTerm(
                   bruteForce.getSimilarRowNums(minSimilarity, query, null), rows, query);
 
           assertEquivalent(
@@ -96,7 +96,7 @@ class TermIndexOnSequencesTest {
         LongTermsAndValues query = randomSequence(random);
         int k = 1 + random.nextInt(5);
         List<RowNumAndSimilarity> expected =
-            restrictToRowsSharingAnElement(
+            restrictToRowsSharingAnTerm(
                 bruteForce.getSimilarRowNums(0.0f, query, null), rows, query);
         expected.sort(RowNumAndSimilarity.NEAREST_FIRST);
 
@@ -121,7 +121,7 @@ class TermIndexOnSequencesTest {
   }
 
   @Test
-  void aQueryFindsARowItSharesOnlyRepeatedElementsWith() {
+  void aQueryFindsARowItSharesOnlyRepeatedTermsWith() {
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
     rows.put(1, sequence(4, 4, 4, 4));
     TermIndex index = new TermIndex(config("ngld"), rows, longObjectMap());
@@ -134,7 +134,7 @@ class TermIndexOnSequencesTest {
   }
 
   @Test
-  void orderIsWhatSeparatesTwoRowsWithTheSameElements() {
+  void orderIsWhatSeparatesTwoRowsWithTheSameTerms() {
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
     rows.put(1, sequence(1, 2, 3, 4));
     rows.put(2, sequence(4, 3, 2, 1));
@@ -179,9 +179,9 @@ class TermIndexOnSequencesTest {
   }
 
   @Test
-  void aPopularElementIsDroppedFromTheSequencesAndNotOnlyFromTheInvertedLists() {
+  void aPopularTermIsDroppedFromTheSequencesAndNotOnlyFromTheInvertedLists() {
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
-    // Element 9 is in all four rows, so a 0.75 cap makes it the only popular one.
+    // Term 9 is in all four rows, so a 0.75 cap makes it the only popular one.
     rows.put(1, sequence(9, 1, 2));
     rows.put(2, sequence(1, 9, 2));
     rows.put(3, sequence(9, 3, 4));
@@ -194,10 +194,10 @@ class TermIndexOnSequencesTest {
             longObjectMap());
 
     assertEquals(0, index.getRowNumsForKeyForTests(9).length);
-    long[] rowNumsForElementTwo = index.getRowNumsForKeyForTests(2).clone();
-    Arrays.sort(rowNumsForElementTwo);
-    assertArrayEquals(new long[] {1, 2}, rowNumsForElementTwo);
-    // The element is gone from the scored sequence too, so rows 1 and 2 become identical.
+    long[] rowNumsForTermTwo = index.getRowNumsForKeyForTests(2).clone();
+    Arrays.sort(rowNumsForTermTwo);
+    assertArrayEquals(new long[] {1, 2}, rowNumsForTermTwo);
+    // The term is gone from the scored sequence too, so rows 1 and 2 become identical.
     assertArrayEquals(new long[] {1, 2}, index.getVerificationRow(1).getTerms());
     assertArrayEquals(new long[] {1, 2}, index.getVerificationRow(2).getTerms());
     assertEquals(2.0, index.getVerificationRow(1).getUniValue(), DELTA);
@@ -211,7 +211,7 @@ class TermIndexOnSequencesTest {
   }
 
   @Test
-  void candidatesOnlyKeepsThePopularElementInTheScoredSequences() {
+  void candidatesOnlyKeepsThePopularTermInTheScoredSequences() {
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
     rows.put(1, sequence(9, 1, 2));
     rows.put(2, sequence(1, 9, 2));
@@ -233,7 +233,7 @@ class TermIndexOnSequencesTest {
 
     assertEquals(0, index.getRowNumsForKeyForTests(9).length);
     assertEquals(2, index.getIndexedRow(1).termsLength());
-    // The scored sequences keep the discarded element, so rows 1 and 2 are transpositions apart.
+    // The scored sequences keep the discarded term, so rows 1 and 2 are transpositions apart.
     assertArrayEquals(new long[] {9, 1, 2}, index.getVerificationRow(1).getTerms());
     assertArrayEquals(new long[] {1, 9, 2}, index.getVerificationRow(2).getTerms());
 
@@ -247,7 +247,7 @@ class TermIndexOnSequencesTest {
   @Test
   void aSequenceLeftEmptyByTheDiscardIsSimplyNotIndexed() {
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
-    // Both of row 1's elements are popular, so nothing of it survives to be indexed or scored.
+    // Both of row 1's terms are popular, so nothing of it survives to be indexed or scored.
     rows.put(1, sequence(8, 9));
     rows.put(2, sequence(8, 9, 1));
     rows.put(3, sequence(9, 8, 2));
@@ -310,17 +310,17 @@ class TermIndexOnSequencesTest {
     throw new AssertionError("rowNum " + rowNum + " is absent from " + results);
   }
 
-  /** Drops the rows sharing no element with the query, which the inverted lists cannot reach. */
-  private static List<RowNumAndSimilarity> restrictToRowsSharingAnElement(
+  /** Drops the rows sharing no term with the query, which the inverted lists cannot reach. */
+  private static List<RowNumAndSimilarity> restrictToRowsSharingAnTerm(
       List<RowNumAndSimilarity> results,
       LongObjectHashMap<LongTermsAndValues> rows,
       LongTermsAndValues query) {
-    LongHashSet queryElements = LongHashSet.from(query.getTerms());
+    LongHashSet queryTerms = LongHashSet.from(query.getTerms());
     List<RowNumAndSimilarity> restricted = new ArrayList<>(results.size());
     for (RowNumAndSimilarity result : results) {
       LongTermsAndValues row = rows.get(result.getRowNum());
       for (int index = 0; index < row.termsLength(); ++index) {
-        if (queryElements.contains(row.getTerm(index))) {
+        if (queryTerms.contains(row.getTerm(index))) {
           restricted.add(result);
           break;
         }
@@ -337,17 +337,17 @@ class TermIndexOnSequencesTest {
     return rows;
   }
 
-  /** A short sequence over a small alphabet, so repeats and shared elements are both common. */
+  /** A short sequence over a small alphabet, so repeats and shared terms are both common. */
   private static LongTermsAndValues randomSequence(Random random) {
-    long[] elements = new long[1 + random.nextInt(7)];
-    for (int index = 0; index < elements.length; ++index) {
-      elements[index] = random.nextInt(5);
+    long[] terms = new long[1 + random.nextInt(7)];
+    for (int index = 0; index < terms.length; ++index) {
+      terms[index] = random.nextInt(5);
     }
-    return LongTermsAndValuesTestFactory.create(elements, NO_VALUES, elements.length);
+    return LongTermsAndValuesTestFactory.create(terms, NO_VALUES, terms.length);
   }
 
-  private static LongTermsAndValues sequence(long... elements) {
-    return LongTermsAndValuesTestFactory.create(elements, NO_VALUES, elements.length);
+  private static LongTermsAndValues sequence(long... terms) {
+    return LongTermsAndValuesTestFactory.create(terms, NO_VALUES, terms.length);
   }
 
   private static NamespaceConfig config(String comparatorType) {

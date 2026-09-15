@@ -16,13 +16,13 @@ import java.util.Set;
  * length-normalized fraction ({@link NgldComparator}), over the {@link SequenceDistance} they
  * compose.
  *
- * <p>A sequence record carries its elements, in order and with repeats, in its terms and has no
- * values, so its Uni value is its length. Candidate generation instead indexes the element
- * multiset as a sparse record whose counts sum to that same length, so both forms agree on the Uni
- * value. A signature-keyed structure draws its signatures from that same multiset, which is why
- * these comparators generate signatures at all despite measuring order.
+ * <p>A sequence record carries its terms in order and with repeats, and has no values, so its
+ * Uni value is its length. Candidate generation instead indexes the term multiset as a sparse
+ * record whose counts sum to that same length, so both forms agree on the Uni value. A
+ * signature-keyed structure draws its signatures from that same multiset, which is why these
+ * comparators generate signatures at all despite measuring order.
  *
- * <p>Merging cannot generate candidates here: the shared elements bound an order-sensitive
+ * <p>Merging cannot generate candidates here: the shared terms bound an order-sensitive
  * distance without determining it, so these searches generate candidates and then verify them.
  */
 abstract class BaseSequenceComparator extends Comparator implements KeyShareBounded {
@@ -46,14 +46,14 @@ abstract class BaseSequenceComparator extends Comparator implements KeyShareBoun
   protected abstract long getMaxDistance(double comparatorValue, int length1, int length2);
 
   /**
-   * Returns the largest share of two sequences' combined length that the elements one holds and
+   * Returns the largest share of two sequences' combined length that the terms one holds and
    * the other does not can take up, for a candidate clearing {@code comparatorValue}. A share of
    * 1.0 or more is one that guarantees nothing.
    */
   protected abstract double getMaxUnmatchedFraction(double recordUniValue, double comparatorValue);
 
   /**
-   * An edit changes one element, so two sequences within {@code d} edits have element multisets
+   * An edit changes one term, so two sequences within {@code d} edits have term multisets
    * within {@code l1BoundFactor * d} of each other. Write that L1 distance as a share {@code u} of
    * the sequences' combined length: the shared counts then come to {@code (1 - u) / 2} of that
    * length and the combined counts to {@code (1 + u) / 2}, so the multiset similarity the keys are
@@ -92,17 +92,17 @@ abstract class BaseSequenceComparator extends Comparator implements KeyShareBoun
         : getComparatorValue(distance, length1, length2);
   }
 
-  /** An element's value is its occurrence count, so it contributes itself to the Uni value. */
+  /** A term's value is its occurrence count, so it contributes itself to the Uni value. */
   @Override
   public final double getUniTransformedValue(float value) {
     if (value < 0.0f) {
       throw new IllegalArgumentException(
-          String.format("A sequence element cannot occur a negative number of times (%s).", value));
+          String.format("A sequence term cannot occur a negative number of times (%s).", value));
     }
     return value;
   }
 
-  /** An edit distance reads the elements in the order they arrived, so only a sequence will do. */
+  /** An edit distance reads the terms in the order they arrived, so only a sequence will do. */
   @Override
   public final Set<RecordType> getSupportedRecordTypes() {
     return Set.of(RecordType.SEQUENCE);

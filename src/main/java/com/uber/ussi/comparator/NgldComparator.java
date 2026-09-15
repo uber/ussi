@@ -19,7 +19,7 @@ import com.uber.ussi.utils.MathUtils;
  */
 public class NgldComparator extends BaseSequenceComparator {
 
-  /** The largest normalized distance there is, reached when every element has to be edited. */
+  /** The largest normalized distance there is, reached when every term has to be edited. */
   private static final double MAX_NORMALIZED_DISTANCE = 1.0;
 
   NgldComparator(
@@ -44,7 +44,7 @@ public class NgldComparator extends BaseSequenceComparator {
    * <p>Distances are integer-valued, so the budget is floored; the epsilon keeps one that should
    * land exactly on an integer from being floored down by representation error. That tolerance is
    * absolute on a budget that grows with the sequences, so it stops covering the error once the
-   * combined length reaches the low tens of thousands of elements.
+   * combined length reaches the low tens of thousands of terms.
    */
   static long getDenormalizedMaxDistance(double maxNormalizedDistance, int length1, int length2) {
     double totalLength = (double) length1 + (double) length2;

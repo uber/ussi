@@ -8,13 +8,13 @@ import java.util.Objects;
 /**
  * A unit-cost, L1-boundable edit distance between two sequences, the distances that the
  * generalized Levenshtein distance generalizes over. Every one of them charges unit cost for
- * inserting or deleting one element, which bounds the normalized distance the comparators report
+ * inserting or deleting one term, which bounds the normalized distance the comparators report
  * to [0.0, 1.0]; they differ in the other moves they permit, and so in
  * {@link #getL1BoundFactor()}.
  *
  * <p>That bound is what lets an inverted index generate candidates for an order-sensitive
- * distance. Two sequences within edit distance {@code d} have element multisets within L1 distance
- * {@code getL1BoundFactor() * d} of each other, so a candidate sharing too few elements with the
+ * distance. Two sequences within edit distance {@code d} have term multisets within L1 distance
+ * {@code getL1BoundFactor() * d} of each other, so a candidate sharing too few terms with the
  * query, disregarding their order, cannot be close enough in order either.
  */
 public abstract class SequenceDistance implements Serializable {
@@ -41,7 +41,7 @@ public abstract class SequenceDistance implements Serializable {
   }
 
   /**
-   * Returns the factor bounding two sequences' element multisets' L1 distance by this edit
+   * Returns the factor bounding two sequences' term multisets' L1 distance by this edit
    * distance, so that {@code l1Distance <= getL1BoundFactor() * distance} for every pair.
    */
   public final double getL1BoundFactor() {
@@ -182,7 +182,7 @@ public abstract class SequenceDistance implements Serializable {
   /**
    * A record that carries values is a dense or sparse feature, not a sequence: its terms are
    * sorted and deduplicated, so reading them in order would measure the distance between two
-   * sorted element sets rather than between the sequences.
+   * sorted term sets rather than between the sequences.
    */
   private static void validateSequence(LongTermsAndValues termsAndValues, String name) {
     Objects.requireNonNull(termsAndValues, name);

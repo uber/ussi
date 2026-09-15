@@ -80,9 +80,9 @@ class ScanCacheTest {
     return LongTermsAndValuesTestFactory.create(new long[0], values, uniValue);
   }
 
-  /** A sequence carries its elements in order, with repeats, and holds no values. */
-  private static LongTermsAndValues sequence(long... elements) {
-    return LongTermsAndValuesTestFactory.create(elements, new float[0], elements.length);
+  /** A sequence carries its terms in order, with repeats, and holds no values. */
+  private static LongTermsAndValues sequence(long... terms) {
+    return LongTermsAndValuesTestFactory.create(terms, new float[0], terms.length);
   }
 
   private static LongFloatHashMap rowNumToSimilarityMap(List<RowNumAndSimilarity> rows) {

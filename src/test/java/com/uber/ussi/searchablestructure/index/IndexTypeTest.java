@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.uber.ussi.comparator.Comparator;
+import com.uber.ussi.comparator.DotProductScored;
 import com.uber.ussi.comparator.ComparatorFactory;
 import com.uber.ussi.config.ConfigVocabulary;
 import com.uber.ussi.config.NamespaceConfig;
@@ -107,8 +108,8 @@ class IndexTypeTest {
     assertFalse(IndexType.INVERTED_SIGNATURE.scoresByDotProducts());
     assertFalse(IndexType.INVERTED_HYBRID.scoresByDotProducts());
 
-    assertTrue(comparator("l2", "reciprocal").supportsDotProductScoring());
-    assertFalse(comparator("jaccard", "identity").supportsDotProductScoring());
+    assertTrue(comparator("l2", "reciprocal") instanceof DotProductScored);
+    assertFalse(comparator("jaccard", "identity") instanceof DotProductScored);
   }
 
   @Test

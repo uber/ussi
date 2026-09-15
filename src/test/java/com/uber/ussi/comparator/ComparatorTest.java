@@ -167,16 +167,10 @@ class ComparatorTest {
    */
   @Test
   void onlyL2DerivesItsSimilarityFromADotProduct() {
-    assertTrue(l2Comparator().supportsDotProductScoring());
+    assertTrue(l2Comparator() instanceof DotProductScored);
 
     for (String comparatorType : List.of("jaccard", "ruzicka", "gld", "ngld")) {
-      Comparator comparator = comparator(comparatorType);
-
-      assertFalse(comparator.supportsDotProductScoring(), comparatorType);
-      assertThrows(
-          UnsupportedOperationException.class,
-          () -> comparator.similarityFromDotProduct(1.0, 1.0, 1.0),
-          comparatorType);
+      assertFalse(comparator(comparatorType) instanceof DotProductScored, comparatorType);
     }
   }
 

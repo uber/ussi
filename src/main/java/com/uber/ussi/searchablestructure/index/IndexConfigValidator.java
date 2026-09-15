@@ -4,6 +4,8 @@ package com.uber.ussi.searchablestructure.index;
 import com.uber.ussi.comparator.Comparator;
 import com.uber.ussi.comparator.ComparatorFactory;
 import com.uber.ussi.comparator.ComparatorType;
+import com.uber.ussi.comparator.ConjunctionScored;
+import com.uber.ussi.comparator.DotProductScored;
 import com.uber.ussi.comparator.KeyShareBounded;
 import com.uber.ussi.config.ConfigViolations;
 import com.uber.ussi.config.ConfigVocabulary;
@@ -93,7 +95,7 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
       return;
     }
     Comparator comparator = ComparatorFactory.tryCreateComparator(config);
-    if (comparator == null || comparator.supportsDotProductScoring()) {
+    if (comparator == null || comparator instanceof DotProductScored) {
       return;
     }
     violations.add(
@@ -210,7 +212,7 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
       return;
     }
     Comparator comparator = ComparatorFactory.tryCreateComparator(config);
-    if (comparator != null && !comparator.supportsMergeCandidateGeneration()) {
+    if (comparator != null && !(comparator instanceof ConjunctionScored)) {
       violations.add(
           String.format(
               "%s=%s is not supported with comparatorType %s.",

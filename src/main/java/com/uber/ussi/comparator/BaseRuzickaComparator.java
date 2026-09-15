@@ -12,7 +12,8 @@ import java.util.Set;
  * Shared Jaccard/Ruzicka implementation with length and position filtering. A negatively weighted
  * term is treated as the corresponding negative term with a positive weight.
  */
-abstract class BaseRuzickaComparator extends Comparator implements KeyShareBounded {
+abstract class BaseRuzickaComparator extends Comparator
+    implements ConjunctionScored, KeyShareBounded {
 
   BaseRuzickaComparator(ComparatorNormalizer comparatorNormalizer) {
     super(comparatorNormalizer);
@@ -152,11 +153,6 @@ abstract class BaseRuzickaComparator extends Comparator implements KeyShareBound
   @Override
   public Set<RecordType> getSupportedRecordTypes() {
     return Set.of(RecordType.SPARSE, RecordType.DENSE);
-  }
-
-  @Override
-  public boolean supportsMergeCandidateGeneration() {
-    return true;
   }
 
   @Override

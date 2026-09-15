@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-import com.uber.ussi.utils.Utils;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -31,7 +30,7 @@ class MatrixDotProductScorersTest {
 
   @Test
   void createUsesDefaultOpenBlasScorerWhenNativePathIsAvailable() {
-    assumeTrue(isOpenBlasSupportedPlatform());
+    assumeTrue(OpenBlasMatrixDotProductScorer.isSupportedPlatform());
     FakeOpenBlas fakeOpenBlas = new FakeOpenBlas();
 
     withFakeOpenBlas(
@@ -335,12 +334,6 @@ class MatrixDotProductScorersTest {
       OpenBlasMatrixDotProductScorer.blasThreadCountSupplier = originalThreadCountSupplier;
       OpenBlasMatrixDotProductScorer.blasThreadCountSetter = originalThreadCountSetter;
     }
-  }
-
-  private static boolean isOpenBlasSupportedPlatform() {
-    return (Utils.isRunningOnLinux() && Utils.isRunningOnArm())
-        || (Utils.isRunningOnLinux() && Utils.isRunningOnX86())
-        || (Utils.isRunningOnMacOs() && Utils.isRunningOnX86());
   }
 
   private static final class FakeOpenBlas {

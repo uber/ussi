@@ -11,7 +11,6 @@ import com.uber.ussi.utils.BoundedSizeMaxHeap;
 import com.uber.ussi.utils.Constants;
 import com.uber.ussi.utils.MathUtils;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
@@ -200,9 +199,10 @@ public final class FilteredSearch {
 
   /**
    * Iterates deduplicated candidates in nondecreasing prefix cost. Takes ownership of the
-   * {@code keyData} it is handed and sorts it in place.
+   * {@code keyData} it is handed and sorts it in place. Not an {@code Iterator}, whose element
+   * type would box every row number it yields.
    */
-  static final class CandidateIterator implements Iterator<Long> {
+  static final class CandidateIterator {
     private final Comparator comparator;
     private final Context context;
     private final KeyAndPrefixFilteringData[] keyData;
@@ -289,8 +289,7 @@ public final class FilteredSearch {
               currentRowEndIndex);
     }
 
-    @Override
-    public boolean hasNext() {
+    boolean hasNext() {
       if (nextRowPrepared) {
         return true;
       }
@@ -340,8 +339,7 @@ public final class FilteredSearch {
       }
     }
 
-    @Override
-    public Long next() {
+    long next() {
       if (!hasNext()) {
         throw new NoSuchElementException();
       }

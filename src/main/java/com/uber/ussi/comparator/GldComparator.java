@@ -47,10 +47,10 @@ public class GldComparator extends BaseSequenceComparator {
    * SequenceDistance#getL1BoundFactor()} {@code * d} of its own elements unmatched by that
    * candidate, disregarding order, so only a prefix that long has to generate candidates.
    *
-   * <p>An edit count states the cap directly rather than through a share, because over terms the
-   * keys are those elements. Taking the share shape here would be sound but looser, since
-   * expressing the budget as a share needs the shortest length a candidate may have and then
-   * scales back up by a longer one.
+   * <p>An edit count states the prefix sum directly rather than through a share, because it
+   * already counts terms. Taking the share shape here would be sound but looser, since expressing
+   * the budget as a share needs the shortest length a candidate may have and then scales back up
+   * by a longer one.
    */
   @Override
   protected double getMaxPrefixSumForTermsAndValuesInternal(
@@ -67,8 +67,8 @@ public class GldComparator extends BaseSequenceComparator {
    * candidates within the budget's worth of elements of the query, so the shortest runs {@code
    * recordUniValue - comparatorValue} elements and cannot run shorter than empty.
    *
-   * <p>Signature keys are why this detour is needed: over terms the keys are the elements
-   * themselves, so the budget counts them directly and no length comes into it.
+   * <p>Signature keys are why this detour is needed: over terms the budget counts the keys
+   * directly and no length comes into it.
    */
   @Override
   protected double getMaxUnmatchedFraction(double recordUniValue, double comparatorValue) {

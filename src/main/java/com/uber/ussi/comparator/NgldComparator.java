@@ -73,9 +73,8 @@ public class NgldComparator extends BaseSequenceComparator {
 
   /**
    * A normalized distance is a share of the sequences' combined length rather than a count of
-   * anything, so the prefix takes the share shape, and the fraction is the one the signatures are
-   * bounded by: the elements are the terms themselves, so the multiset similarity that bounds
-   * their collision rate bounds the share of terms a qualifying candidate matches.
+   * anything, so the prefix takes the share shape, over the same shared-key fraction that bounds
+   * this measure's signatures.
    */
   @Override
   protected double getMaxPrefixSumForTermsAndValuesInternal(

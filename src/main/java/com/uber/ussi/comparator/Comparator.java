@@ -153,14 +153,14 @@ public abstract class Comparator implements Serializable {
   }
 
   /**
-   * Returns the prefix sum cap in this comparator's own units, given its threshold in them.
+   * Returns the maximum prefix sum in this comparator's own units, given its threshold in them.
    *
    * <p>Two shapes arise, and which one a measure takes is what decides the implementation. A
-   * threshold that is already a share of the keys gives the cap through {@link
+   * threshold that is already a share of the keys gives it through {@link
    * #maxPrefixSumFromSharedFraction}: a similarity for Jaccard and Ruzicka, a normalized distance
-   * for NGLD. A threshold that counts keys instead states the cap directly, and no share comes
-   * into it: GLD's edits are elements, which over terms are the keys themselves, and L2's squared
-   * distance is in the units of the squared values its Uni value sums.
+   * for NGLD. A threshold that counts keys instead states it directly, and no share comes into it:
+   * GLD's edits count a sequence's terms, and L2's squared distance is in the units of the squared
+   * values its Uni value sums.
    */
   protected abstract double getMaxPrefixSumForTermsAndValuesInternal(
       double uniValue, double comparatorValue);

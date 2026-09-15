@@ -206,10 +206,11 @@ pieces in sub-packages of their own:
   generators, which a namespace names through a comparator param because which
   of them says anything depends on the measure, but which no comparator holds.
   Drawing signatures belongs to the structure keyed by them, so a comparator
-  contributes only `SignatureBounded`: the share of a record's signatures a
-  qualifying candidate has to collide on. That is a property of the measure and
-  holds whether or not any structure is keyed by signatures, which is why the
-  same comparator serves a scan unchanged.
+  contributes only `KeyShareBounded`: the share of a record's keys a qualifying
+  candidate has to share with it. That is a property of the measure and holds
+  whether or not any structure is keyed by signatures, which is why the same
+  comparator serves a scan unchanged, and it is one fraction across both key
+  spaces, signatures colliding at the rate a record's own terms are shared at.
 
 Normalizers are separate, under `com.uber.ussi.comparatornormalizer`, because a
 namespace configures one independently of its comparator.

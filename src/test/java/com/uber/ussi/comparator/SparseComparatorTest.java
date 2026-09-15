@@ -165,8 +165,8 @@ class SparseComparatorTest {
   void theSharedSignatureBoundIsTheThresholdItself() {
     BaseRuzickaComparator comparator = (BaseRuzickaComparator) comparator("jaccard");
 
-    assertEquals(0.5, comparator.getMinSharedSignatureFraction(8.0, 0.5), 0.0);
-    assertEquals(0.5, comparator.getMinSharedSignatureFraction(4096.0, 0.5), 0.0);
+    assertEquals(0.5, comparator.getMinSharedKeyFraction(8.0, 0.5), 0.0);
+    assertEquals(0.5, comparator.getMinSharedKeyFraction(4096.0, 0.5), 0.0);
   }
 
   @Test
@@ -207,7 +207,7 @@ class SparseComparatorTest {
 
     assertThrows(
         IllegalArgumentException.class,
-        () -> comparator.getMinSharedSignatureFraction(4.0, -0.1));
+        () -> comparator.getMinSharedKeyFraction(4.0, -0.1));
   }
 
   @Test

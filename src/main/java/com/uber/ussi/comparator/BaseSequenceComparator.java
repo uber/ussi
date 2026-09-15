@@ -25,7 +25,7 @@ import java.util.Set;
  * <p>Merging cannot generate candidates here: the shared elements bound an order-sensitive
  * distance without determining it, so these searches generate candidates and then verify them.
  */
-abstract class BaseSequenceComparator extends Comparator implements SignatureBounded {
+abstract class BaseSequenceComparator extends Comparator implements KeyShareBounded {
 
   private final SequenceDistance sequenceDistance;
 
@@ -56,12 +56,12 @@ abstract class BaseSequenceComparator extends Comparator implements SignatureBou
    * An edit changes one element, so two sequences within {@code d} edits have element multisets
    * within {@code l1BoundFactor * d} of each other. Write that L1 distance as a share {@code u} of
    * the sequences' combined length: the shared counts then come to {@code (1 - u) / 2} of that
-   * length and the combined counts to {@code (1 + u) / 2}, so the multiset similarity the
-   * signatures collide at is at least the ratio of the two. The lengths cancel, which is what lets
-   * one share stand for every candidate the threshold admits.
+   * length and the combined counts to {@code (1 + u) / 2}, so the multiset similarity the keys are
+   * shared at is at least the ratio of the two. The lengths cancel, which is what lets one share
+   * stand for every candidate the threshold admits.
    */
   @Override
-  public final double getMinSharedSignatureFraction(
+  public final double getMinSharedKeyFraction(
       double recordUniValue, double comparatorValue) {
     double unmatchedFraction = getMaxUnmatchedFraction(recordUniValue, comparatorValue);
     return unmatchedFraction >= 1.0

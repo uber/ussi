@@ -81,7 +81,7 @@ public class NgldComparator extends BaseSequenceComparator {
   protected double getMaxPrefixSumForTermsAndValuesInternal(
       double uniValue, double comparatorValue) {
     return maxPrefixSumFromSharedFraction(
-        uniValue, getMinSharedSignatureFraction(uniValue, comparatorValue));
+        uniValue, getMinSharedKeyFraction(uniValue, comparatorValue));
   }
 
   /**

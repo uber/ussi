@@ -1,7 +1,7 @@
 /* AUTHOR: Shijie Lu (shijie@uber.com), Shalini Kedlaya (skedlaya@uber.com), Ahmed Metwally (ametwally@uber.com) */
 package com.uber.ussi.config;
 
-import com.uber.ussi.utils.Constants;
+import com.uber.ussi.utils.ConfigKeys;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -201,7 +201,7 @@ public final class NamespaceConfig {
   }
 
   private static PopularTermDiscardScope parsePopularTermDiscardScope(Map<String, String> params) {
-    String rawValue = NamespaceConfigParams.getParam(params, Constants.POPULAR_TERM_DISCARD_SCOPE);
+    String rawValue = NamespaceConfigParams.getParam(params, ConfigKeys.POPULAR_TERM_DISCARD_SCOPE);
     if (NamespaceConfigParams.isBlank(rawValue)) {
       return PopularTermDiscardScope.CANDIDATES_AND_VERIFICATION;
     }
@@ -210,14 +210,14 @@ public final class NamespaceConfig {
     if (scope == null) {
       throw new IllegalArgumentException(
           ConfigVocabulary.unsupported(
-              Constants.POPULAR_TERM_DISCARD_SCOPE, rawValue, PopularTermDiscardScope.class));
+              ConfigKeys.POPULAR_TERM_DISCARD_SCOPE, rawValue, PopularTermDiscardScope.class));
     }
     return scope;
   }
 
   private static CandidateGeneratorType parseCandidateGeneratorType(
       Map<String, String> indexParams) {
-    String rawValue = NamespaceConfigParams.getParam(indexParams, Constants.CANDIDATE_GENERATOR);
+    String rawValue = NamespaceConfigParams.getParam(indexParams, ConfigKeys.CANDIDATE_GENERATOR);
     if (NamespaceConfigParams.isBlank(rawValue)) {
       return CandidateGeneratorType.SPARS;
     }
@@ -226,14 +226,14 @@ public final class NamespaceConfig {
     if (generatorType == null) {
       throw new IllegalArgumentException(
           ConfigVocabulary.unsupported(
-              Constants.CANDIDATE_GENERATOR, rawValue, CandidateGeneratorType.class));
+              ConfigKeys.CANDIDATE_GENERATOR, rawValue, CandidateGeneratorType.class));
     }
     return generatorType;
   }
 
   /**
    * Which phases of a search a discarded high-popularity term is absent from. Which terms qualify
-   * for discarding is governed by {@link Constants#MAX_FRACTION_IDS_PER_TERM}.
+   * for discarding is governed by {@link ConfigKeys#MAX_FRACTION_IDS_PER_TERM}.
    */
   public enum PopularTermDiscardScope implements ConfigVocabulary {
     /**

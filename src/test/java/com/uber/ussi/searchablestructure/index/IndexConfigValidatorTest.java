@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import com.uber.ussi.comparator.ComparatorType;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.config.NamespaceConfig.CandidateGeneratorType;
-import com.uber.ussi.utils.Constants;
+import com.uber.ussi.utils.ConfigKeys;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -17,11 +17,11 @@ class IndexConfigValidatorTest {
     new ValidationCase("defaults", builder -> builder, true),
     new ValidationCase(
         "unparseable max fraction",
-        builder -> builder.indexParams(Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "bad")),
+        builder -> builder.indexParams(Map.of(ConfigKeys.MAX_FRACTION_IDS_PER_TERM, "bad")),
         false),
     new ValidationCase(
         "max fraction at zero",
-        builder -> builder.indexParams(Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "0")),
+        builder -> builder.indexParams(Map.of(ConfigKeys.MAX_FRACTION_IDS_PER_TERM, "0")),
         false),
     new ValidationCase(
         "pre-filtering ratio above one",
@@ -38,7 +38,7 @@ class IndexConfigValidatorTest {
         builder ->
             builder
                 .indexType(IndexType.SCAN.getParamValue())
-                .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, sparsMerge())),
+                .indexParams(Map.of(ConfigKeys.CANDIDATE_GENERATOR, sparsMerge())),
         false),
     new ValidationCase(
         "spars merge with l2 on the signature structure",
@@ -46,7 +46,7 @@ class IndexConfigValidatorTest {
             builder
                 .indexType(IndexType.INVERTED_SIGNATURE.getParamValue())
                 .comparatorType(ComparatorType.L2.getParamValue())
-                .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, sparsMerge())),
+                .indexParams(Map.of(ConfigKeys.CANDIDATE_GENERATOR, sparsMerge())),
         false),
     new ValidationCase(
         "spars merge with l2 on the term structure",
@@ -54,7 +54,7 @@ class IndexConfigValidatorTest {
             builder
                 .indexType(IndexType.INVERTED_TERM.getParamValue())
                 .comparatorType(ComparatorType.L2.getParamValue())
-                .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, sparsMerge())),
+                .indexParams(Map.of(ConfigKeys.CANDIDATE_GENERATOR, sparsMerge())),
         true),
     // Sequence comparators need the ordered sequence, not just shared keys, so merge never applies.
     new ValidationCase(
@@ -63,7 +63,7 @@ class IndexConfigValidatorTest {
             builder
                 .indexType(IndexType.INVERTED_TERM.getParamValue())
                 .comparatorType(ComparatorType.NGLD.getParamValue())
-                .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, sparsMerge())),
+                .indexParams(Map.of(ConfigKeys.CANDIDATE_GENERATOR, sparsMerge())),
         false),
     new ValidationCase(
         "spars merge with gld on the hybrid structure",
@@ -71,7 +71,7 @@ class IndexConfigValidatorTest {
             builder
                 .indexType(IndexType.INVERTED_HYBRID.getParamValue())
                 .comparatorType(ComparatorType.GLD.getParamValue())
-                .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, sparsMerge())),
+                .indexParams(Map.of(ConfigKeys.CANDIDATE_GENERATOR, sparsMerge())),
         false),
     // Ruzicka scores a row from the keys it shares with the query, so merge stays available.
     new ValidationCase(
@@ -80,7 +80,7 @@ class IndexConfigValidatorTest {
             builder
                 .indexType(IndexType.INVERTED_TERM.getParamValue())
                 .comparatorType(ComparatorType.RUZICKA.getParamValue())
-                .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, sparsMerge())),
+                .indexParams(Map.of(ConfigKeys.CANDIDATE_GENERATOR, sparsMerge())),
         true),
     // A sequence has no values, so only the term structure, which keys the element multiset, and
     // the scan structure, which never reads terms, can hold one.
@@ -112,7 +112,7 @@ class IndexConfigValidatorTest {
             builder
                 .indexType(IndexType.INVERTED_TERM.getParamValue())
                 .comparatorType(ComparatorType.NGLD.getParamValue())
-                .indexParams(Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "0.05")),
+                .indexParams(Map.of(ConfigKeys.MAX_FRACTION_IDS_PER_TERM, "0.05")),
         true),
     new ValidationCase(
         "the term structure keeping every element",
@@ -120,7 +120,7 @@ class IndexConfigValidatorTest {
             builder
                 .indexType(IndexType.INVERTED_TERM.getParamValue())
                 .comparatorType(ComparatorType.NGLD.getParamValue())
-                .indexParams(Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "1.0")),
+                .indexParams(Map.of(ConfigKeys.MAX_FRACTION_IDS_PER_TERM, "1.0")),
         true),
     // L2 reads both dense and sparse records, so no structure here can turn it away.
     new ValidationCase(
@@ -170,7 +170,7 @@ class IndexConfigValidatorTest {
     NamespaceConfig config =
         validBuilder()
             .indexType("term")
-            .indexParams(Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "0"))
+            .indexParams(Map.of(ConfigKeys.MAX_FRACTION_IDS_PER_TERM, "0"))
             .build();
 
     List<String> violations = violations(config);
@@ -189,7 +189,7 @@ class IndexConfigValidatorTest {
         validBuilder()
             .indexType(IndexType.INVERTED_TERM.getParamValue())
             .comparatorType(ComparatorType.NGLD.getParamValue())
-            .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, sparsMerge()))
+            .indexParams(Map.of(ConfigKeys.CANDIDATE_GENERATOR, sparsMerge()))
             .build();
 
     List<String> violations = violations(config);
@@ -198,7 +198,7 @@ class IndexConfigValidatorTest {
     assertEquals(
         String.format(
             "%s=%s is not supported with comparatorType ngld.",
-            Constants.CANDIDATE_GENERATOR, sparsMerge()),
+            ConfigKeys.CANDIDATE_GENERATOR, sparsMerge()),
         violations.get(0));
   }
 
@@ -218,7 +218,7 @@ class IndexConfigValidatorTest {
   void anUnparseableCandidateGeneratorTypeIsLeftToTheStructuralChecks() {
     NamespaceConfig config =
         validBuilder()
-            .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, "uni_outward"))
+            .indexParams(Map.of(ConfigKeys.CANDIDATE_GENERATOR, "uni_outward"))
             .build();
 
     List<String> structuralViolations = config.collectStructuralViolations();
@@ -237,10 +237,10 @@ class IndexConfigValidatorTest {
         validBuilder()
             .indexType(IndexType.INVERTED_SIGNATURE.getParamValue())
             .comparatorType("cosine")
-            .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, sparsMerge()))
+            .indexParams(Map.of(ConfigKeys.CANDIDATE_GENERATOR, sparsMerge()))
             .build();
     // Merging would be reported for jaccard on its own, so this pins the params.
-    Map<String, String> unbuildableParams = Map.of(Constants.SIGNATURE_GENERATOR, "superhash");
+    Map<String, String> unbuildableParams = Map.of(ConfigKeys.SIGNATURE_GENERATOR, "superhash");
     // The structure names the comparator it computes from the config alone, so pairing it with
     // anything else is reported whether or not that comparator could be built. Naming l2 leaves
     // the params as the only thing wrong.
@@ -254,7 +254,7 @@ class IndexConfigValidatorTest {
         validBuilder()
             .indexType(IndexType.INVERTED_SIGNATURE.getParamValue())
             .comparatorParams(unbuildableParams)
-            .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, sparsMerge()))
+            .indexParams(Map.of(ConfigKeys.CANDIDATE_GENERATOR, sparsMerge()))
             .build();
 
     assertEquals(List.of(), violations(unknownType), "unknown type");
@@ -315,7 +315,7 @@ class IndexConfigValidatorTest {
         validBuilder()
             .indexType(IndexType.MATRIX.getParamValue())
             .comparatorType(ComparatorType.L2.getParamValue())
-            .indexParams(Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "0.5"))
+            .indexParams(Map.of(ConfigKeys.MAX_FRACTION_IDS_PER_TERM, "0.5"))
             .build();
 
     assertEquals(List.of(), violations(config));

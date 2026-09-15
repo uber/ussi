@@ -13,7 +13,7 @@ import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
-import com.uber.ussi.utils.Constants;
+import com.uber.ussi.utils.ConfigKeys;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -81,7 +81,7 @@ class HybridIndexTest {
         new HybridIndex(
             config(),
             longObjectMap(
-                1, smallQuery, 2, jaccard(sequentialTerms(Constants.NUM_SIGNATURES_PER_ROW + 1, 1))),
+                1, smallQuery, 2, jaccard(sequentialTerms(SignatureIndex.NUM_SIGNATURES_PER_ROW + 1, 1))),
             longObjectMap());
 
     assertEquals(
@@ -94,7 +94,7 @@ class HybridIndexTest {
         new HybridIndex(
             config(0, 1000),
             longObjectMap(
-                1, jaccard(sequentialTerms(Constants.NUM_SIGNATURES_PER_ROW, 1)), 2, largeQuery),
+                1, jaccard(sequentialTerms(SignatureIndex.NUM_SIGNATURES_PER_ROW, 1)), 2, largeQuery),
             longObjectMap());
 
     assertEquals(
@@ -114,7 +114,7 @@ class HybridIndexTest {
             1,
             jaccard(weakExactTerms),
             2,
-            jaccard(sequentialTerms(Constants.NUM_SIGNATURES_PER_ROW + 1, 1)));
+            jaccard(sequentialTerms(SignatureIndex.NUM_SIGNATURES_PER_ROW + 1, 1)));
     rows.put(3, jaccard(new long[] {1}));
     HybridIndex index = new HybridIndex(config(), rows, longObjectMap());
 
@@ -129,7 +129,7 @@ class HybridIndexTest {
   @Test
   void ruzickaRoutingConservativelySearchesAcrossTheBoundary() {
     LongTermsAndValues query = ruzicka(new long[] {1}, new float[] {100.0f});
-    float[] longValues = new float[Constants.NUM_SIGNATURES_PER_ROW + 1];
+    float[] longValues = new float[SignatureIndex.NUM_SIGNATURES_PER_ROW + 1];
     Arrays.fill(longValues, 0.001f);
     longValues[0] = 100.0f;
     LongTermsAndValues longRow = ruzicka(sequentialTerms(longValues.length, 1), longValues);
@@ -145,7 +145,7 @@ class HybridIndexTest {
 
   @Test
   void popularityFilteringDisablesUnsafeCardinalityRouting() {
-    LongTermsAndValues target = jaccard(sequentialTerms(Constants.NUM_SIGNATURES_PER_ROW, 1));
+    LongTermsAndValues target = jaccard(sequentialTerms(SignatureIndex.NUM_SIGNATURES_PER_ROW, 1));
     LongTermsAndValues popularExtraTerms = jaccard(sequentialTerms(30, 271));
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap(1, target, 2, popularExtraTerms);
     rows.put(3, popularExtraTerms);
@@ -156,7 +156,7 @@ class HybridIndexTest {
                 "minhash",
                 0,
                 1000,
-                Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "0.5")),
+                Map.of(ConfigKeys.MAX_FRACTION_IDS_PER_TERM, "0.5")),
             rows,
             longObjectMap());
     LongTermsAndValues query = jaccard(sequentialTerms(300, 1));
@@ -235,7 +235,7 @@ class HybridIndexTest {
                 0,
                 1000,
                 Map.of(
-                    Constants.CANDIDATE_GENERATOR,
+                    ConfigKeys.CANDIDATE_GENERATOR,
                     NamespaceConfig.CandidateGeneratorType.SPARS_MERGE.getParamValue())),
             rows,
             longObjectMap());
@@ -286,7 +286,7 @@ class HybridIndexTest {
         .indexType("inverted_hybrid")
         .indexParams(indexParams)
         .comparatorType(comparatorType)
-        .comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR, signatureGeneratorType))
+        .comparatorParams(Map.of(ConfigKeys.SIGNATURE_GENERATOR, signatureGeneratorType))
         .comparatorNormalizerType("identity")
         .maxNumSearchableStructures(3)
         .maxNumSimilarities(100)

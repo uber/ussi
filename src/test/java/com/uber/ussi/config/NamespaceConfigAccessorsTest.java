@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.uber.ussi.config.NamespaceConfig.PopularTermDiscardScope;
 import com.uber.ussi.config.NamespaceConfig.CandidateGeneratorType;
-import com.uber.ussi.utils.Constants;
+import com.uber.ussi.utils.ConfigKeys;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -60,7 +60,7 @@ class NamespaceConfigAccessorsTest {
         fullBuilder()
             .indexParams(
                 Map.of(
-                    Constants.CANDIDATE_GENERATOR,
+                    ConfigKeys.CANDIDATE_GENERATOR,
                     CandidateGeneratorType.SPARS_MERGE.getParamValue()))
             .build();
 
@@ -101,7 +101,7 @@ class NamespaceConfigAccessorsTest {
 
   /** Returns a config carrying {@code scope} in both its index and its cache params. */
   private static NamespaceConfig withDiscardScope(String scope) {
-    return withDiscardParams(Map.of(Constants.POPULAR_TERM_DISCARD_SCOPE, scope));
+    return withDiscardParams(Map.of(ConfigKeys.POPULAR_TERM_DISCARD_SCOPE, scope));
   }
 
   private static NamespaceConfig withDiscardParams(Map<String, String> params) {

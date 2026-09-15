@@ -8,7 +8,6 @@ import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.inverted.KeyAndPrefixFilteringData;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
-import com.uber.ussi.utils.Constants;
 import com.uber.ussi.utils.MathUtils;
 import java.util.Arrays;
 import java.util.List;
@@ -373,7 +372,7 @@ public final class FilteredSearch {
   private static void validateUniValueSearch(
       long[] rowNums, double comparatorUniValue, int searchFromIndex, int searchToIndex) {
     Objects.requireNonNull(rowNums, "rowNums");
-    if (comparatorUniValue == Constants.UNSET_UNI_VALUE
+    if (comparatorUniValue == Comparator.UNSET_UNI_VALUE
         || !Double.isFinite(comparatorUniValue)
         || comparatorUniValue < 0.0) {
       throw new IllegalArgumentException(

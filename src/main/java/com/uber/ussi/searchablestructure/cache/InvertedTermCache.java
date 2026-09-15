@@ -14,7 +14,7 @@ import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.inverted.KeyAndPrefixFilteringData;
 import com.uber.ussi.searchablestructure.metadata.PreFilteringResult;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
-import com.uber.ussi.utils.Constants;
+import com.uber.ussi.utils.ConfigKeys;
 import com.uber.ussi.utils.MathUtils;
 import java.util.Arrays;
 import java.util.Collections;
@@ -353,15 +353,15 @@ public final class InvertedTermCache extends Cache {
 
   private static double parseMaxFractionIdsPerTerm(NamespaceConfig namespaceConfig) {
     return namespaceConfig.readDoubleCacheParam(
-        Constants.MAX_FRACTION_IDS_PER_TERM,
-        Constants.DEFAULT_MAX_FRACTION_IDS_PER_TERM);
+        ConfigKeys.MAX_FRACTION_IDS_PER_TERM,
+        ConfigKeys.DEFAULT_MAX_FRACTION_IDS_PER_TERM);
   }
 
   private static double parseFullReevaluationCacheSizeDecreaseFraction(
       NamespaceConfig namespaceConfig) {
     return namespaceConfig.readDoubleCacheParam(
-        Constants.FULL_REEVALUATION_CACHE_SIZE_DECREASE_FRACTION,
-        Constants.DEFAULT_FULL_REEVALUATION_CACHE_SIZE_DECREASE_FRACTION);
+        ConfigKeys.FULL_REEVALUATION_CACHE_SIZE_DECREASE_FRACTION,
+        ConfigKeys.DEFAULT_FULL_REEVALUATION_CACHE_SIZE_DECREASE_FRACTION);
   }
 
   /**
@@ -370,7 +370,7 @@ public final class InvertedTermCache extends Cache {
    */
   private static double parseMaxFractionIdsPerTermConfidence(NamespaceConfig namespaceConfig) {
     return namespaceConfig.readDoubleCacheParam(
-        Constants.MAX_FRACTION_IDS_PER_TERM_CONFIDENCE,
-        Constants.DEFAULT_MAX_FRACTION_IDS_PER_TERM_CONFIDENCE);
+        ConfigKeys.MAX_FRACTION_IDS_PER_TERM_CONFIDENCE,
+        ConfigKeys.DEFAULT_MAX_FRACTION_IDS_PER_TERM_CONFIDENCE);
   }
 }

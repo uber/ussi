@@ -2,7 +2,7 @@
 package com.uber.ussi.comparator.sequencedistance;
 
 import com.uber.ussi.config.ConfigVocabulary;
-import com.uber.ussi.utils.Constants;
+import com.uber.ussi.utils.ConfigKeys;
 import java.util.Objects;
 
 /** Creates the edit distances supported by the sequence comparators. */
@@ -37,7 +37,7 @@ public final class SequenceDistanceFactory {
     if (type == null) {
       throw new IllegalArgumentException(
           ConfigVocabulary.unsupported(
-              Constants.SEQUENCE_DISTANCE_TYPE, sequenceDistanceType,
+              ConfigKeys.SEQUENCE_DISTANCE_TYPE, sequenceDistanceType,
               SequenceDistanceType.class));
     }
     return createSequenceDistance(type);

@@ -12,7 +12,7 @@ import com.uber.ussi.config.NamespaceConfig.CandidateGeneratorType;
 import com.uber.ussi.config.NamespaceConfigValidator;
 import com.uber.ussi.entity.termsandvalues.RecordType;
 import com.uber.ussi.searchablestructure.metadata.MetadataFilteringStrategy;
-import com.uber.ussi.utils.Constants;
+import com.uber.ussi.utils.ConfigKeys;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -28,9 +28,9 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
       Set.of(
           Index.MAX_PRE_FILTERING_ROWS_RATIO,
           Index.METADATA_FILTERING_STRATEGY,
-          Constants.MAX_FRACTION_IDS_PER_TERM,
-          Constants.CANDIDATE_GENERATOR,
-          Constants.POPULAR_TERM_DISCARD_SCOPE);
+          ConfigKeys.MAX_FRACTION_IDS_PER_TERM,
+          ConfigKeys.CANDIDATE_GENERATOR,
+          ConfigKeys.POPULAR_TERM_DISCARD_SCOPE);
 
   private static final IndexConfigValidator INSTANCE = new IndexConfigValidator();
 
@@ -59,8 +59,8 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
     if (indexType.supportsCandidateGenerator()) {
       ConfigViolations.checkDoubleAboveMinInRange(
           violations,
-          Constants.MAX_FRACTION_IDS_PER_TERM,
-          config.getIndexParam(Constants.MAX_FRACTION_IDS_PER_TERM),
+          ConfigKeys.MAX_FRACTION_IDS_PER_TERM,
+          config.getIndexParam(ConfigKeys.MAX_FRACTION_IDS_PER_TERM),
           0.0,
           1.0);
     }
@@ -138,7 +138,7 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
               "indexType %s keys its lists by signatures, so comparatorType %s needs %s.",
               indexType.getParamValue(),
               config.getComparatorType(),
-              Constants.SIGNATURE_GENERATOR));
+              ConfigKeys.SIGNATURE_GENERATOR));
     }
   }
 
@@ -208,7 +208,7 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
       violations.add(
           String.format(
               "%s=%s is supported only for the inverted index types, got %s.",
-              Constants.CANDIDATE_GENERATOR, mergeParamValue, indexType.getParamValue()));
+              ConfigKeys.CANDIDATE_GENERATOR, mergeParamValue, indexType.getParamValue()));
       return;
     }
     if (comparatorType == null) {
@@ -220,7 +220,7 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
       violations.add(
           String.format(
               "%s=%s is not supported with comparatorType %s.",
-              Constants.CANDIDATE_GENERATOR, mergeParamValue, config.getComparatorType()));
+              ConfigKeys.CANDIDATE_GENERATOR, mergeParamValue, config.getComparatorType()));
       return;
     }
     if (recordType != null
@@ -229,7 +229,7 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
       violations.add(
           String.format(
               "%s=%s is not supported with comparatorType %s for indexType %s.",
-              Constants.CANDIDATE_GENERATOR,
+              ConfigKeys.CANDIDATE_GENERATOR,
               mergeParamValue,
               config.getComparatorType(),
               indexType.getParamValue()));

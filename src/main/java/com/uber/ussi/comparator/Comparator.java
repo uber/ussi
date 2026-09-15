@@ -5,13 +5,19 @@ import com.uber.ussi.comparatornormalizer.ComparatorNormalizer;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.RecordType;
 import com.uber.ussi.error.ArraysSizeMismatchError;
-import com.uber.ussi.utils.Constants;
 import com.uber.ussi.utils.MathUtils;
 import java.io.Serializable;
 import java.util.Objects;
 import java.util.Set;
 
 public abstract class Comparator implements Serializable {
+
+  /**
+   * The uniValue of a record no comparator has measured yet. Only a comparator can compute one, so
+   * a record carrying this reached a comparison without ever passing through {@link
+   * #computeUniValue}.
+   */
+  public static final double UNSET_UNI_VALUE = -Double.MAX_VALUE;
 
   protected final ComparatorNormalizer comparatorNormalizer;
   private final double zeroSimilarityComparatorValue;
@@ -37,8 +43,8 @@ public abstract class Comparator implements Serializable {
   final double compare(
       LongTermsAndValues termsAndValues1, LongTermsAndValues termsAndValues2, double minSimilarity)
       throws ArraysSizeMismatchError, IllegalArgumentException, NullPointerException {
-    if (termsAndValues1.getUniValue() == Constants.UNSET_UNI_VALUE
-        || termsAndValues2.getUniValue() == Constants.UNSET_UNI_VALUE) {
+    if (termsAndValues1.getUniValue() == UNSET_UNI_VALUE
+        || termsAndValues2.getUniValue() == UNSET_UNI_VALUE) {
       throw new IllegalArgumentException(
           String.format(
               "The comparator was called on TermsAndValues with unset uniValues (%s), (%s).",
@@ -112,7 +118,7 @@ public abstract class Comparator implements Serializable {
    * minSimilarity gives a smaller prefix sum, down to a single term at 1.0.
    */
   public final double getMinPrefixSumForTermsAndValues(double uniValue, double minSimilarity) {
-    if (uniValue == Constants.UNSET_UNI_VALUE || uniValue < 0.0) {
+    if (uniValue == UNSET_UNI_VALUE || uniValue < 0.0) {
       throw new IllegalArgumentException(String.format("Invalid uniValue (%s).", uniValue));
     }
     if (minSimilarity < 0.0 || minSimilarity > 1.0) {

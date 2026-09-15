@@ -12,7 +12,7 @@ import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
 import com.uber.ussi.entity.termsandvalues.RecordType;
 import com.uber.ussi.error.ComparatorCreationError;
-import com.uber.ussi.utils.Constants;
+import com.uber.ussi.utils.ConfigKeys;
 import com.uber.ussi.utils.MathUtils;
 import java.util.Map;
 import java.util.Random;
@@ -176,28 +176,28 @@ class SparseComparatorTest {
         () ->
             ComparatorFactory.createComparator(
                 "jaccard",
-                Map.of(Constants.SIGNATURE_GENERATOR, "icws"),
+                Map.of(ConfigKeys.SIGNATURE_GENERATOR, "icws"),
                 new IdentityComparatorNormalizer()));
     assertThrows(
         ComparatorCreationError.class,
         () ->
             ComparatorFactory.createComparator(
                 "ruzicka",
-                Map.of(Constants.SIGNATURE_GENERATOR, "minhash"),
+                Map.of(ConfigKeys.SIGNATURE_GENERATOR, "minhash"),
                 new IdentityComparatorNormalizer()));
     assertThrows(
         ComparatorCreationError.class,
         () ->
             ComparatorFactory.createComparator(
                 "jaccard",
-                Map.of(Constants.SIGNATURE_GENERATOR, "unknown"),
+                Map.of(ConfigKeys.SIGNATURE_GENERATOR, "unknown"),
                 new IdentityComparatorNormalizer()));
     assertThrows(
         ComparatorCreationError.class,
         () ->
             ComparatorFactory.createComparator(
                 "l2",
-                Map.of(Constants.SIGNATURE_GENERATOR, "icws"),
+                Map.of(ConfigKeys.SIGNATURE_GENERATOR, "icws"),
                 new IdentityComparatorNormalizer()));
   }
 

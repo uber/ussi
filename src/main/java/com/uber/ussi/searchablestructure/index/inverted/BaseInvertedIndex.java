@@ -27,7 +27,7 @@ import com.uber.ussi.searchablestructure.index.inverted.generator.TopResults;
 import com.uber.ussi.searchablestructure.inverted.KeyAndPrefixFilteringData;
 import com.uber.ussi.searchablestructure.metadata.MetadataFilteringStrategy;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
-import com.uber.ussi.utils.Constants;
+import com.uber.ussi.utils.ConfigKeys;
 import com.uber.ussi.utils.MathUtils;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -579,7 +579,7 @@ abstract class BaseInvertedIndex extends Index {
 
   private static double parseMaxFractionIdsPerTerm(NamespaceConfig namespaceConfig) {
     return namespaceConfig.readDoubleIndexParam(
-        Constants.MAX_FRACTION_IDS_PER_TERM, Constants.DEFAULT_MAX_FRACTION_IDS_PER_TERM);
+        ConfigKeys.MAX_FRACTION_IDS_PER_TERM, ConfigKeys.DEFAULT_MAX_FRACTION_IDS_PER_TERM);
   }
 
   /**

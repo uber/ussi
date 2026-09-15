@@ -7,7 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.uber.ussi.TestLongObjectMaps;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.config.NamespaceConfig.CandidateGeneratorType;
-import com.uber.ussi.utils.Constants;
+import com.uber.ussi.searchablestructure.index.inverted.SignatureIndex;
+import com.uber.ussi.utils.ConfigKeys;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -163,20 +164,20 @@ class IndexPairingMatrixTest {
     NamespaceConfig.Builder builder =
         NamespaceConfig.builder()
             .minTermsAndValuesLength(0)
-            .maxTermsAndValuesLength(Constants.NUM_SIGNATURES_PER_ROW + 1)
+            .maxTermsAndValuesLength(SignatureIndex.NUM_SIGNATURES_PER_ROW + 1)
             .maxCacheSize(10)
             .cacheType("scan")
             .indexType(cell.indexType().getParamValue())
             .indexParams(
                 Map.of(
-                    Constants.CANDIDATE_GENERATOR, cell.candidateGeneratorType().getParamValue()))
+                    ConfigKeys.CANDIDATE_GENERATOR, cell.candidateGeneratorType().getParamValue()))
             .comparatorType(cell.comparator().comparatorType())
             .comparatorNormalizerType(cell.comparator().normalizerType())
             .maxNumSearchableStructures(3)
             .maxNumSimilarities(10);
     if (cell.comparator().generatesSignatures()) {
       builder.comparatorParams(
-          Map.of(Constants.SIGNATURE_GENERATOR, cell.comparator().signatureGenerator()));
+          Map.of(ConfigKeys.SIGNATURE_GENERATOR, cell.comparator().signatureGenerator()));
     }
     return builder.build();
   }

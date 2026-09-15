@@ -10,7 +10,6 @@ import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.index.Index;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
-import com.uber.ussi.utils.Constants;
 import java.util.List;
 
 /** Hybrid inverted index using exact keys for short rows and signatures for long rows. */
@@ -25,7 +24,7 @@ public final class HybridIndex extends Index {
    * entries and buying no pruning. The two quantities are derived separately and happen to
    * coincide, so the cutoff names itself rather than reading as a signature count here.
    */
-  private static final int TERM_KEYING_CUTOFF = Constants.NUM_SIGNATURES_PER_ROW;
+  private static final int TERM_KEYING_CUTOFF = SignatureIndex.NUM_SIGNATURES_PER_ROW;
 
   private final TermIndex termIndex;
   private final SignatureIndex signatureIndex;

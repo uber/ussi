@@ -12,7 +12,7 @@ import com.uber.ussi.comparatornormalizer.ComparatorNormalizerFactory;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
 import com.uber.ussi.error.IndexCreationError;
-import com.uber.ussi.utils.Constants;
+import com.uber.ussi.utils.ConfigKeys;
 import com.uber.ussi.utils.MathUtils;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -50,7 +50,7 @@ class SignatureKeyingStrategyTest {
     SignatureKeyingStrategy strategy =
         strategy(
             comparator(
-                "ngld", "complement", Map.of(Constants.SEQUENCE_DISTANCE_TYPE, "levenshtein")),
+                "ngld", "complement", Map.of(ConfigKeys.SEQUENCE_DISTANCE_TYPE, "levenshtein")),
             SignatureGeneratorType.ICWS);
 
     assertEquals(
@@ -110,7 +110,7 @@ class SignatureKeyingStrategyTest {
   @Test
   void theConfiguredGeneratorIsTheOneTheStrategyDrawsFrom() {
     NamespaceConfig config =
-        config("jaccard", "identity", Map.of(Constants.SIGNATURE_GENERATOR, "minhash"));
+        config("jaccard", "identity", Map.of(ConfigKeys.SIGNATURE_GENERATOR, "minhash"));
     Comparator comparator = comparator("jaccard", "identity");
 
     SignatureKeyingStrategy strategy = SignatureKeyingStrategy.create(config, comparator);

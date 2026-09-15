@@ -11,7 +11,7 @@ import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
 import com.uber.ussi.error.ComparatorCreationError;
-import com.uber.ussi.utils.Constants;
+import com.uber.ussi.utils.ConfigKeys;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -24,7 +24,7 @@ class ComparatorConfigValidatorTest {
     new ValidationCase("no signature param", builder -> builder, true, null),
     new ValidationCase(
         "minhash for jaccard",
-        builder -> builder.comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR, "minhash")),
+        builder -> builder.comparatorParams(Map.of(ConfigKeys.SIGNATURE_GENERATOR, "minhash")),
         true,
         null),
     new ValidationCase(
@@ -32,13 +32,13 @@ class ComparatorConfigValidatorTest {
         builder ->
             builder
                 .comparatorType("l2")
-                .comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR, "minhash")),
+                .comparatorParams(Map.of(ConfigKeys.SIGNATURE_GENERATOR, "minhash")),
         false,
         "L2 does not support signature generation."),
     new ValidationCase(
         "unknown signature type",
         builder ->
-            builder.comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR, "superhash")),
+            builder.comparatorParams(Map.of(ConfigKeys.SIGNATURE_GENERATOR, "superhash")),
         false,
         null),
     new ValidationCase(
@@ -52,7 +52,7 @@ class ComparatorConfigValidatorTest {
         builder ->
             builder
                 .comparatorType("cosine")
-                .comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR, "minhash")),
+                .comparatorParams(Map.of(ConfigKeys.SIGNATURE_GENERATOR, "minhash")),
         false,
         UNSUPPORTED_COMPARATOR_TYPE),
     new ValidationCase(
@@ -61,13 +61,13 @@ class ComparatorConfigValidatorTest {
             builder
                 .comparatorType("ngld")
                 .comparatorNormalizerType("complement")
-                .comparatorParams(Map.of(Constants.SEQUENCE_DISTANCE_TYPE, "levenshtein")),
+                .comparatorParams(Map.of(ConfigKeys.SEQUENCE_DISTANCE_TYPE, "levenshtein")),
         true,
         null),
     new ValidationCase(
         "sequence distance param on jaccard",
         builder ->
-            builder.comparatorParams(Map.of(Constants.SEQUENCE_DISTANCE_TYPE, "levenshtein")),
+            builder.comparatorParams(Map.of(ConfigKeys.SEQUENCE_DISTANCE_TYPE, "levenshtein")),
         false,
         "JACCARD does not compare sequences, so it has no sequence distance type."),
     new ValidationCase(
@@ -76,7 +76,7 @@ class ComparatorConfigValidatorTest {
             builder
                 .comparatorType("ngld")
                 .comparatorNormalizerType("complement")
-                .comparatorParams(Map.of(Constants.SEQUENCE_DISTANCE_TYPE, "hamming")),
+                .comparatorParams(Map.of(ConfigKeys.SEQUENCE_DISTANCE_TYPE, "hamming")),
         false,
         null),
     // A blank value is treated as unset, which a sequence comparator defaults.
@@ -86,7 +86,7 @@ class ComparatorConfigValidatorTest {
             builder
                 .comparatorType("ngld")
                 .comparatorNormalizerType("complement")
-                .comparatorParams(Map.of(Constants.SEQUENCE_DISTANCE_TYPE, "  ")),
+                .comparatorParams(Map.of(ConfigKeys.SEQUENCE_DISTANCE_TYPE, "  ")),
         true,
         null),
     new ValidationCase(
@@ -94,7 +94,7 @@ class ComparatorConfigValidatorTest {
         builder ->
             builder
                 .comparatorType("ruzicka")
-                .comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR, "minhash")),
+                .comparatorParams(Map.of(ConfigKeys.SIGNATURE_GENERATOR, "minhash")),
         false,
         null),
     new ValidationCase(

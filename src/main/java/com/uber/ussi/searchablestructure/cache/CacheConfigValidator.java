@@ -8,7 +8,7 @@ import com.uber.ussi.config.ConfigVocabulary;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.config.NamespaceConfigValidator;
 import com.uber.ussi.entity.termsandvalues.RecordType;
-import com.uber.ussi.utils.Constants;
+import com.uber.ussi.utils.ConfigKeys;
 import java.util.List;
 import java.util.Set;
 
@@ -17,10 +17,10 @@ public final class CacheConfigValidator implements NamespaceConfigValidator {
   /** Every key some layer reads from cacheParams, whatever structure is configured. */
   private static final Set<String> RECOGNIZED_KEYS =
       Set.of(
-          Constants.MAX_FRACTION_IDS_PER_TERM,
-          Constants.MAX_FRACTION_IDS_PER_TERM_CONFIDENCE,
-          Constants.FULL_REEVALUATION_CACHE_SIZE_DECREASE_FRACTION,
-          Constants.POPULAR_TERM_DISCARD_SCOPE);
+          ConfigKeys.MAX_FRACTION_IDS_PER_TERM,
+          ConfigKeys.MAX_FRACTION_IDS_PER_TERM_CONFIDENCE,
+          ConfigKeys.FULL_REEVALUATION_CACHE_SIZE_DECREASE_FRACTION,
+          ConfigKeys.POPULAR_TERM_DISCARD_SCOPE);
 
   private static final CacheConfigValidator INSTANCE = new CacheConfigValidator();
 
@@ -56,20 +56,20 @@ public final class CacheConfigValidator implements NamespaceConfigValidator {
     }
     ConfigViolations.checkDoubleAboveMinInRange(
         violations,
-        Constants.MAX_FRACTION_IDS_PER_TERM,
-        config.getCacheParam(Constants.MAX_FRACTION_IDS_PER_TERM),
+        ConfigKeys.MAX_FRACTION_IDS_PER_TERM,
+        config.getCacheParam(ConfigKeys.MAX_FRACTION_IDS_PER_TERM),
         0.0,
         1.0);
     ConfigViolations.checkDoubleInRange(
         violations,
-        Constants.MAX_FRACTION_IDS_PER_TERM_CONFIDENCE,
-        config.getCacheParam(Constants.MAX_FRACTION_IDS_PER_TERM_CONFIDENCE),
+        ConfigKeys.MAX_FRACTION_IDS_PER_TERM_CONFIDENCE,
+        config.getCacheParam(ConfigKeys.MAX_FRACTION_IDS_PER_TERM_CONFIDENCE),
         0.5,
         1.0);
     ConfigViolations.checkDoubleInRange(
         violations,
-        Constants.FULL_REEVALUATION_CACHE_SIZE_DECREASE_FRACTION,
-        config.getCacheParam(Constants.FULL_REEVALUATION_CACHE_SIZE_DECREASE_FRACTION),
+        ConfigKeys.FULL_REEVALUATION_CACHE_SIZE_DECREASE_FRACTION,
+        config.getCacheParam(ConfigKeys.FULL_REEVALUATION_CACHE_SIZE_DECREASE_FRACTION),
         0.0,
         1.0);
   }

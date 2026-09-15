@@ -16,7 +16,7 @@ import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.index.inverted.generator.InvertedList;
-import com.uber.ussi.utils.Constants;
+import com.uber.ussi.utils.ConfigKeys;
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
@@ -93,7 +93,7 @@ class SignatureIndexTest {
     LongTermsAndValues record = jaccard(new long[] {11}, 1f);
     SignatureIndex index =
         new SignatureIndex(
-            config("jaccard", "minhash", Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "0.5")),
+            config("jaccard", "minhash", Map.of(ConfigKeys.MAX_FRACTION_IDS_PER_TERM, "0.5")),
             longObjectMap(1, record, 2, record),
             longObjectMap());
 
@@ -220,7 +220,7 @@ class SignatureIndexTest {
 
   private static Map<String, String> mergeIndexParams() {
     return Map.of(
-        Constants.CANDIDATE_GENERATOR,
+        ConfigKeys.CANDIDATE_GENERATOR,
         NamespaceConfig.CandidateGeneratorType.SPARS_MERGE.getParamValue());
   }
 
@@ -273,7 +273,7 @@ class SignatureIndexTest {
     Map<String, String> comparatorParams =
         signatureGeneratorType == null
             ? Map.of()
-            : Map.of(Constants.SIGNATURE_GENERATOR, signatureGeneratorType);
+            : Map.of(ConfigKeys.SIGNATURE_GENERATOR, signatureGeneratorType);
     return NamespaceConfig.builder()
         .minTermsAndValuesLength(0)
         .maxTermsAndValuesLength(1000)

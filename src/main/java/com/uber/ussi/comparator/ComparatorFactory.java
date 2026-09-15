@@ -13,7 +13,7 @@ import com.uber.ussi.config.ConfigVocabulary;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.config.NamespaceConfigParams;
 import com.uber.ussi.error.ComparatorCreationError;
-import com.uber.ussi.utils.Constants;
+import com.uber.ussi.utils.ConfigKeys;
 import java.util.Map;
 import javax.annotation.Nullable;
 
@@ -74,7 +74,7 @@ public class ComparatorFactory {
   static SequenceDistance createSequenceDistance(Map<String, String> comparatorParams)
       throws ComparatorCreationError {
     String configuredType =
-        NamespaceConfigParams.getParam(comparatorParams, Constants.SEQUENCE_DISTANCE_TYPE);
+        NamespaceConfigParams.getParam(comparatorParams, ConfigKeys.SEQUENCE_DISTANCE_TYPE);
     if (configuredType == null || configuredType.trim().isEmpty()) {
       return SequenceDistanceFactory.createSequenceDistance(SequenceDistanceType.LEVENSHTEIN);
     }
@@ -121,7 +121,7 @@ public class ComparatorFactory {
   private static SignatureGeneratorType resolveSignatureGeneratorType(
       Map<String, String> comparatorParams, ComparatorType comparatorType) {
     String configuredType =
-        NamespaceConfigParams.getParam(comparatorParams, Constants.SIGNATURE_GENERATOR);
+        NamespaceConfigParams.getParam(comparatorParams, ConfigKeys.SIGNATURE_GENERATOR);
     if (configuredType == null || configuredType.trim().isEmpty()) {
       return null;
     }
@@ -134,7 +134,7 @@ public class ComparatorFactory {
     if (type == null) {
       throw new ComparatorCreationError(
           ConfigVocabulary.unsupported(
-              Constants.SIGNATURE_GENERATOR, configuredType, SignatureGeneratorType.class));
+              ConfigKeys.SIGNATURE_GENERATOR, configuredType, SignatureGeneratorType.class));
     }
     if (!comparatorType.getSupportedSignatureGeneratorTypes().contains(type)) {
       throw new ComparatorCreationError(

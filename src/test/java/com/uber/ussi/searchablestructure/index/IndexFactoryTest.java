@@ -12,7 +12,7 @@ import com.uber.ussi.searchablestructure.index.inverted.SignatureIndex;
 import com.uber.ussi.searchablestructure.index.inverted.TermIndex;
 import com.uber.ussi.searchablestructure.index.matrix.MatrixIndex;
 import com.uber.ussi.searchablestructure.index.scan.ScanIndex;
-import com.uber.ussi.utils.Constants;
+import com.uber.ussi.utils.ConfigKeys;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -130,9 +130,9 @@ class IndexFactoryTest {
 
   private static NamespaceConfig.Builder signatureConfig() {
     return validConfig()
-        .maxTermsAndValuesLength(Constants.NUM_SIGNATURES_PER_ROW + 1)
+        .maxTermsAndValuesLength(SignatureIndex.NUM_SIGNATURES_PER_ROW + 1)
         .comparatorType("jaccard")
-        .comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR, "minhash"))
+        .comparatorParams(Map.of(ConfigKeys.SIGNATURE_GENERATOR, "minhash"))
         .comparatorNormalizerType("identity");
   }
 }

@@ -18,7 +18,7 @@ import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
 import com.uber.ussi.error.IndexCreationError;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.index.scan.ScanIndex;
-import com.uber.ussi.utils.Constants;
+import com.uber.ussi.utils.ConfigKeys;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -189,7 +189,7 @@ class TermIndexOnSequencesTest {
 
     TermIndex index =
         new TermIndex(
-            config("ngld", Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "0.75"), "inverted_term"),
+            config("ngld", Map.of(ConfigKeys.MAX_FRACTION_IDS_PER_TERM, "0.75"), "inverted_term"),
             rows,
             longObjectMap());
 
@@ -223,9 +223,9 @@ class TermIndexOnSequencesTest {
             config(
                 "ngld",
                 Map.of(
-                    Constants.MAX_FRACTION_IDS_PER_TERM,
+                    ConfigKeys.MAX_FRACTION_IDS_PER_TERM,
                     "0.75",
-                    Constants.POPULAR_TERM_DISCARD_SCOPE,
+                    ConfigKeys.POPULAR_TERM_DISCARD_SCOPE,
                     PopularTermDiscardScope.CANDIDATES_ONLY.getParamValue()),
                 "inverted_term"),
             rows,
@@ -255,7 +255,7 @@ class TermIndexOnSequencesTest {
 
     TermIndex index =
         new TermIndex(
-            config("ngld", Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "0.75"), "inverted_term"),
+            config("ngld", Map.of(ConfigKeys.MAX_FRACTION_IDS_PER_TERM, "0.75"), "inverted_term"),
             rows,
             longObjectMap());
 

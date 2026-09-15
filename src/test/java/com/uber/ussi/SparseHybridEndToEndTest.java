@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.TermsAndValues;
-import com.uber.ussi.utils.Constants;
+import com.uber.ussi.utils.ConfigKeys;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -80,7 +80,7 @@ class SparseHybridEndToEndTest {
         .cacheType("inverted_term")
         .indexType("inverted_hybrid")
         .comparatorType("jaccard")
-        .comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR, "minhash"))
+        .comparatorParams(Map.of(ConfigKeys.SIGNATURE_GENERATOR, "minhash"))
         .comparatorNormalizerType("identity")
         .maxNumSearchableStructures(3)
         .maxNumSimilarities(10)

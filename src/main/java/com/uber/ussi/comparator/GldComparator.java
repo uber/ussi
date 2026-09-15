@@ -46,9 +46,14 @@ public class GldComparator extends BaseSequenceComparator {
    * A query within {@code d} edits of a candidate has at most {@link
    * SequenceDistance#getL1BoundFactor()} {@code * d} of its own elements unmatched by that
    * candidate, disregarding order, so only a prefix that long has to generate candidates.
+   *
+   * <p>An edit count states the cap directly rather than through a share, because over terms the
+   * keys are those elements. Taking the share shape here would be sound but looser, since
+   * expressing the budget as a share needs the shortest length a candidate may have and then
+   * scales back up by a longer one.
    */
   @Override
-  protected double getMinPrefixSumForTermsAndValuesInternal(
+  protected double getMaxPrefixSumForTermsAndValuesInternal(
       double uniValue, double comparatorValue) {
     if (comparatorValue < 0.0) {
       throw new IllegalArgumentException("comparatorValue must be at least 0.0.");

@@ -72,16 +72,16 @@ public class NgldComparator extends BaseSequenceComparator {
   }
 
   /**
-   * A query within {@code d} edits of a candidate has at most {@code l1BoundFactor * d} of its own
-   * elements unmatched by that candidate, disregarding order. Substituting the largest {@code d}
-   * this threshold allows gives a fraction of the query's length, the same for every candidate,
-   * and only a prefix that long has to generate candidates.
+   * A normalized distance is a share of the sequences' combined length rather than a count of
+   * anything, so the prefix takes the share shape, and the fraction is the one the signatures are
+   * bounded by: the elements are the terms themselves, so the multiset similarity that bounds
+   * their collision rate bounds the share of terms a qualifying candidate matches.
    */
   @Override
-  protected double getMinPrefixSumForTermsAndValuesInternal(
+  protected double getMaxPrefixSumForTermsAndValuesInternal(
       double uniValue, double comparatorValue) {
-    double unmatchedFraction = getMaxUnmatchedFraction(uniValue, comparatorValue);
-    return Math.min(uniValue, uniValue * 2.0 * unmatchedFraction / (1.0 + unmatchedFraction));
+    return maxPrefixSumFromSharedFraction(
+        uniValue, getMinSharedSignatureFraction(uniValue, comparatorValue));
   }
 
   /**

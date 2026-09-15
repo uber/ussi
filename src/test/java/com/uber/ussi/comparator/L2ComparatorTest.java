@@ -162,7 +162,7 @@ class L2ComparatorTest {
   void exactPrefixSumUsesSquaredMaximumDistance() {
     Assertions.assertEquals(
         4.0 + MathUtils.EPSILON_12,
-        comparator.getMinPrefixSumForTermsAndValues(
+        comparator.getMaxPrefixSumForTermsAndValues(
             25.0, comparatorNormalizer.comparatorValueToNormalizedSimilarityValue(2.0)),
         0.0);
   }

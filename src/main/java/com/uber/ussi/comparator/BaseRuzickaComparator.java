@@ -113,13 +113,15 @@ abstract class BaseRuzickaComparator extends Comparator implements SignatureBoun
     return union == 0.0 ? 1.0 : intersection / union;
   }
 
+  /**
+   * These measures are a share of the keys already, so the prefix takes the share shape and the
+   * fraction is the one below, the same over terms as over signatures.
+   */
   @Override
-  protected double getMinPrefixSumForTermsAndValuesInternal(
+  protected double getMaxPrefixSumForTermsAndValuesInternal(
       double uniValue, double comparatorValue) {
-    if (comparatorValue < 0.0) {
-      throw new IllegalArgumentException("comparatorValue must be at least 0.0.");
-    }
-    return uniValue * (1.0 - comparatorValue);
+    return maxPrefixSumFromSharedFraction(
+        uniValue, getMinSharedSignatureFraction(uniValue, comparatorValue));
   }
 
   /**

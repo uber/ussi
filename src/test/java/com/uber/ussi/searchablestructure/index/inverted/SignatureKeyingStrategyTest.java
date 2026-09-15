@@ -32,11 +32,11 @@ class SignatureKeyingStrategyTest {
 
     assertEquals(
         60.0 + MathUtils.EPSILON_12,
-        strategy.getMinPrefixSumForSignatures(100, /* recordUniValue */ 8.0, 0.5),
+        strategy.getMaxPrefixSumForSignatures(100, /* recordUniValue */ 8.0, 0.5),
         0.0);
     assertEquals(
         60.0 + MathUtils.EPSILON_12,
-        strategy.getMinPrefixSumForSignatures(100, /* recordUniValue */ 4096.0, 0.5),
+        strategy.getMaxPrefixSumForSignatures(100, /* recordUniValue */ 4096.0, 0.5),
         0.0);
   }
 
@@ -55,7 +55,7 @@ class SignatureKeyingStrategyTest {
 
     assertEquals(
         47.0 + MathUtils.EPSILON_12,
-        strategy.getMinPrefixSumForSignatures(100, /* recordUniValue */ 6.0, 0.8),
+        strategy.getMaxPrefixSumForSignatures(100, /* recordUniValue */ 6.0, 0.8),
         EPSILON_9);
   }
 
@@ -75,13 +75,13 @@ class SignatureKeyingStrategyTest {
 
     assertThrows(
         IllegalArgumentException.class,
-        () -> strategy.getMinPrefixSumForSignatures(-1, 4.0, 0.5));
+        () -> strategy.getMaxPrefixSumForSignatures(-1, 4.0, 0.5));
     assertThrows(
         IllegalArgumentException.class,
-        () -> strategy.getMinPrefixSumForSignatures(10, 4.0, -0.1));
+        () -> strategy.getMaxPrefixSumForSignatures(10, 4.0, -0.1));
     assertThrows(
         IllegalArgumentException.class,
-        () -> strategy.getMinPrefixSumForSignatures(10, 4.0, 1.1));
+        () -> strategy.getMaxPrefixSumForSignatures(10, 4.0, 1.1));
   }
 
   /**

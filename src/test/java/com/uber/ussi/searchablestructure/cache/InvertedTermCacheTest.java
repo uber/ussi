@@ -615,7 +615,7 @@ class InvertedTermCacheTest {
     }
 
     @Override
-    protected double getMinPrefixSumForTermsAndValuesInternal(
+    protected double getMaxPrefixSumForTermsAndValuesInternal(
         double uniValue, double comparatorValue) {
       return comparatorValue == 0.0 ? 10.0 : -1.0;
     }

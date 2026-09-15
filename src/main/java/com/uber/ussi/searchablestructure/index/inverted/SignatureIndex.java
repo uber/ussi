@@ -28,10 +28,10 @@ public final class SignatureIndex extends BaseInvertedIndex {
   }
 
   @Override
-  protected double getMinPrefixSum(
+  protected double getMaxPrefixSum(
       double keysUniValue, double recordUniValue, double minSimilarity) {
     return getSignatureKeyingStrategy()
-        .getMinPrefixSumForSignatures(
+        .getMaxPrefixSumForSignatures(
             (int) Math.ceil(keysUniValue), recordUniValue, minSimilarity);
   }
 

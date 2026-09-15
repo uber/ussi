@@ -289,10 +289,19 @@ could still add leaves the pair short of the threshold, the comparison stops.
 Prefix filtering prunes before any comparison, on the same quantity taken over
 the query's keys. The prefix is chosen per query, cheapest inverted list first,
 and the traversal halts once the partial unilateral value of the visited keys
-exceeds the most a qualifying candidate may leave unmatched. For Jaccard and
-Ruzicka that allowance is the share of the query's `uniValue` a candidate at
-exactly the threshold can afford to miss; the comparator supplies it for term
-keys and the signature keying strategy for signature keys. A row absent from
+exceeds the most a qualifying candidate may leave unmatched. That allowance
+takes one of two shapes, and which one a measure takes is what decides how it
+is derived. A threshold that is already a share of the keys gives the share of
+their unilateral value a candidate at exactly the threshold can afford to
+miss: a similarity for Jaccard and Ruzicka, a normalized distance for NGLD,
+and any signature-keyed structure, a signature standing for one draw. Keys are
+shared in proportion to the multiset similarity of the records they were drawn
+from whether they are terms or signatures, so that share is one fraction
+serving both key spaces. A threshold that counts keys instead states the
+allowance directly and no share comes into it, GLD's edits being elements and
+L2's squared distance being in the units of the squared values its unilateral
+value sums. The comparator supplies the allowance for term keys and the
+signature keying strategy for signature keys. A row absent from
 every list visited so far has missed all of them, so once that accumulation
 passes the allowance, no row still unseen can qualify and the rest of the
 query's keys go unvisited. Either candidate generator can traverse these lists.

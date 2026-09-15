@@ -113,11 +113,12 @@ public abstract class Comparator implements Serializable {
   }
 
   /**
-   * Returns the prefix sum, over the uniTransformed values in term order, below which terms can
-   * generate candidates; past it no candidate generated can be similar enough. A larger
-   * minSimilarity gives a smaller prefix sum, down to a single term at 1.0.
+   * Returns the most a traversal of this record's terms, in uniTransformed value order, may
+   * accumulate while an unseen candidate can still be similar enough; only terms within it have to
+   * generate candidates. A larger minSimilarity gives a smaller prefix sum, down to a single term
+   * at 1.0.
    */
-  public final double getMinPrefixSumForTermsAndValues(double uniValue, double minSimilarity) {
+  public final double getMaxPrefixSumForTermsAndValues(double uniValue, double minSimilarity) {
     if (uniValue == UNSET_UNI_VALUE || uniValue < 0.0) {
       throw new IllegalArgumentException(String.format("Invalid uniValue (%s).", uniValue));
     }
@@ -125,13 +126,43 @@ public abstract class Comparator implements Serializable {
       throw new IllegalArgumentException(
           String.format("minSimilarity must be in [0.0, 1.0], got %s.", minSimilarity));
     }
-    return getMinPrefixSumForTermsAndValuesInternal(
+    return getMaxPrefixSumForTermsAndValuesInternal(
             uniValue,
             comparatorNormalizer.normalizedSimilarityValueToComparatorValue(minSimilarity))
         + MathUtils.EPSILON_12;
   }
 
-  protected abstract double getMinPrefixSumForTermsAndValuesInternal(
+  /**
+   * Returns the prefix sum a threshold gives when it is a share of the keys: what a candidate
+   * obliged to share {@code minSharedKeyFraction} of them may leave unshared, out of keys whose
+   * combined Uni value is {@code keysUniValue}.
+   *
+   * <p>One shape serves both key spaces. Keys are shared in proportion to the multiset similarity
+   * of the records they were drawn from, whether they are the record's own terms or signatures
+   * drawn from it, so the fraction a measure bounds that similarity by caps the prefix over either
+   * one. Only the Uni value differs, being the record's own over terms and the number of
+   * signatures over signatures, since each of those stands for one draw.
+   *
+   * <p>A fraction outside [0.0, 1.0] guarantees nothing, and is clamped rather than rejected: a
+   * measure may bound a similarity it does not itself report, and a bound that has gone slack
+   * should widen the prefix rather than fail the search.
+   */
+  public static double maxPrefixSumFromSharedFraction(
+      double keysUniValue, double minSharedKeyFraction) {
+    return keysUniValue * (1.0 - Math.min(1.0, Math.max(0.0, minSharedKeyFraction)));
+  }
+
+  /**
+   * Returns the prefix sum cap in this comparator's own units, given its threshold in them.
+   *
+   * <p>Two shapes arise, and which one a measure takes is what decides the implementation. A
+   * threshold that is already a share of the keys gives the cap through {@link
+   * #maxPrefixSumFromSharedFraction}: a similarity for Jaccard and Ruzicka, a normalized distance
+   * for NGLD. A threshold that counts keys instead states the cap directly, and no share comes
+   * into it: GLD's edits are elements, which over terms are the keys themselves, and L2's squared
+   * distance is in the units of the squared values its Uni value sums.
+   */
+  protected abstract double getMaxPrefixSumForTermsAndValuesInternal(
       double uniValue, double comparatorValue);
 
   public abstract boolean mayPassLengthFiltering(

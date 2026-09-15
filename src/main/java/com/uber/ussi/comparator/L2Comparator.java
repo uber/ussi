@@ -120,8 +120,13 @@ public class L2Comparator extends Comparator {
     return (double) value * value;
   }
 
+  /**
+   * A squared distance states the cap directly rather than through a share: it is already in the
+   * units of the squared values this comparator's Uni value sums, and a distance budget bounds no
+   * share of a record, two vectors being as far apart as their magnitudes allow.
+   */
   @Override
-  protected double getMinPrefixSumForTermsAndValuesInternal(
+  protected double getMaxPrefixSumForTermsAndValuesInternal(
       double uniValue, double comparatorValue) {
     return comparatorValue * comparatorValue;
   }

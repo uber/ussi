@@ -191,7 +191,7 @@ public final class InvertedTermCache extends Cache {
     BoundedSizeMaxHeap<RowNumAndSimilarity> rows = createTopResultsHeap(maxResults);
     double currentMinSimilarity = minSimilarity;
     double maxPrefixSum =
-        comparator.getMinPrefixSumForTermsAndValues(
+        comparator.getMaxPrefixSumForTermsAndValues(
             discardedTermFreeQuery.getUniValue(), currentMinSimilarity);
     MathUtils.StableSumAccumulator prefixSumAccumulator = new MathUtils.StableSumAccumulator();
     LongHashSet scannedRowNums = new LongHashSet();
@@ -220,7 +220,7 @@ public final class InvertedTermCache extends Cache {
           if (tightenedMinSimilarity > currentMinSimilarity) {
             currentMinSimilarity = tightenedMinSimilarity;
             maxPrefixSum =
-                comparator.getMinPrefixSumForTermsAndValues(
+                comparator.getMaxPrefixSumForTermsAndValues(
                     discardedTermFreeQuery.getUniValue(), currentMinSimilarity);
             if (prefixSumAccumulator.getSum() > maxPrefixSum) {
               break;

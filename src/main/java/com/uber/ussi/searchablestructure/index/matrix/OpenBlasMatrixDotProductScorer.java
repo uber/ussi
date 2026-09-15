@@ -7,7 +7,6 @@ import static org.bytedeco.openblas.global.openblas.CblasRowMajor;
 import com.uber.ussi.utils.Utils;
 import java.util.function.BooleanSupplier;
 import java.util.function.IntConsumer;
-import java.util.function.IntSupplier;
 import org.bytedeco.javacpp.FloatPointer;
 import org.bytedeco.openblas.global.openblas;
 import org.bytedeco.openblas.presets.openblas_nolapack;
@@ -20,7 +19,6 @@ final class OpenBlasMatrixDotProductScorer implements MatrixDotProductScorer {
   static FloatPointerArrayReader floatPointerArrayReader = FloatPointer::get;
   static SgemvOperation sgemvOperation = openblas::cblas_sgemv;
   static Runnable blasNativeLoadProbe = openblas_nolapack::blas_get_num_threads;
-  static IntSupplier blasThreadCountSupplier = openblas_nolapack::blas_get_num_threads;
   static IntConsumer blasThreadCountSetter = openblas_nolapack::blas_set_num_threads;
 
   // One entry per native binary carried as a runtime dependency; isAvailable still probes the load.
@@ -29,7 +27,6 @@ final class OpenBlasMatrixDotProductScorer implements MatrixDotProductScorer {
           || (Utils.isRunningOnLinux() && Utils.isRunningOnX86())
           || (Utils.isRunningOnMacOs() && Utils.isRunningOnArm())
           || (Utils.isRunningOnMacOs() && Utils.isRunningOnX86());
-  private static final Object OPENBLAS_GEMV_LOCK = new Object();
   private static final int GEMV_NUM_THREADS =
       Math.max(1, Runtime.getRuntime().availableProcessors());
 
@@ -44,6 +41,9 @@ final class OpenBlasMatrixDotProductScorer implements MatrixDotProductScorer {
     if (!availabilitySupplier.getAsBoolean()) {
       throw new IllegalStateException("OpenBLAS is not available on this platform.");
     }
+    // The count is process-global to OpenBLAS and rebuilds its thread pool, so it is set here
+    // rather than per score, where it would cost orders of magnitude more than the gemv itself.
+    blasThreadCountSetter.accept(GEMV_NUM_THREADS);
     this.nativeMatrix = floatArrayPointerFactory.create(rowMajorValues);
     this.numRows = numRows;
     this.dimension = dimension;
@@ -82,27 +82,19 @@ final class OpenBlasMatrixDotProductScorer implements MatrixDotProductScorer {
     MatrixDotProductScorers.validateScoreInputs(null, numRows, dimension, queryValues, dotProducts);
     try (FloatPointer nativeQuery = floatArrayPointerFactory.create(queryValues);
         FloatPointer nativeDotProducts = floatSizePointerFactory.create(numRows)) {
-      synchronized (OPENBLAS_GEMV_LOCK) {
-        int previousThreads = blasThreadCountSupplier.getAsInt();
-        blasThreadCountSetter.accept(GEMV_NUM_THREADS);
-        try {
-          sgemvOperation.run(
-              /* Order */ CblasRowMajor,
-              /* transA */ CblasNoTrans,
-              /* numRowsA */ numRows,
-              /* numColsA */ dimension,
-              /* alpha */ 1.0f,
-              /* A */ nativeMatrix,
-              /* lda */ dimension,
-              /* X */ nativeQuery,
-              /* incX */ 1,
-              /* beta */ 0.0f,
-              /* Y */ nativeDotProducts,
-              /* incY */ 1);
-        } finally {
-          blasThreadCountSetter.accept(previousThreads);
-        }
-      }
+      sgemvOperation.run(
+          /* Order */ CblasRowMajor,
+          /* transA */ CblasNoTrans,
+          /* numRowsA */ numRows,
+          /* numColsA */ dimension,
+          /* alpha */ 1.0f,
+          /* A */ nativeMatrix,
+          /* lda */ dimension,
+          /* X */ nativeQuery,
+          /* incX */ 1,
+          /* beta */ 0.0f,
+          /* Y */ nativeDotProducts,
+          /* incY */ 1);
       floatPointerArrayReader.read(nativeDotProducts, dotProducts);
     }
   }

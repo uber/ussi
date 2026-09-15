@@ -123,10 +123,6 @@ public abstract class Index implements SearchableStructure, AutoCloseable {
         metadataFilter, getMaxPreFilteringNumRows());
   }
 
-  protected boolean supportsInFiltering() {
-    return false;
-  }
-
   /**
    * Expands the unfiltered candidate pool so post-filtering still reaches the matching rows that
    * sit just below the unexpanded top-k boundary.

@@ -5,7 +5,7 @@ package com.uber.ussi.comparator.signaturegenerator;
 abstract class BaseCwsSignatureGenerator extends SignatureGenerator {
 
   BaseCwsSignatureGenerator(double comparisonValueApproximationSafetyMargin) {
-    super(/* weighted */ true, comparisonValueApproximationSafetyMargin);
+    super(comparisonValueApproximationSafetyMargin);
   }
 
   protected static long[] toLongSignatures(CwsSignature[] signatures) {

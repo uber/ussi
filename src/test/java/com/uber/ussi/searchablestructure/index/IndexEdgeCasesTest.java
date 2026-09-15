@@ -2,7 +2,6 @@ package com.uber.ussi.searchablestructure.index;
 
 import static com.uber.ussi.TestLongObjectMaps.longObjectMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -25,7 +24,6 @@ class IndexEdgeCasesTest {
     TestIndex index = new TestIndex(config(Map.of()), longObjectMap(), null);
 
     assertTrue(index.isEmpty());
-    assertFalse(index.supportsInFilteringForTests());
     assertEquals(5, index.getPostFilteringMaxResultsForTests(5, MetaFilter.empty()));
 
     index.close();
@@ -98,10 +96,6 @@ class IndexEdgeCasesTest {
         LongObjectHashMap<LongTermsAndValues> rows,
         LongObjectHashMap<LongMeta> metadata) {
       super(namespaceConfig, rows, metadata);
-    }
-
-    private boolean supportsInFilteringForTests() {
-      return supportsInFiltering();
     }
 
     private int getPostFilteringMaxResultsForTests(int maxResults, MetaFilter metadataFilter) {

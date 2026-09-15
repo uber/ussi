@@ -190,11 +190,6 @@ abstract class BaseInvertedIndex extends Index {
     return search(record, metadataFilter, minSimilarity, namespaceConfig.getMaxNumSimilarities());
   }
 
-  @Override
-  protected final boolean supportsInFiltering() {
-    return true;
-  }
-
   final MetadataFilteringStrategy
       getResolvedMetadataFilteringStrategyForLastSearchForTests() {
     return metadataFilteredSearchExecutor.getResolvedMetadataFilteringStrategyForLastSearch();
@@ -262,10 +257,6 @@ abstract class BaseInvertedIndex extends Index {
         minSimilarity,
         searchFromIndex,
         searchToIndex);
-  }
-
-  final SharedSearchContext getSearchContext() {
-    return searchContext;
   }
 
   private List<RowNumAndSimilarity> search(

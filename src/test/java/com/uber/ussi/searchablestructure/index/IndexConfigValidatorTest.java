@@ -278,10 +278,11 @@ class IndexConfigValidatorTest {
 
   /**
    * The matrix structure stores dense records and so shares a record type with every
-   * order-agnostic comparator. What it reports is L2, so the pairing is named rather than inferred.
+   * order-agnostic comparator. What separates them is whether a dot product determines the
+   * measure, which Jaccard's intersection over populated positions does not.
    */
   @Test
-  void theMatrixStructureIsReportedForAComparatorItCannotCompute() {
+  void theMatrixStructureIsReportedForAComparatorItCannotScoreByDotProducts() {
     List<String> violations =
         violations(
             validBuilder()
@@ -291,8 +292,8 @@ class IndexConfigValidatorTest {
 
     assertEquals(
         List.of(
-            "indexType matrix computes similarity itself, so it needs comparatorType l2, "
-                + "got jaccard."),
+            "indexType matrix scores every row by one dot product, and comparatorType jaccard "
+                + "does not derive its similarity from one."),
         violations);
   }
 

@@ -66,7 +66,7 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
     }
     ComparatorType comparatorType =
         ConfigVocabulary.fromParamValue(ComparatorType.class, config.getComparatorType());
-    collectRequiredComparatorViolations(config, indexType, comparatorType, violations);
+    collectDotProductScoringViolations(config, indexType, violations);
     RecordType recordType = resolveRecordType(config, indexType, violations);
     collectSignatureSupportViolations(config, indexType, comparatorType, violations);
     collectCandidateGeneratorTypeViolations(
@@ -84,29 +84,23 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
   }
 
   /**
-   * A structure that computes similarity itself reports only the comparators whose arithmetic it
-   * implements, whatever record types it and the configured comparator happen to share.
+   * A structure that scores by dot products needs a comparator whose similarity one determines,
+   * whatever record types it and the configured comparator happen to share.
    */
-  private static void collectRequiredComparatorViolations(
-      NamespaceConfig config,
-      IndexType indexType,
-      @Nullable ComparatorType comparatorType,
-      List<String> violations) {
-    Set<ComparatorType> requiredComparatorTypes = indexType.getRequiredComparatorTypes();
-    if (requiredComparatorTypes.isEmpty()
-        || comparatorType == null
-        || requiredComparatorTypes.contains(comparatorType)) {
+  private static void collectDotProductScoringViolations(
+      NamespaceConfig config, IndexType indexType, List<String> violations) {
+    if (!indexType.scoresByDotProducts()) {
+      return;
+    }
+    Comparator comparator = ComparatorFactory.tryCreateComparator(config);
+    if (comparator == null || comparator.supportsDotProductScoring()) {
       return;
     }
     violations.add(
         String.format(
-            "indexType %s computes similarity itself, so it needs comparatorType %s, got %s.",
-            indexType.getParamValue(),
-            requiredComparatorTypes.stream()
-                .map(ComparatorType::getParamValue)
-                .sorted()
-                .collect(Collectors.joining(" or ")),
-            config.getComparatorType()));
+            "indexType %s scores every row by one dot product, and comparatorType %s does not"
+                + " derive its similarity from one.",
+            indexType.getParamValue(), config.getComparatorType()));
   }
 
   /** A signature-keyed structure is invalid with a comparator that generates no signatures. */

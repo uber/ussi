@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.uber.ussi.comparator.Comparator;
 import com.uber.ussi.comparator.ComparatorFactory;
-import com.uber.ussi.comparator.ComparatorType;
 import com.uber.ussi.config.ConfigVocabulary;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.termsandvalues.RecordType;
@@ -94,19 +93,22 @@ class IndexTypeTest {
 
   /**
    * The matrix structure shares a record type with every order-agnostic comparator, so what keeps
-   * it to one is the arithmetic it implements rather than the type it stores.
+   * it to some of them is the arithmetic they can supply rather than the type it stores.
    */
   @Test
-  void onlyTheMatrixStructureNamesTheComparatorItComputesItself() {
+  void onlyTheMatrixStructureScoresByDotProducts() {
     assertEquals(
         Set.of(RecordType.DENSE),
         IndexType.MATRIX.resolveRecordTypes(comparator("jaccard", "identity")));
 
-    assertEquals(Set.of(ComparatorType.L2), IndexType.MATRIX.getRequiredComparatorTypes());
-    assertEquals(Set.of(), IndexType.SCAN.getRequiredComparatorTypes());
-    assertEquals(Set.of(), IndexType.INVERTED_TERM.getRequiredComparatorTypes());
-    assertEquals(Set.of(), IndexType.INVERTED_SIGNATURE.getRequiredComparatorTypes());
-    assertEquals(Set.of(), IndexType.INVERTED_HYBRID.getRequiredComparatorTypes());
+    assertTrue(IndexType.MATRIX.scoresByDotProducts());
+    assertFalse(IndexType.SCAN.scoresByDotProducts());
+    assertFalse(IndexType.INVERTED_TERM.scoresByDotProducts());
+    assertFalse(IndexType.INVERTED_SIGNATURE.scoresByDotProducts());
+    assertFalse(IndexType.INVERTED_HYBRID.scoresByDotProducts());
+
+    assertTrue(comparator("l2", "reciprocal").supportsDotProductScoring());
+    assertFalse(comparator("jaccard", "identity").supportsDotProductScoring());
   }
 
   @Test
@@ -169,7 +171,7 @@ class IndexTypeTest {
 
     // Storing the type is only half of it: scan also imposes neither of the checks that would
     // reject a comparator the pairing otherwise allows.
-    assertEquals(Set.of(), IndexType.SCAN.getRequiredComparatorTypes());
+    assertFalse(IndexType.SCAN.scoresByDotProducts());
     assertFalse(IndexType.SCAN.keysBySignatures());
   }
 

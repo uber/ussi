@@ -47,10 +47,10 @@ public class GldComparator extends BaseSequenceComparator {
    * SequenceDistance#getL1BoundFactor()} {@code * d} of its own terms unmatched by that
    * candidate, disregarding order, so only a prefix that long has to generate candidates.
    *
-   * <p>An edit count states the prefix sum directly rather than through a share, because it
-   * already counts terms. Taking the share shape here would be sound but looser, since expressing
-   * the budget as a share needs the shortest length a candidate may have and then scales back up
-   * by a longer one.
+   * <p>An edit count states the maximum prefix sum directly rather than through a share, because
+   * it already counts terms. Taking the share shape here would be sound but looser, since
+   * expressing the budget as a share needs the shortest length a candidate may have and then
+   * scales back up by a longer one.
    */
   @Override
   protected double getMaxPrefixSumForTermsAndValuesInternal(

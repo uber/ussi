@@ -36,9 +36,9 @@ it, which is why the enum is `RecordType` and not `TermsAndValuesType`.
 
 Below these sit two more words. Every record holds **terms**, whatever its
 shape: a sequence's ordered items are terms in the `terms` array just as a
-sparse record's are. A **key** is the collective name for whatever
-an inverted list can be keyed by, which is a term or a signature, so a key is
-not always something the record itself holds.
+sparse record's are. A **key** is the collective name for whatever an inverted
+list can be keyed by, which is a term or a signature, so a key is not always
+something the record itself holds.
 
 ## Structure Lifecycle
 
@@ -75,7 +75,9 @@ When the total number of searchable structures reaches
 `maxNumSearchableStructures`, older indexes are consolidated in the background.
 
 Each searchable structure and the final merge keep only `maxNumSimilarities`
-results, accumulated in a `BoundedSizeMaxHeap`.
+results, accumulated in a `BoundedSizeMaxHeap`. A threshold search is
+therefore a **capped range query**, returning the best `maxNumSimilarities`
+rows meeting the threshold rather than every row that meets it.
 
 The top-level index uses a single read/write lock. Searches run under the read
 lock and mutations under the write lock. Background builds snapshot under the
@@ -272,11 +274,17 @@ a row's own terms with nothing derived from them, so the terms a query and a
 candidate share determine their similarity exactly rather than bounding it.
 
 Inverted lists are sorted by each row's comparator-specific unilateral value,
-its `uniValue`, which is what enables length filtering. Candidate traversal
-combines length, position, and prefix filtering while tightening the similarity
-threshold as the top-k heap fills. The latter two both prune on a partial
-unilateral value: the portion of a `uniValue` consumed so far, leaving the rest
-to bound what the unconsumed part can still contribute.
+its `uniValue`, which is what enables length filtering. They are one of two
+components: the **forward index** holds the other side, mapping each `rowNum`
+to its record and its precomputed `uniValue`, so candidate generation reads
+the lists and verification reads the forward index.
+
+Candidate traversal runs on two axes. A **vertical scan** visits the query's
+keys, and a **horizontal scan** walks the inverted list of each key it visits.
+Traversal combines length, position, and prefix filtering while tightening the
+similarity threshold as the top-k heap fills. The latter two both prune on a
+partial unilateral value: the portion of a `uniValue` consumed so far, leaving
+the rest to bound what the unconsumed part can still contribute.
 
 Position filtering prunes during a comparison, on the partial unilateral values
 of the two records being compared, which the comparators carry as
@@ -284,25 +292,25 @@ of the two records being compared, which the comparators carry as
 could still add leaves the pair short of the threshold, the comparison stops.
 
 Prefix filtering prunes before any comparison, on the same quantity taken over
-the query's keys. The prefix is chosen per query, cheapest inverted list first,
-and the traversal halts once the partial unilateral value of the visited keys
-exceeds the most a qualifying candidate may leave unmatched. That allowance
-takes one of two shapes, and which one a measure takes is what decides how it
-is derived. A threshold that is already a share of the keys gives the share of
-their unilateral value a candidate at exactly the threshold can afford to
-miss: a similarity for Jaccard and Ruzicka, a normalized distance for NGLD,
-and any signature-keyed structure, a signature standing for one draw. Keys are
-shared in proportion to the multiset similarity of the records they were drawn
-from whether they are terms or signatures, so that share is one fraction
-serving both key spaces. A threshold that counts keys instead states the
-allowance directly and no share comes into it, GLD's edits counting a
-sequence's terms and L2's squared distance being in the units of the squared
-values its unilateral value sums. The comparator supplies the allowance for
-term keys and the signature keying strategy for signature keys. A row absent
-from every list visited so far has missed all of them, so once that
-accumulation passes the allowance, no row still unseen can qualify and the rest
-of the query's keys go unvisited. Either candidate generator can traverse these
-lists.
+the query's keys. The prefix is chosen per query, cheapest inverted list
+first, and the vertical scan halts once the partial unilateral value of the
+visited keys exceeds the query's `maxPrefixSum`, the most a qualifying
+candidate may leave unmatched. `maxPrefixSum` takes one of two shapes, and
+which one a measure takes is what decides how it is derived. A threshold that
+is already a share of the keys gives the share of their unilateral value a
+candidate at exactly the threshold can afford to miss: a similarity for
+Jaccard and Ruzicka, a normalized distance for NGLD, and any signature-keyed
+structure, a signature standing for one draw. Keys are shared in proportion to
+the multiset similarity of the records they were drawn from whether they are
+terms or signatures, so that share is one fraction serving both key spaces. A
+threshold that counts keys instead states `maxPrefixSum` directly and no share
+comes into it, GLD's edits counting a sequence's terms and L2's squared
+distance being in the units of the squared values its unilateral value sums.
+The comparator supplies `maxPrefixSum` for term keys and the signature keying
+strategy for signature keys. A row absent from every list visited so far has
+missed all of them, so once that accumulation passes `maxPrefixSum`, no row
+still unseen can qualify and the rest of the query's keys go unvisited. Either
+candidate generator can traverse these lists.
 
 Each row and each query must have non-empty terms and values arrays of equal
 length after canonicalization; a query and a row need not have the same number
@@ -439,11 +447,11 @@ with the `candidate_generator` index parameter. Both return identical results
 and honor every metadata filtering strategy; they differ only in how much work
 they do to get there.
 
-`spars` is the default and is key-major. It visits the query's keys cheapest
-first, narrows each key's inverted list to the rows that length filtering
-admits, and scores every surviving candidate with the comparator. Because it
-always scores through the comparator, it supports every inverted index type and
-every supported comparator.
+`spars` is the default and is key-major. Its vertical scan visits the query's
+keys cheapest first, each horizontal scan narrows that key's inverted list to
+the rows length filtering admits, and every surviving candidate is scored with
+the comparator. Because it always scores through the comparator, it supports
+every inverted index type and every supported comparator.
 
 `spars_merge` is row-major. One frontier spans all of the query's keys and
 advances them in step, so every inverted-list entry belonging to a candidate

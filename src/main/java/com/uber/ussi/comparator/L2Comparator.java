@@ -121,9 +121,10 @@ public class L2Comparator extends Comparator {
   }
 
   /**
-   * A squared distance states the prefix sum directly rather than through a share: it is already
-   * in the units of the squared values this comparator's Uni value sums, and a distance budget
-   * bounds no share of a record, two vectors being as far apart as their magnitudes allow.
+   * A squared distance states the maximum prefix sum directly rather than through a share: it is
+   * already in the units of the squared values this comparator's Uni value sums, and a distance
+   * budget bounds no share of a record, two vectors being as far apart as their magnitudes
+   * allow.
    */
   @Override
   protected double getMaxPrefixSumForTermsAndValuesInternal(

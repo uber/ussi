@@ -11,7 +11,6 @@ class MatrixDotProductScorerTest {
   private static final int RANDOM_PROFILE_PHOTO_DIMENSION = 4096;
   private static final long RANDOM_PROFILE_PHOTO_SEED = 20260616L;
   private static final float DELTA = 1e-3f;
-  private static volatile float benchmarkSink;
 
   @Test
   void openBlasScorerMatchesJavaScorer() {
@@ -42,8 +41,14 @@ class MatrixDotProductScorerTest {
     }
   }
 
+  /**
+   * A nine-value matrix is too small for OpenBLAS to spread over the threads {@code score} gives it
+   * or to reach its vectorized kernels, so the case above agrees with the Java scorer the easy way.
+   * Profile-photo dimensions reach both, where the kernels accumulate in an order of their own
+   * choosing and agreement holds only to {@link #DELTA}.
+   */
   @Test
-  void randomProfilePhotoEmbeddingBenchmarkReportsOpenBlasSpeedup() {
+  void openBlasScorerMatchesJavaScorerOverProfilePhotoSizedEmbeddings() {
     assumeTrue(OpenBlasMatrixDotProductScorer.isAvailable());
     EmbeddingData embeddingData =
         generatedProfilePhotoEmbeddingsData(
@@ -52,11 +57,8 @@ class MatrixDotProductScorerTest {
             RANDOM_PROFILE_PHOTO_SEED);
     int numRows = embeddingData.numRows;
     int dimension = embeddingData.dimension;
-    int numQueries = 20;
-    int numWarmups = 5;
-    int openBlasThreads = Math.max(1, Runtime.getRuntime().availableProcessors());
     float[] matrix = embeddingData.rowMajorValues;
-    float[][] queries = embeddingData.getFirstRowsAsQueries(numQueries);
+    float[] query = embeddingData.getFirstRowAsQuery();
     float[] javaDots = new float[numRows];
     float[] openBlasDots = new float[numRows];
     JavaMatrixDotProductScorer javaScorer =
@@ -65,60 +67,13 @@ class MatrixDotProductScorerTest {
     try (OpenBlasMatrixDotProductScorer openBlasScorer =
         new OpenBlasMatrixDotProductScorer(
             matrix, numRows, dimension, OpenBlasMatrixDotProductScorer::isAvailable)) {
-      javaScorer.score(queries[0], javaDots);
-      openBlasScorer.score(queries[0], openBlasDots);
-      for (int i = 0; i < numRows; ++i) {
-        assertEquals(javaDots[i], openBlasDots[i], DELTA);
-      }
-
-      warmUp(javaScorer, queries, javaDots, numWarmups);
-      warmUp(openBlasScorer, queries, openBlasDots, numWarmups);
-
-      long javaNanos = timeScorer(javaScorer, queries, javaDots);
-      long openBlasNanos = timeScorer(openBlasScorer, queries, openBlasDots);
-      double javaAvgMillis = nanosToMillis(javaNanos) / numQueries;
-      double openBlasAvgMillis = nanosToMillis(openBlasNanos) / numQueries;
-      double speedup = (double) javaNanos / openBlasNanos;
-
-      System.out.printf(
-          "Random profile-photo embedding dot-product benchmark: rows=%d, dimension=%d, "
-              + "queries=%d, openBlasThreads=%d, javaAvgMs=%.3f, openBlasAvgMs=%.3f, "
-              + "speedup=%.2fx, checksum=%.6f%n",
-          numRows,
-          dimension,
-          numQueries,
-          openBlasThreads,
-          javaAvgMillis,
-          openBlasAvgMillis,
-          speedup,
-          benchmarkSink);
+      javaScorer.score(query, javaDots);
+      openBlasScorer.score(query, openBlasDots);
     }
-  }
 
-  private static void warmUp(
-      MatrixDotProductScorer scorer, float[][] queries, float[] dotProducts, int numWarmups) {
-    for (int i = 0; i < numWarmups; ++i) {
-      scorer.score(queries[i % queries.length], dotProducts);
+    for (int i = 0; i < numRows; ++i) {
+      assertEquals(javaDots[i], openBlasDots[i], DELTA);
     }
-  }
-
-  private static long timeScorer(
-      MatrixDotProductScorer scorer, float[][] queries, float[] dotProducts) {
-    long startNanos = System.nanoTime();
-    float checksum = 0.0f;
-    for (float[] query : queries) {
-      scorer.score(query, dotProducts);
-      checksum +=
-          dotProducts[0]
-              + dotProducts[dotProducts.length / 2]
-              + dotProducts[dotProducts.length - 1];
-    }
-    benchmarkSink = checksum;
-    return System.nanoTime() - startNanos;
-  }
-
-  private static double nanosToMillis(long nanos) {
-    return nanos / 1_000_000.0d;
   }
 
   private static EmbeddingData generatedProfilePhotoEmbeddingsData(
@@ -142,16 +97,8 @@ class MatrixDotProductScorerTest {
       this.dimension = dimension;
     }
 
-    private float[][] getFirstRowsAsQueries(int numQueries) {
-      if (numQueries > numRows) {
-        throw new IllegalArgumentException("numQueries must be <= numRows.");
-      }
-      float[][] queries = new float[numQueries][];
-      for (int query = 0; query < numQueries; ++query) {
-        int offset = query * dimension;
-        queries[query] = Arrays.copyOfRange(rowMajorValues, offset, offset + dimension);
-      }
-      return queries;
+    private float[] getFirstRowAsQuery() {
+      return Arrays.copyOfRange(rowMajorValues, 0, dimension);
     }
   }
 }

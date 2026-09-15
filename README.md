@@ -88,7 +88,7 @@ that cannot work together all fail at creation.
 
 ## Records
 
-A record is a `TermsAndValues`, built from parallel arrays:
+A record reaches USSI as a `TermsAndValues`, built from parallel arrays:
 
 ```java
 new TermsAndValues(String[] terms, float[] values)

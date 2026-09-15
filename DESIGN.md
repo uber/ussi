@@ -7,6 +7,33 @@ library. If you are embedding it, [README.md](README.md) is what you want, and
 the public `NearestNeighborSearchIndex` API is what you should use rather than
 managing any of the structures below directly.
 
+## Rows and Records
+
+Four names sit close enough together to look like duplicates. They are four
+levels of one thing.
+
+A **row** is the unit a searchable structure stores: a record together with
+its metadata, the extra data a filter matches on. A row is identified by a
+`rowNum`, which is the handle the internals pass around in place of the row
+itself.
+
+A **record** is the feature data of a row. It is a concept, not a type, and
+it can take the shape of a vector, a time series, a histogram, a sparse
+(multi-)set, or a sequence of terms. `RecordType` names which shape a given
+record is in; a comparator declares the shapes it reads and a structure
+declares the one it stores, so the two pair up by agreeing on one.
+
+`TermsAndValues` is the public data structure a record arrives in: two
+parallel arrays, `String[] terms` and `float[] values`, which between them
+express every shape above depending on how they are populated. Terms alone
+is a sequence, values alone is dense, both together is sparse.
+
+`LongTermsAndValues` is the internal form of the same pair, with terms
+hashed to `long` and the comparator-derived `uniValue` cached alongside them.
+
+So a record is the idea and a `TermsAndValues` is the array pair implementing
+it, which is why the enum is `RecordType` and not `TermsAndValuesType`.
+
 ## Structure Lifecycle
 
 `NearestNeighborSearchIndex` owns one active cache, zero or more graduating

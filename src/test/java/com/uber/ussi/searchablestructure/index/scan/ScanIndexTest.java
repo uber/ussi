@@ -265,6 +265,42 @@ class ScanIndexTest {
                 metadata()));
   }
 
+  /**
+   * Jaccard and Ruzicka read dense records as well as sparse ones, and scan is the only structure
+   * that can hold a dense record for them: the inverted structures key by terms a dense record has
+   * none of, and the matrix structure takes l2 alone. A dense record addresses its coordinates by
+   * position rather than by a term, so what these two measure is the positions a pair populates.
+   */
+  @Test
+  void jaccardAndRuzickaScoreDenseVectorsByPosition() {
+    LongObjectHashMap<LongTermsAndValues> jaccardRows = longObjectMap();
+    jaccardRows.put(1, jaccardDense(1f, 0f, 1f));
+    jaccardRows.put(2, jaccardDense(1f, 1f, 1f));
+    ScanIndex jaccardIndex = new ScanIndex(denseConfig("jaccard"), jaccardRows, longObjectMap());
+
+    LongFloatHashMap jaccard =
+        rowNumToSimilarityMap(
+            jaccardIndex.getSimilarRowNums(0.0f, jaccardDense(1f, 1f, 0f), MetaFilter.empty()));
+    // Jaccard counts a populated position once however large its value, so row 1 populates
+    // {0, 2} against the query's {0, 1}: one position of the three either holds.
+    assertEquals(1.0f / 3.0f, jaccard.get(1), DELTA);
+    // Row 2 populates every position, so it covers both of the query's two.
+    assertEquals(2.0f / 3.0f, jaccard.get(2), DELTA);
+
+    LongObjectHashMap<LongTermsAndValues> ruzickaRows = longObjectMap();
+    ruzickaRows.put(1, ruzickaDense(2f, 0f, 1f));
+    ruzickaRows.put(2, ruzickaDense(1f, 1f, 1f));
+    ScanIndex ruzickaIndex = new ScanIndex(denseConfig("ruzicka"), ruzickaRows, longObjectMap());
+
+    LongFloatHashMap ruzicka =
+        rowNumToSimilarityMap(
+            ruzickaIndex.getSimilarRowNums(0.0f, ruzickaDense(1f, 1f, 0f), MetaFilter.empty()));
+    // Ruzicka weighs each position, so row 1's larger first value widens the union without
+    // adding to the intersection: min(2,1) + 0 + 0 over max(2,1) + 1 + 1.
+    assertEquals(0.25f, ruzicka.get(1), DELTA);
+    assertEquals(2.0f / 3.0f, ruzicka.get(2), DELTA);
+  }
+
   private static NamespaceConfig config() {
     return configWithIndexParams(Map.of());
   }
@@ -310,6 +346,39 @@ class ScanIndexTest {
 
   private static LongTermsAndValues denseVector(float... values) {
     return denseInternal(values);
+  }
+
+  /** A config for dense records wider than the two dimensions the l2 rows above use. */
+  private static NamespaceConfig denseConfig(String comparatorType) {
+    return NamespaceConfig.builder()
+        .minTermsAndValuesLength(0)
+        .maxTermsAndValuesLength(3)
+        .maxCacheSize(100)
+        .cacheType("scan")
+        .indexType("scan")
+        .comparatorType(comparatorType)
+        .comparatorNormalizerType("identity")
+        .maxNumSearchableStructures(3)
+        .maxNumSimilarities(10)
+        .build();
+  }
+
+  /** Jaccard weighs a populated position at one, so its Uni value counts the non-zero ones. */
+  private static LongTermsAndValues jaccardDense(float... values) {
+    double uniValue = 0.0;
+    for (float value : values) {
+      uniValue += Math.abs(Math.signum(value));
+    }
+    return LongTermsAndValuesTestFactory.create(new long[0], values, uniValue);
+  }
+
+  /** Ruzicka weighs a position by its magnitude, so its Uni value sums them. */
+  private static LongTermsAndValues ruzickaDense(float... values) {
+    double uniValue = 0.0;
+    for (float value : values) {
+      uniValue += Math.abs(value);
+    }
+    return LongTermsAndValuesTestFactory.create(new long[0], values, uniValue);
   }
 
   private static LongMeta longMeta(String key, String value) {

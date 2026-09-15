@@ -127,6 +127,23 @@ Enums a config names implement `ConfigVocabulary`, which holds the one
 case-insensitive lookup and the one unsupported-value message. A config never
 names a record type, so `RecordType` is not among them.
 
+## Two Senses Of "Index"
+
+The word covers two levels, and both are correct in their place.
+
+The library is an index: `NearestNeighborSearchIndex` is the whole searchable
+thing, which is the sense the project's own name carries in Uber Similarity
+Search Index. It stores rows, answers queries, and is the only type an
+embedder needs.
+
+An `Index` is one searchable structure inside it, a sibling of a `Cache` and
+a `SearchableStructure` like it. The facade owns a list of these and a list
+of caches, and merges their results.
+
+So the facade holding indexes rather than being one is not a contradiction.
+A reader who expects `NearestNeighborSearchIndex` to extend `Index` has the
+narrow sense in mind; nothing does, and nothing should.
+
 ## Package Layout
 
 ### Searchable Structures

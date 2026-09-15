@@ -8,7 +8,7 @@ import com.carrotsearch.hppc.LongObjectHashMap;
 import com.carrotsearch.hppc.cursors.IntCursor;
 import com.carrotsearch.hppc.cursors.LongCursor;
 import com.carrotsearch.hppc.cursors.LongObjectCursor;
-import com.uber.ussi.comparator.Comparator;
+import com.uber.ussi.comparator.DotProductScored;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.meta.MetaFilter;
@@ -27,10 +27,11 @@ import javax.annotation.Nullable;
  *
  * <p>One matrix multiply scores every row at once, so the comparator never sees a candidate. It
  * supplies the arithmetic instead: each row's unilateral value, and the similarity a dot product
- * implies. Which comparators can do that is {@link Comparator#supportsDotProductScoring}, and
- * {@code IndexConfigValidator} rejects a namespace configured with one that cannot.
+ * implies. Which comparators can do that is {@link DotProductScored}, and {@code
+ * IndexConfigValidator} rejects a namespace configured with one that cannot.
  */
 public final class MatrixIndex extends Index {
+  private final DotProductScored dotProductScored;
   private final MatrixDotProductScorer dotProductScorer;
   private final int dimension;
   private final long[] rowNums;
@@ -44,6 +45,7 @@ public final class MatrixIndex extends Index {
       LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
       LongObjectHashMap<LongMeta> rowNumToMetaMap) {
     super(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);
+    this.dotProductScored = (DotProductScored) comparator;
     MatrixData matrixData = buildMatrixData();
     this.dimension = matrixData.dimension;
     this.rowNums = matrixData.rowNums;
@@ -235,7 +237,7 @@ public final class MatrixIndex extends Index {
   private float computeSimilarityFromDotProduct(
       double queryUniValue, int matrixRowIndex, double dotProduct) {
     return (float)
-        comparator.similarityFromDotProduct(
+        dotProductScored.similarityFromDotProduct(
             dotProduct, queryUniValue, rowUniValues[matrixRowIndex]);
   }
 

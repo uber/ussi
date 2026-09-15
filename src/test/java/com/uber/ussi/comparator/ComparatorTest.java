@@ -2,6 +2,7 @@ package com.uber.ussi.comparator;
 
 import static com.uber.ussi.utils.MathUtils.EPSILON_9;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -155,6 +156,28 @@ class ComparatorTest {
   @Test
   void l2BoundsNoShareOfItsKeys() {
     assertTrue(!(l2Comparator() instanceof KeyShareBounded));
+  }
+
+  /**
+   * A dot product carries everything two records share, so the measures it determines are the ones
+   * whose remaining need is a sum over each record on its own. L2 qualifies: its squared distance
+   * expands into the two Uni values less twice the dot product. Jaccard and Ruzicka weigh each
+   * shared position against the larger of the two values, which no sum over either record alone
+   * recovers, and a sequence's edits are not a sum over values at all.
+   */
+  @Test
+  void onlyL2DerivesItsSimilarityFromADotProduct() {
+    assertTrue(l2Comparator().supportsDotProductScoring());
+
+    for (String comparatorType : List.of("jaccard", "ruzicka", "gld", "ngld")) {
+      Comparator comparator = comparator(comparatorType);
+
+      assertFalse(comparator.supportsDotProductScoring(), comparatorType);
+      assertThrows(
+          UnsupportedOperationException.class,
+          () -> comparator.similarityFromDotProduct(1.0, 1.0, 1.0),
+          comparatorType);
+    }
   }
 
   /**

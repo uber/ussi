@@ -155,6 +155,10 @@ void close()
 `update` reuses the existing `rowNum`, so a row keeps its identity across
 versions. Keep your own mapping from your document IDs to these values.
 
+`getNearestNeighborRowNums` is a kNN query and `getSimilarRowNums` a capped
+range query, returning the best `maxNumSimilarities` rows meeting the
+threshold rather than every row that meets it.
+
 Both searches return `SearchResults`, an ordered container with parallel
 `rowNums` and `similarities` arrays, ordered by descending similarity with the
 lower `rowNum` breaking ties.

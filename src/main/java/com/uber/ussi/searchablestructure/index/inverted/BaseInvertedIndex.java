@@ -51,6 +51,10 @@ import javax.annotation.Nullable;
  *
  * <p>Both forms report the same Uni value, so length and prefix filtering read the same bound
  * whichever one reaches them.
+ *
+ * <p>Storage is two components. The inverted lists key rows by term or signature, and the forward
+ * index holds the other side, mapping each row number to its two forms and its Uni value, so
+ * candidate generation reads the lists and verification reads the forward index.
  */
 abstract class BaseInvertedIndex extends Index {
   private static final long[] EMPTY_ROW_NUMS = new long[0];

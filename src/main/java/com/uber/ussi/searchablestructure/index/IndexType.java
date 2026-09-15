@@ -2,7 +2,6 @@
 package com.uber.ussi.searchablestructure.index;
 
 import com.uber.ussi.comparator.Comparator;
-import com.uber.ussi.comparator.ComparatorType;
 import com.uber.ussi.config.ConfigVocabulary;
 import com.uber.ussi.entity.termsandvalues.RecordType;
 import java.util.EnumSet;
@@ -66,13 +65,12 @@ public enum IndexType implements ConfigVocabulary {
   }
 
   /**
-   * Returns the comparators this structure computes similarity with itself, empty when it scores
-   * every candidate through whichever comparator is configured. A structure that implements
-   * comparator arithmetic inline can report only the comparators it implements, so it has to be
-   * configured with one of them.
+   * Returns whether this structure scores every row by one dot product rather than by passing
+   * candidates to the comparator, so it has to be configured with a comparator whose similarity a
+   * dot product determines; see {@link Comparator#supportsDotProductScoring}.
    */
-  public Set<ComparatorType> getRequiredComparatorTypes() {
-    return this == MATRIX ? Set.of(ComparatorType.L2) : Set.of();
+  public boolean scoresByDotProducts() {
+    return this == MATRIX;
   }
 
   /** Returns whether this structure keeps the uni-sorted inverted lists the generators walk. */

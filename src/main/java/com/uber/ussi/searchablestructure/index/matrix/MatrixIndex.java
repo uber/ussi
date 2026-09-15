@@ -8,8 +8,7 @@ import com.carrotsearch.hppc.LongObjectHashMap;
 import com.carrotsearch.hppc.cursors.IntCursor;
 import com.carrotsearch.hppc.cursors.LongCursor;
 import com.carrotsearch.hppc.cursors.LongObjectCursor;
-import com.uber.ussi.comparatornormalizer.ComparatorNormalizer;
-import com.uber.ussi.comparatornormalizer.ComparatorNormalizerFactory;
+import com.uber.ussi.comparator.Comparator;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.meta.MetaFilter;
@@ -19,19 +18,24 @@ import com.uber.ussi.searchablestructure.index.Index;
 import com.uber.ussi.searchablestructure.index.MetadataFilteredSearchExecutor;
 import com.uber.ussi.searchablestructure.metadata.MetadataFilteringStrategy;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
-import com.uber.ussi.utils.MathUtils;
 import java.util.Collections;
 import java.util.List;
 import javax.annotation.Nullable;
 
-/** Pure Java exact dense-vector index backed by a row-major float matrix. */
+/**
+ * Pure Java exact dense-vector index backed by a row-major float matrix.
+ *
+ * <p>One matrix multiply scores every row at once, so the comparator never sees a candidate. It
+ * supplies the arithmetic instead: each row's unilateral value, and the similarity a dot product
+ * implies. Which comparators can do that is {@link Comparator#supportsDotProductScoring}, and
+ * {@code IndexConfigValidator} rejects a namespace configured with one that cannot.
+ */
 public final class MatrixIndex extends Index {
-  private final ComparatorNormalizer comparatorNormalizer;
   private final MatrixDotProductScorer dotProductScorer;
   private final int dimension;
   private final long[] rowNums;
   private final float[] rowMajorValues;
-  private final double[] rowSquaredNorms;
+  private final double[] rowUniValues;
   private final LongIntHashMap rowNumToMatrixRowIndex;
   private final MetadataFilteredSearchExecutor metadataFilteredSearchExecutor;
 
@@ -40,16 +44,11 @@ public final class MatrixIndex extends Index {
       LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
       LongObjectHashMap<LongMeta> rowNumToMetaMap) {
     super(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);
-    this.comparatorNormalizer =
-        ComparatorNormalizerFactory.createComparatorNormalizer(
-            namespaceConfig.getComparatorNormalizerType(),
-            namespaceConfig.getComparatorNormalizerParams());
-
     MatrixData matrixData = buildMatrixData();
     this.dimension = matrixData.dimension;
     this.rowNums = matrixData.rowNums;
     this.rowMajorValues = matrixData.rowMajorValues;
-    this.rowSquaredNorms = matrixData.rowSquaredNorms;
+    this.rowUniValues = matrixData.rowUniValues;
     this.rowNumToMatrixRowIndex = matrixData.rowNumToMatrixRowIndex;
     this.dotProductScorer =
         MatrixDotProductScorers.create(rowMajorValues, rowNums.length, dimension);
@@ -103,7 +102,7 @@ public final class MatrixIndex extends Index {
       return Collections.emptyList();
     }
     float[] queryValues = getDenseQueryValues(record);
-    double querySquaredNorm = computeSquaredNorm(queryValues);
+    double queryUniValue = comparator.computeUniValue(queryValues);
 
     return metadataFilteredSearchExecutor.search(
         metadataFilter,
@@ -111,14 +110,14 @@ public final class MatrixIndex extends Index {
         (resolvedMetadataFilter, resolvedMaxResults) ->
             searchAllMatrixRows(
                 queryValues,
-                querySquaredNorm,
+                queryUniValue,
                 resolvedMetadataFilter,
                 minSimilarity,
                 resolvedMaxResults),
         (candidateRowNums, resolvedMetadataFilter, resolvedMaxResults) ->
             searchRowNums(
                 queryValues,
-                querySquaredNorm,
+                queryUniValue,
                 candidateRowNums,
                 resolvedMetadataFilter,
                 minSimilarity,
@@ -127,7 +126,7 @@ public final class MatrixIndex extends Index {
 
   private List<RowNumAndSimilarity> searchRowNums(
       float[] queryValues,
-      double querySquaredNorm,
+      double queryUniValue,
       LongHashSet candidateRowNums,
       @Nullable MetaFilter metadataFilter,
       float minSimilarity,
@@ -139,31 +138,31 @@ public final class MatrixIndex extends Index {
       }
     }
     return searchMatrixRows(
-        queryValues, querySquaredNorm, matrixRowIndexes, metadataFilter, minSimilarity, maxResults);
+        queryValues, queryUniValue, matrixRowIndexes, metadataFilter, minSimilarity, maxResults);
   }
 
   private List<RowNumAndSimilarity> searchAllMatrixRows(
       float[] queryValues,
-      double querySquaredNorm,
+      double queryUniValue,
       @Nullable MetaFilter metadataFilter,
       float minSimilarity,
       int maxResults) {
     if (metadataFilter == null) {
       // Unfiltered, so every row is scored with one bulk matrix-vector multiply.
       return searchAllMatrixRowsWithDotProductScorer(
-          queryValues, querySquaredNorm, minSimilarity, maxResults);
+          queryValues, queryUniValue, minSimilarity, maxResults);
     }
     // With in-filtering, skip non-matching rows before paying the per-row similarity cost.
     BoundedSizeMaxHeap<RowNumAndSimilarity> rows = createTopResultsHeap(maxResults);
     for (int matrixRowIndex = 0; matrixRowIndex < rowNums.length; ++matrixRowIndex) {
       addMatchingRow(
-          rows, queryValues, querySquaredNorm, matrixRowIndex, metadataFilter, minSimilarity);
+          rows, queryValues, queryUniValue, matrixRowIndex, metadataFilter, minSimilarity);
     }
     return rows.toList();
   }
 
   private List<RowNumAndSimilarity> searchAllMatrixRowsWithDotProductScorer(
-      float[] queryValues, double querySquaredNorm, float minSimilarity, int maxResults) {
+      float[] queryValues, double queryUniValue, float minSimilarity, int maxResults) {
     float[] dotProducts = new float[rowNums.length];
     dotProductScorer.score(queryValues, dotProducts);
 
@@ -174,8 +173,8 @@ public final class MatrixIndex extends Index {
         continue;
       }
       float similarity =
-          computeL2SimilarityFromDotProduct(
-              querySquaredNorm, matrixRowIndex, dotProducts[matrixRowIndex]);
+          computeSimilarityFromDotProduct(
+              queryUniValue, matrixRowIndex, dotProducts[matrixRowIndex]);
       if (similarity >= minSimilarity) {
         rows.add(new RowNumAndSimilarity(rowNum, similarity));
       }
@@ -185,7 +184,7 @@ public final class MatrixIndex extends Index {
 
   private List<RowNumAndSimilarity> searchMatrixRows(
       float[] queryValues,
-      double querySquaredNorm,
+      double queryUniValue,
       IntHashSet matrixRowIndexes,
       @Nullable MetaFilter metadataFilter,
       float minSimilarity,
@@ -193,7 +192,7 @@ public final class MatrixIndex extends Index {
     BoundedSizeMaxHeap<RowNumAndSimilarity> rows = createTopResultsHeap(maxResults);
     for (IntCursor matrixRowIndex : matrixRowIndexes) {
       addMatchingRow(
-          rows, queryValues, querySquaredNorm, matrixRowIndex.value, metadataFilter, minSimilarity);
+          rows, queryValues, queryUniValue, matrixRowIndex.value, metadataFilter, minSimilarity);
     }
     return rows.toList();
   }
@@ -201,7 +200,7 @@ public final class MatrixIndex extends Index {
   private void addMatchingRow(
       BoundedSizeMaxHeap<RowNumAndSimilarity> rows,
       float[] queryValues,
-      double querySquaredNorm,
+      double queryUniValue,
       int matrixRowIndex,
       @Nullable MetaFilter metadataFilter,
       float minSimilarity) {
@@ -212,8 +211,7 @@ public final class MatrixIndex extends Index {
     if (metadataFilter != null && !matchesMetaFilter(rowNum, metadataFilter)) {
       return;
     }
-    float similarity =
-        computeL2SimilarityForMatrixRow(queryValues, querySquaredNorm, matrixRowIndex);
+    float similarity = computeSimilarityForMatrixRow(queryValues, queryUniValue, matrixRowIndex);
     if (similarity >= minSimilarity) {
       rows.add(new RowNumAndSimilarity(rowNum, similarity));
     }
@@ -223,23 +221,22 @@ public final class MatrixIndex extends Index {
     return new BoundedSizeMaxHeap<>(maxResults, RowNumAndSimilarity.TOP_RESULTS_HEAP_ORDER);
   }
 
-  private float computeL2SimilarityForMatrixRow(
-      float[] queryValues, double querySquaredNorm, int matrixRowIndex) {
+  /** Scores one row without the bulk multiply, for a search that reaches only some of them. */
+  private float computeSimilarityForMatrixRow(
+      float[] queryValues, double queryUniValue, int matrixRowIndex) {
     int offset = matrixRowIndex * dimension;
     double dotProduct = 0.0d;
     for (int i = 0; i < dimension; ++i) {
       dotProduct += (double) queryValues[i] * rowMajorValues[offset + i];
     }
-    return computeL2SimilarityFromDotProduct(querySquaredNorm, matrixRowIndex, dotProduct);
+    return computeSimilarityFromDotProduct(queryUniValue, matrixRowIndex, dotProduct);
   }
 
-  private float computeL2SimilarityFromDotProduct(
-      double querySquaredNorm, int matrixRowIndex, double dotProduct) {
-    // The clamp absorbs the small negative ||query - row||^2 that round-off can produce.
-    double squaredDistance =
-        Math.max(0.0d, querySquaredNorm + rowSquaredNorms[matrixRowIndex] - 2.0d * dotProduct);
-    double distance = Math.sqrt(squaredDistance);
-    return (float) comparatorNormalizer.comparatorValueToNormalizedSimilarityValue(distance);
+  private float computeSimilarityFromDotProduct(
+      double queryUniValue, int matrixRowIndex, double dotProduct) {
+    return (float)
+        comparator.similarityFromDotProduct(
+            dotProduct, queryUniValue, rowUniValues[matrixRowIndex]);
   }
 
   private float[] getDenseQueryValues(LongTermsAndValues record) {
@@ -277,7 +274,7 @@ public final class MatrixIndex extends Index {
 
     long[] matrixRowNums = new long[numRows];
     float[] matrixValues = new float[(int) numCells];
-    double[] matrixRowSquaredNorms = new double[numRows];
+    double[] matrixRowUniValues = new double[numRows];
     LongIntHashMap matrixRowIndexByRowNum = new LongIntHashMap(numRows);
 
     int matrixRowIndex = 0;
@@ -288,7 +285,7 @@ public final class MatrixIndex extends Index {
       matrixRowIndexByRowNum.put(rowNum, matrixRowIndex);
       System.arraycopy(
           values, 0, matrixValues, matrixRowIndex * inferredDimension, inferredDimension);
-      matrixRowSquaredNorms[matrixRowIndex] = computeSquaredNorm(values);
+      matrixRowUniValues[matrixRowIndex] = comparator.computeUniValue(values);
       ++matrixRowIndex;
     }
 
@@ -296,7 +293,7 @@ public final class MatrixIndex extends Index {
         inferredDimension,
         matrixRowNums,
         matrixValues,
-        matrixRowSquaredNorms,
+        matrixRowUniValues,
         matrixRowIndexByRowNum);
   }
 
@@ -320,14 +317,6 @@ public final class MatrixIndex extends Index {
     return dimension;
   }
 
-  private static double computeSquaredNorm(float[] values) {
-    MathUtils.StableSumAccumulator squaredNorm = new MathUtils.StableSumAccumulator();
-    for (float value : values) {
-      squaredNorm.add((double) value * value);
-    }
-    return squaredNorm.getSum();
-  }
-
   static long validateMatrixCellCountForTests(int numRows, int dimension) {
     return validateMatrixCellCount(numRows, dimension);
   }
@@ -347,19 +336,19 @@ public final class MatrixIndex extends Index {
     private final int dimension;
     private final long[] rowNums;
     private final float[] rowMajorValues;
-    private final double[] rowSquaredNorms;
+    private final double[] rowUniValues;
     private final LongIntHashMap rowNumToMatrixRowIndex;
 
     private MatrixData(
         int dimension,
         long[] rowNums,
         float[] rowMajorValues,
-        double[] rowSquaredNorms,
+        double[] rowUniValues,
         LongIntHashMap rowNumToMatrixRowIndex) {
       this.dimension = dimension;
       this.rowNums = rowNums;
       this.rowMajorValues = rowMajorValues;
-      this.rowSquaredNorms = rowSquaredNorms;
+      this.rowUniValues = rowUniValues;
       this.rowNumToMatrixRowIndex = rowNumToMatrixRowIndex;
     }
   }

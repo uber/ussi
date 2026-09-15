@@ -256,4 +256,28 @@ public abstract class Comparator implements Serializable {
   public boolean doesSuffixBoundConjunction() {
     return false;
   }
+
+  /**
+   * Returns whether this comparator derives its similarity from a dot product, which is exactly
+   * whether it implements {@link #similarityFromDotProduct}. A structure that scores by matrix
+   * multiplication needs that, so a comparator that cannot must say so here, so that the config is
+   * rejected up front rather than a structure scoring by arithmetic that is not the measure's.
+   */
+  public boolean supportsDotProductScoring() {
+    return false;
+  }
+
+  /**
+   * Returns the normalized similarity of two records whose dot product is {@code dotProduct}.
+   *
+   * <p>A measure qualifies when these three quantities determine it. The dot product carries
+   * everything the two records share, so whatever else the measure needs has to come from each
+   * record on its own, which is what its unilateral value is. A measure that needs the values
+   * themselves, rather than a sum over them, does not decompose this way and cannot be scored from
+   * a dot product at all.
+   */
+  public double similarityFromDotProduct(double dotProduct, double uniValue1, double uniValue2) {
+    throw new UnsupportedOperationException(
+        "similarityFromDotProduct is not supported by " + getClass().getSimpleName() + ".");
+  }
 }

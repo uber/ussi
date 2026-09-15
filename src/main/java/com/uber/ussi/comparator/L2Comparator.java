@@ -189,4 +189,22 @@ public class L2Comparator extends Comparator {
     return comparatorNormalizer.comparatorValueToNormalizedSimilarityValue(
         Math.sqrt(Math.max(0.0, conjunction + unscannedSquaredDistance)));
   }
+
+  @Override
+  public boolean supportsDotProductScoring() {
+    return true;
+  }
+
+  /**
+   * Expands the squared distance as the two squared norms less twice the dot product. A record's
+   * unilateral value sums the squares of its values, so it is that record's squared norm.
+   *
+   * <p>The expansion cancels to nothing for a close pair, which leaves the clamp absorbing the
+   * small negative squared distance that round-off can produce.
+   */
+  @Override
+  public double similarityFromDotProduct(double dotProduct, double uniValue1, double uniValue2) {
+    return comparatorNormalizer.comparatorValueToNormalizedSimilarityValue(
+        Math.sqrt(Math.max(0.0, uniValue1 + uniValue2 - 2.0 * dotProduct)));
+  }
 }

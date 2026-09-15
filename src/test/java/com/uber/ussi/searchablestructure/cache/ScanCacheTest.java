@@ -1,20 +1,24 @@
 package com.uber.ussi.searchablestructure.cache;
 
+import static com.uber.ussi.TestLongObjectMaps.longObjectMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.carrotsearch.hppc.LongFloatHashMap;
+import com.carrotsearch.hppc.LongObjectHashMap;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
+import com.uber.ussi.searchablestructure.index.scan.ScanIndex;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import org.junit.jupiter.api.Test;
 
 class ScanCacheTest {
@@ -42,6 +46,43 @@ class ScanCacheTest {
       uniValue += value * value;
     }
     return LongTermsAndValuesTestFactory.create(new long[0], values, uniValue);
+  }
+
+  private static NamespaceConfig scanConfig(String comparatorType, String normalizerType) {
+    return NamespaceConfig.builder()
+        .minTermsAndValuesLength(0)
+        .maxTermsAndValuesLength(4)
+        .maxCacheSize(100)
+        .cacheType("scan")
+        .indexType("scan")
+        .comparatorType(comparatorType)
+        .comparatorNormalizerType(normalizerType)
+        .maxNumSearchableStructures(3)
+        .maxNumSimilarities(10)
+        .build();
+  }
+
+  /** Jaccard weighs a populated position at one, so its Uni value counts the non-zero ones. */
+  private static LongTermsAndValues jaccardDense(float... values) {
+    double uniValue = 0.0;
+    for (float value : values) {
+      uniValue += Math.abs(Math.signum(value));
+    }
+    return LongTermsAndValuesTestFactory.create(new long[0], values, uniValue);
+  }
+
+  /** Ruzicka weighs a position by its magnitude, so its Uni value sums them. */
+  private static LongTermsAndValues ruzickaDense(float... values) {
+    double uniValue = 0.0;
+    for (float value : values) {
+      uniValue += Math.abs(value);
+    }
+    return LongTermsAndValuesTestFactory.create(new long[0], values, uniValue);
+  }
+
+  /** A sequence carries its elements in order, with repeats, and holds no values. */
+  private static LongTermsAndValues sequence(long... elements) {
+    return LongTermsAndValuesTestFactory.create(elements, new float[0], elements.length);
   }
 
   private static LongFloatHashMap rowNumToSimilarityMap(List<RowNumAndSimilarity> rows) {
@@ -160,6 +201,65 @@ class ScanCacheTest {
     assertEquals(rowNum, result.get(0).getRowNum());
     assertEquals(1.0f, result.get(0).getSimilarity(), DELTA);
     assertEquals(1, cache.insert(denseVector(1f, 1f), Map.of()));
+  }
+
+  /**
+   * The scan cache scores every row through the comparator, exactly as the scan index does, so it
+   * serves whatever the comparator reads rather than one record type of its own. Its own tests
+   * only ever configured l2 over dense vectors, which left the dense form of the two multiset
+   * measures and sequences of either edit distance unsearched here, even though the cache config
+   * validator accepts all of them.
+   */
+  @Test
+  void theScanCacheAgreesWithTheScanIndexOnEveryRecordTypeItsComparatorReads() {
+    assertAgreesWithScanIndex(
+        "jaccard over dense vectors",
+        scanConfig("jaccard", "identity"),
+        List.of(jaccardDense(1f, 0f, 1f), jaccardDense(1f, 1f, 1f), jaccardDense(0f, 0f, 1f)));
+    assertAgreesWithScanIndex(
+        "ruzicka over dense vectors",
+        scanConfig("ruzicka", "identity"),
+        List.of(ruzickaDense(2f, 0f, 1f), ruzickaDense(1f, 1f, 1f), ruzickaDense(0f, 0f, 3f)));
+    assertAgreesWithScanIndex(
+        "gld over sequences",
+        scanConfig("gld", "reciprocal"),
+        List.of(sequence(1, 2, 3), sequence(1, 2, 4), sequence(3, 2, 1)));
+    assertAgreesWithScanIndex(
+        "ngld over sequences",
+        scanConfig("ngld", "complement"),
+        List.of(sequence(1, 2, 3), sequence(1, 2, 4), sequence(3, 2, 1)));
+  }
+
+  /**
+   * Queries by the first record, so the cache has to return it scored 1.0 rather than agreeing
+   * with the index on an empty result.
+   */
+  private static void assertAgreesWithScanIndex(
+      String where, NamespaceConfig config, List<LongTermsAndValues> records) {
+    ScanCache cache = new ScanCache(config);
+    LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
+    for (LongTermsAndValues record : records) {
+      rows.put(cache.insert(record, Map.of()), record);
+    }
+    ScanIndex index = new ScanIndex(config, rows, longObjectMap());
+    LongTermsAndValues query = records.get(0);
+
+    List<RowNumAndSimilarity> fromCache =
+        cache.getSimilarRowNums(0.0f, query, MetaFilter.empty());
+    assertEquals(
+        similaritiesByRowNum(index.getSimilarRowNums(0.0f, query, MetaFilter.empty())),
+        similaritiesByRowNum(fromCache),
+        where);
+    assertEquals(1.0f, rowNumToSimilarityMap(fromCache).get(0), DELTA, where + " on itself");
+  }
+
+  /** Results arrive unordered, so compare them keyed by row rather than as a sequence. */
+  private static Map<Long, Float> similaritiesByRowNum(List<RowNumAndSimilarity> results) {
+    Map<Long, Float> similarities = new TreeMap<>();
+    for (RowNumAndSimilarity result : results) {
+      similarities.put(result.getRowNum(), result.getSimilarity());
+    }
+    return similarities;
   }
 
   @Test

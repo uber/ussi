@@ -205,10 +205,9 @@ class ScanCacheTest {
 
   /**
    * The scan cache scores every row through the comparator, exactly as the scan index does, so it
-   * serves whatever the comparator reads rather than one record type of its own. Its own tests
-   * only ever configured l2 over dense vectors, which left the dense form of the two multiset
-   * measures and sequences of either edit distance unsearched here, even though the cache config
-   * validator accepts all of them.
+   * serves whatever the comparator reads rather than one record type of its own: the dense form of
+   * the two multiset measures, and sequences under either edit distance, all of which its config
+   * validator accepts.
    */
   @Test
   void theScanCacheAgreesWithTheScanIndexOnEveryRecordTypeItsComparatorReads() {

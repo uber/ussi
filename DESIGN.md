@@ -299,13 +299,14 @@ and any signature-keyed structure, a signature standing for one draw. Keys are
 shared in proportion to the multiset similarity of the records they were drawn
 from whether they are terms or signatures, so that share is one fraction
 serving both key spaces. A threshold that counts keys instead states the
-allowance directly and no share comes into it, GLD's edits being elements and
-L2's squared distance being in the units of the squared values its unilateral
-value sums. The comparator supplies the allowance for term keys and the
-signature keying strategy for signature keys. A row absent from
-every list visited so far has missed all of them, so once that accumulation
-passes the allowance, no row still unseen can qualify and the rest of the
-query's keys go unvisited. Either candidate generator can traverse these lists.
+allowance directly and no share comes into it, GLD's edits counting a
+sequence's terms and L2's squared distance being in the units of the squared
+values its unilateral value sums. The comparator supplies the allowance for
+term keys and the signature keying strategy for signature keys. A row absent
+from every list visited so far has missed all of them, so once that
+accumulation passes the allowance, no row still unseen can qualify and the rest
+of the query's keys go unvisited. Either candidate generator can traverse these
+lists.
 
 Each row and each query must have non-empty terms and values arrays of equal
 length after canonicalization; a query and a row need not have the same number

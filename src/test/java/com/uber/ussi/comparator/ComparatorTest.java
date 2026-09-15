@@ -159,15 +159,15 @@ class ComparatorTest {
 
   /**
    * A measure either caps the prefix by a share of its keys or by counting them, and which one it
-   * does shows in whether the cap moves with the keys' Uni value: a share of twice as many keys is
-   * twice as much, while an edit count or a squared distance is the same quantity however long the
-   * record.
+   * does shows in whether that prefix sum moves with the keys' Uni value: a share of twice as many
+   * keys is twice as much, while an edit count or a squared distance is the same quantity however
+   * long the record.
    *
-   * <p>For the share-shaped three the cap over terms is that shape applied to the very fraction
+   * <p>For the share-shaped three the prefix sum over terms is that shape applied to the fraction
    * their signatures are bounded by, since keys are shared in proportion to the multiset
-   * similarity of the records they come from whether they are terms or signatures. Each of the
-   * three used to restate the shape itself, NGLD by re-deriving that fraction's algebra in a
-   * second form, so this is the identity that lets one shape serve both key spaces.
+   * similarity of the records they come from whether they are terms or signatures. That identity
+   * is what lets one shape serve both key spaces, so it is asserted directly rather than left to
+   * follow from each measure's own arithmetic.
    */
   @Test
   void aMeasureCapsThePrefixByAShareOfItsKeysOrByCountingThem() {
@@ -177,17 +177,17 @@ class ComparatorTest {
       for (double comparatorValue : List.of(0.0, 0.05, 0.25, 0.5, 0.9, 1.0)) {
         for (double uniValue : List.of(1.0, 5.0, 17.0, 1000.0)) {
           String where = comparatorType + " at " + comparatorValue + " over " + uniValue;
-          double cap =
+          double prefixSum =
               comparator.getMaxPrefixSumForTermsAndValuesInternal(uniValue, comparatorValue);
 
           assertEquals(
               Comparator.maxPrefixSumFromSharedFraction(
                   uniValue, bounded.getMinSharedKeyFraction(uniValue, comparatorValue)),
-              cap,
+              prefixSum,
               EPSILON_9,
               where);
           assertEquals(
-              2.0 * cap,
+              2.0 * prefixSum,
               comparator.getMaxPrefixSumForTermsAndValuesInternal(
                   2.0 * uniValue, comparatorValue),
               EPSILON_9,
@@ -196,7 +196,7 @@ class ComparatorTest {
       }
     }
 
-    // A budget of 3 well inside both records, so neither cap is the whole of the record instead.
+    // A budget of 3 well inside both records, so neither prefix sum is the whole of one.
     for (String comparatorType : List.of("gld", "l2")) {
       Comparator comparator = comparator(comparatorType);
 

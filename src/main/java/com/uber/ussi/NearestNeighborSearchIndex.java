@@ -52,6 +52,7 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
   @Nullable private LongHashSet consolidationDeletes;
   private final ExecutorService backgroundExecutor;
   private final ReadWriteLock lock;
+  private final QueryAdmission queryAdmission;
   private final Comparator comparator;
   private Cache cache;
   private long nextRowNum;
@@ -79,6 +80,7 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
     this.backgroundTasks = new ArrayList<>();
     this.backgroundExecutor = Objects.requireNonNull(backgroundExecutor, "backgroundExecutor");
     this.lock = new ReentrantReadWriteLock();
+    this.queryAdmission = QueryAdmission.shared();
     this.nextRowNum = 0;
     this.nextStructureGeneration = 0;
     this.consolidationInFlight = false;
@@ -154,13 +156,20 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
     if (k <= 0) {
       throw new IllegalArgumentException("k must be greater than 0.");
     }
-    lock.readLock().lock();
+    // Admission is taken before the read lock so that searches queued for a turn do not hold the
+    // lock and stall an insert, delete or update.
+    queryAdmission.acquire();
     try {
-      int maxResults = Math.min(k, namespaceConfig.getMaxNumSimilarities());
-      return mergeSearchResultsLocked(
-          /* topK */ true, record, metadataFilter, /* minSimilarity */ 0.0f, maxResults);
+      lock.readLock().lock();
+      try {
+        int maxResults = Math.min(k, namespaceConfig.getMaxNumSimilarities());
+        return mergeSearchResultsLocked(
+            /* topK */ true, record, metadataFilter, /* minSimilarity */ 0.0f, maxResults);
+      } finally {
+        lock.readLock().unlock();
+      }
     } finally {
-      lock.readLock().unlock();
+      queryAdmission.release();
     }
   }
 
@@ -169,16 +178,21 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
     if (minSimilarity < 0.0f || minSimilarity > 1.0f) {
       throw new IllegalArgumentException("minSimilarity must be in the range [0.0, 1.0].");
     }
-    lock.readLock().lock();
+    queryAdmission.acquire();
     try {
-      return mergeSearchResultsLocked(
-          /* topK */ false,
-          record,
-          metadataFilter,
-          minSimilarity,
-          namespaceConfig.getMaxNumSimilarities());
+      lock.readLock().lock();
+      try {
+        return mergeSearchResultsLocked(
+            /* topK */ false,
+            record,
+            metadataFilter,
+            minSimilarity,
+            namespaceConfig.getMaxNumSimilarities());
+      } finally {
+        lock.readLock().unlock();
+      }
     } finally {
-      lock.readLock().unlock();
+      queryAdmission.release();
     }
   }
 

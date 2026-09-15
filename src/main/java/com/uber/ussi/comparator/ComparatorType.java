@@ -6,35 +6,43 @@ import com.uber.ussi.config.ConfigVocabulary;
 import java.util.Set;
 
 /**
- * The comparators a namespace can be configured with, each paired with the signature generators it
- * accepts. An empty set is a comparator that cannot generate signatures at all.
+ * The comparators a namespace can be configured with, each stating the signature generators it
+ * accepts and whether it compares sequences. An empty generator set is a comparator that cannot
+ * generate signatures at all.
  */
 public enum ComparatorType implements ConfigVocabulary {
   /** Generalized Levenshtein distance between two sequences. */
-  GLD(Generators.CONSISTENT_WEIGHTED_SAMPLING),
+  GLD(Generators.CONSISTENT_WEIGHTED_SAMPLING, /* comparesSequences */ true),
 
-  JACCARD(Set.of(SignatureGeneratorType.MINHASH)),
+  JACCARD(Set.of(SignatureGeneratorType.MINHASH), /* comparesSequences */ false),
 
-  L2(Set.of()),
+  L2(Set.of(), /* comparesSequences */ false),
 
   /** Normalized generalized Levenshtein distance between two sequences. */
-  NGLD(Generators.CONSISTENT_WEIGHTED_SAMPLING),
+  NGLD(Generators.CONSISTENT_WEIGHTED_SAMPLING, /* comparesSequences */ true),
 
-  RUZICKA(Generators.CONSISTENT_WEIGHTED_SAMPLING);
+  RUZICKA(Generators.CONSISTENT_WEIGHTED_SAMPLING, /* comparesSequences */ false);
 
   private final Set<SignatureGeneratorType> supportedSignatureGeneratorTypes;
+  private final boolean comparesSequences;
 
-  ComparatorType(Set<SignatureGeneratorType> supportedSignatureGeneratorTypes) {
+  ComparatorType(
+      Set<SignatureGeneratorType> supportedSignatureGeneratorTypes, boolean comparesSequences) {
     this.supportedSignatureGeneratorTypes = supportedSignatureGeneratorTypes;
+    this.comparesSequences = comparesSequences;
   }
 
   public Set<SignatureGeneratorType> getSupportedSignatureGeneratorTypes() {
     return supportedSignatureGeneratorTypes;
   }
 
-  /** Returns whether this comparator compares sequences of terms rather than values. */
+  /**
+   * Returns whether this comparator compares sequences of terms rather than values, which decides
+   * whether a namespace may configure a sequence distance. Each constant states it, so a
+   * comparator added here has to answer rather than be answered for.
+   */
   public boolean comparesSequences() {
-    return this == GLD || this == NGLD;
+    return comparesSequences;
   }
 
   /**

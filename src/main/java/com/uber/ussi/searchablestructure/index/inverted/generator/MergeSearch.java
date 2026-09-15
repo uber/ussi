@@ -3,6 +3,7 @@ package com.uber.ussi.searchablestructure.index.inverted.generator;
 
 import com.carrotsearch.hppc.IntArrayList;
 import com.uber.ussi.comparator.Comparator;
+import com.uber.ussi.comparator.ConjunctionScored;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
@@ -46,18 +47,22 @@ public final class MergeSearch {
     if (queryKeys.length == 0) {
       return List.of();
     }
+    // Only a SPARS_MERGE namespace reaches here, which the config validator admits only for a
+    // comparator a conjunction scores.
+    ConjunctionScored conjunctionScored = (ConjunctionScored) comparator;
     double uniValue1 = context.stableSortedUniValue(indexedQuery);
     double[] unscannedKeysUniValue =
-        scoresFromConjunction ? computeUnscannedKeysUniValue(comparator, queryKeys) : null;
+        scoresFromConjunction ? computeUnscannedKeysUniValue(conjunctionScored, queryKeys) : null;
     Frontier frontier =
         new Frontier(
             queryKeys,
             context,
-            getFirstIndexInEachList(comparator, queryKeys, context, uniValue1, minSimilarity));
+            getFirstIndexInEachList(
+                conjunctionScored, queryKeys, context, uniValue1, minSimilarity));
 
     BoundedSizeMaxHeap<RowNumAndSimilarity> rows = TopResults.newTopResultsHeap(maxResults);
     double currentMinSimilarity = minSimilarity;
-    Conjunction conjunction = new Conjunction();
+    Conjunction conjunction = new Conjunction(comparator, conjunctionScored);
     IntArrayList advancedKeyIndexes = new IntArrayList(queryKeys.length);
 
     while (!frontier.isEmpty()) {
@@ -74,7 +79,6 @@ public final class MergeSearch {
       advancedKeyIndexes.clear();
       boolean mayReachMinSimilarity =
           mergeRow(
-              comparator,
               frontier,
               rowNum,
               conjunction,
@@ -92,7 +96,7 @@ public final class MergeSearch {
 
       double similarity =
           scoresFromConjunction
-              ? conjunction.getSimilarity(comparator, uniValue1, uniValue2)
+              ? conjunction.getSimilarity(uniValue1, uniValue2)
               : getVerifiedSimilarity(
                   comparator, query, verificationRowLookup.apply(rowNum), currentMinSimilarity);
       if (similarity < currentMinSimilarity) {
@@ -114,7 +118,6 @@ public final class MergeSearch {
    * caller scores through the comparator, so no conjunction is computed.
    */
   private static boolean mergeRow(
-      Comparator comparator,
       Frontier frontier,
       long rowNum,
       Conjunction conjunction,
@@ -131,11 +134,11 @@ public final class MergeSearch {
         continue;
       }
       QueryKey queryKey = frontier.getQueryKey(head.keyIndex);
-      conjunction.add(comparator, queryKey, queryKey.getValueAt(head.indexInList));
+      conjunction.add(queryKey, queryKey.getValueAt(head.indexInList));
       double unscanned =
           frontier.isOnRow(rowNum) ? unscannedKeysUniValue[frontier.peek().keyIndex] : 0.0;
       mayReachMinSimilarity =
-          conjunction.getMaxSimilarity(comparator, unscanned, uniValue1, uniValue2)
+          conjunction.getMaxSimilarity(unscanned, uniValue1, uniValue2)
               >= minSimilarity;
       // Falls through to consume the rest of the row's group, keeping the list positions right.
     }
@@ -159,9 +162,9 @@ public final class MergeSearch {
    * comparators whose per-key contribution never exceeds the query's Uni-transformed value there.
    */
   private static double[] computeUnscannedKeysUniValue(
-      Comparator comparator, QueryKey[] queryKeys) {
+      ConjunctionScored conjunctionScored, QueryKey[] queryKeys) {
     double[] unscannedKeysUniValue = new double[queryKeys.length + 1];
-    if (!comparator.doesSuffixBoundConjunction()) {
+    if (!conjunctionScored.doesSuffixBoundConjunction()) {
       Arrays.fill(unscannedKeysUniValue, Double.MAX_VALUE);
       return unscannedKeysUniValue;
     }
@@ -177,14 +180,14 @@ public final class MergeSearch {
    * match, and because the lists are uni-sorted they all sit below one offset per key.
    */
   private static int[] getFirstIndexInEachList(
-      Comparator comparator,
+      ConjunctionScored conjunctionScored,
       QueryKey[] queryKeys,
       Context context,
       double uniValue1,
       double minSimilarity) {
     int[] firstIndexInList = new int[queryKeys.length];
     double minUniValue2 =
-        comparator.doesSuffixBoundConjunction() && minSimilarity > 0.0
+        conjunctionScored.doesSuffixBoundConjunction() && minSimilarity > 0.0
             ? uniValue1 * minSimilarity
             : 0.0;
     if (minUniValue2 <= 0.0) {
@@ -312,9 +315,16 @@ public final class MergeSearch {
 
   /** One candidate row's conjunction, grown one shared key at a time. */
   private static final class Conjunction {
+    private final Comparator comparator;
+    private final ConjunctionScored conjunctionScored;
     private double conjunction;
     private double partialUniValue1;
     private double partialUniValue2;
+
+    private Conjunction(Comparator comparator, ConjunctionScored conjunctionScored) {
+      this.comparator = comparator;
+      this.conjunctionScored = conjunctionScored;
+    }
 
     private void reset() {
       conjunction = 0.0;
@@ -322,22 +332,22 @@ public final class MergeSearch {
       partialUniValue2 = 0.0;
     }
 
-    private void add(Comparator comparator, QueryKey queryKey, float value2) {
-      conjunction += comparator.conjunctionContribution(queryKey.value1, value2);
+    private void add(QueryKey queryKey, float value2) {
+      conjunction += conjunctionScored.conjunctionContribution(queryKey.value1, value2);
       partialUniValue1 += queryKey.uniTransformedValue;
       partialUniValue2 += comparator.getUniTransformedValue(value2);
     }
 
-    private double getSimilarity(Comparator comparator, double uniValue1, double uniValue2) {
+    private double getSimilarity(double uniValue1, double uniValue2) {
       return Math.max(
           0.0,
-          comparator.similarityFromConjunction(
+          conjunctionScored.similarityFromConjunction(
               conjunction, partialUniValue1, uniValue1, partialUniValue2, uniValue2));
     }
 
     private double getMaxSimilarity(
-        Comparator comparator, double unscannedKeysUniValue, double uniValue1, double uniValue2) {
-      return comparator.maxSimilarityFromPartialConjunction(
+        double unscannedKeysUniValue, double uniValue1, double uniValue2) {
+      return conjunctionScored.maxSimilarityFromPartialConjunction(
           conjunction,
           unscannedKeysUniValue,
           partialUniValue1,

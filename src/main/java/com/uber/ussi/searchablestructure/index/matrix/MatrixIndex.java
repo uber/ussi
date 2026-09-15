@@ -228,7 +228,7 @@ public final class MatrixIndex extends Index {
     int offset = matrixRowIndex * dimension;
     double dotProduct = 0.0d;
     for (int i = 0; i < dimension; ++i) {
-      dotProduct += queryValues[i] * rowMajorValues[offset + i];
+      dotProduct += (double) queryValues[i] * rowMajorValues[offset + i];
     }
     return computeL2SimilarityFromDotProduct(querySquaredNorm, matrixRowIndex, dotProduct);
   }

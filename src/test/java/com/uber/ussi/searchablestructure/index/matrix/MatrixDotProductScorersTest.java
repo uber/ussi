@@ -137,10 +137,8 @@ class MatrixDotProductScorersTest {
   }
 
   @Test
-  void openBlasScorerRestoresThreadCountAfterScore() {
+  void openBlasScorerSetsThreadCountAtConstructionAndLeavesItAloneWhileScoring() {
     FakeOpenBlas fakeOpenBlas = new FakeOpenBlas();
-    int expectedRestoredThreads = 1;
-    fakeOpenBlas.threadCount = expectedRestoredThreads;
 
     withFakeOpenBlas(
         fakeOpenBlas,
@@ -151,13 +149,14 @@ class MatrixDotProductScorersTest {
             float[] dotProducts = new float[1];
 
             scorer.score(new float[] {2f}, dotProducts);
+            scorer.score(new float[] {2f}, dotProducts);
 
             assertEquals(2f, dotProducts[0], DELTA);
           }
         });
 
     assertEquals(
-        List.of(Math.max(1, Runtime.getRuntime().availableProcessors()), expectedRestoredThreads),
+        List.of(Math.max(1, Runtime.getRuntime().availableProcessors())),
         fakeOpenBlas.threadCountUpdates);
   }
 
@@ -292,8 +291,6 @@ class MatrixDotProductScorersTest {
     OpenBlasMatrixDotProductScorer.SgemvOperation originalSgemvOperation =
         OpenBlasMatrixDotProductScorer.sgemvOperation;
     Runnable originalNativeLoadProbe = OpenBlasMatrixDotProductScorer.blasNativeLoadProbe;
-    java.util.function.IntSupplier originalThreadCountSupplier =
-        OpenBlasMatrixDotProductScorer.blasThreadCountSupplier;
     java.util.function.IntConsumer originalThreadCountSetter =
         OpenBlasMatrixDotProductScorer.blasThreadCountSetter;
     try {
@@ -317,12 +314,8 @@ class MatrixDotProductScorersTest {
               incY) -> fakeOpenBlas.gemvCalls++;
       OpenBlasMatrixDotProductScorer.blasNativeLoadProbe =
           () -> fakeOpenBlas.nativeLoadProbeCalls++;
-      OpenBlasMatrixDotProductScorer.blasThreadCountSupplier = () -> fakeOpenBlas.threadCount;
       OpenBlasMatrixDotProductScorer.blasThreadCountSetter =
-          numThreads -> {
-            fakeOpenBlas.threadCount = numThreads;
-            fakeOpenBlas.threadCountUpdates.add(numThreads);
-          };
+          numThreads -> fakeOpenBlas.threadCountUpdates.add(numThreads);
       runnable.run();
     } finally {
       OpenBlasMatrixDotProductScorer.floatArrayPointerFactory = originalArrayPointerFactory;
@@ -331,13 +324,11 @@ class MatrixDotProductScorersTest {
       OpenBlasMatrixDotProductScorer.floatPointerArrayReader = originalArrayReader;
       OpenBlasMatrixDotProductScorer.sgemvOperation = originalSgemvOperation;
       OpenBlasMatrixDotProductScorer.blasNativeLoadProbe = originalNativeLoadProbe;
-      OpenBlasMatrixDotProductScorer.blasThreadCountSupplier = originalThreadCountSupplier;
       OpenBlasMatrixDotProductScorer.blasThreadCountSetter = originalThreadCountSetter;
     }
   }
 
   private static final class FakeOpenBlas {
-    private int threadCount = 1;
     private int nativeLoadProbeCalls;
     private int deallocateCalls;
     private int gemvCalls;

@@ -265,11 +265,27 @@ a row's own terms with nothing derived from them, so the terms a query and a
 candidate share determine their similarity exactly rather than bounding it.
 
 Inverted lists are sorted by each row's comparator-specific unilateral value,
-which is what enables length filtering. Candidate traversal combines length,
-position, and prefix filtering while tightening the similarity threshold as the
-top-k heap fills. The prefix is chosen per query, cheapest inverted list first,
-and is bounded by the uni mass the visited keys accumulate. Either candidate
-generator can traverse these lists.
+its `uniValue`, which is what enables length filtering. Candidate traversal
+combines length, position, and prefix filtering while tightening the similarity
+threshold as the top-k heap fills. The latter two both prune on a partial
+unilateral value: the portion of a `uniValue` consumed so far, leaving the rest
+to bound what the unconsumed part can still contribute.
+
+Position filtering prunes during a comparison, on the partial unilateral values
+of the two records being compared, which the comparators carry as
+`partialUniValue1` and `partialUniValue2`. Once the most the unscanned terms
+could still add leaves the pair short of the threshold, the comparison stops.
+
+Prefix filtering prunes before any comparison, on the same quantity taken over
+the query's keys. The prefix is chosen per query, cheapest inverted list first,
+and the traversal halts once the partial unilateral value of the visited keys
+exceeds the most a qualifying candidate may leave unmatched. For Jaccard and
+Ruzicka that allowance is the share of the query's `uniValue` a candidate at
+exactly the threshold can afford to miss; the comparator supplies it for term
+keys and the signature keying strategy for signature keys. A row absent from
+every list visited so far has missed all of them, so once that accumulation
+passes the allowance, no row still unseen can qualify and the rest of the
+query's keys go unvisited. Either candidate generator can traverse these lists.
 
 Each row and each query must have non-empty terms and values arrays of equal
 length after canonicalization; a query and a row need not have the same number
@@ -416,8 +432,11 @@ every supported comparator.
 advances them in step, so every inverted-list entry belonging to a candidate
 row arrives together. That lets the generator accumulate the row's conjunction,
 which is the part of the similarity the query and the row derive from the keys
-they share, as it goes, and abandon the row as soon as no completion of it can
-reach the active similarity threshold. It trades a priority queue over the
+they share, as it goes. What it holds mid-row is a partial conjunction, and
+`maxSimilarityFromPartialConjunction` bounds the best any completion of it
+could reach, using the unscanned keys' unilateral value to bound what the keys
+still to arrive can add. The row is abandoned as soon as that bound falls below
+the threshold the search currently holds. It trades a priority queue over the
 query's keys for the ability to prune a row mid-scan, which pays off when a
 query has many keys and the threshold rejects most rows early.
 

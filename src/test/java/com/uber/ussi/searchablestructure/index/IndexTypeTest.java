@@ -38,19 +38,19 @@ class IndexTypeTest {
    */
   @Test
   void storableRecordTypesAreTheTypesTheStructureKeeps() {
-    assertEquals(Set.of(RecordType.ORDER_AGNOSTIC_DENSE), IndexType.MATRIX.getStorableRecordTypes());
+    assertEquals(Set.of(RecordType.DENSE), IndexType.MATRIX.getStorableRecordTypes());
     assertEquals(
-        Set.of(RecordType.ORDER_AGNOSTIC_SPARSE, RecordType.SEQUENCE),
+        Set.of(RecordType.SPARSE, RecordType.SEQUENCE),
         IndexType.INVERTED_TERM.getStorableRecordTypes());
     assertEquals(
-        Set.of(RecordType.ORDER_AGNOSTIC_SPARSE, RecordType.SEQUENCE),
+        Set.of(RecordType.SPARSE, RecordType.SEQUENCE),
         IndexType.INVERTED_SIGNATURE.getStorableRecordTypes());
     assertEquals(
-        Set.of(RecordType.ORDER_AGNOSTIC_SPARSE, RecordType.SEQUENCE),
+        Set.of(RecordType.SPARSE, RecordType.SEQUENCE),
         IndexType.INVERTED_HYBRID.getStorableRecordTypes());
     assertEquals(
         Set.of(
-            RecordType.ORDER_AGNOSTIC_DENSE, RecordType.ORDER_AGNOSTIC_SPARSE, RecordType.SEQUENCE),
+            RecordType.DENSE, RecordType.SPARSE, RecordType.SEQUENCE),
         IndexType.SCAN.getStorableRecordTypes());
   }
 
@@ -62,11 +62,11 @@ class IndexTypeTest {
     Comparator ngld = comparator("ngld", "complement");
 
     assertEquals(
-        Set.of(RecordType.ORDER_AGNOSTIC_DENSE), IndexType.MATRIX.resolveRecordTypes(l2));
+        Set.of(RecordType.DENSE), IndexType.MATRIX.resolveRecordTypes(l2));
     assertEquals(
-        Set.of(RecordType.ORDER_AGNOSTIC_SPARSE), IndexType.INVERTED_TERM.resolveRecordTypes(l2));
+        Set.of(RecordType.SPARSE), IndexType.INVERTED_TERM.resolveRecordTypes(l2));
     assertEquals(
-        Set.of(RecordType.ORDER_AGNOSTIC_SPARSE),
+        Set.of(RecordType.SPARSE),
         IndexType.INVERTED_TERM.resolveRecordTypes(jaccard));
     assertEquals(Set.of(RecordType.SEQUENCE), IndexType.INVERTED_TERM.resolveRecordTypes(ngld));
   }
@@ -85,10 +85,10 @@ class IndexTypeTest {
   @Test
   void resolvingRecordTypesIsAmbiguousOnlyWhereTheAnswerIsUnused() {
     assertEquals(
-        Set.of(RecordType.ORDER_AGNOSTIC_DENSE, RecordType.ORDER_AGNOSTIC_SPARSE),
+        Set.of(RecordType.DENSE, RecordType.SPARSE),
         IndexType.SCAN.resolveRecordTypes(comparator("l2", "reciprocal")));
     assertEquals(
-        Set.of(RecordType.ORDER_AGNOSTIC_DENSE, RecordType.ORDER_AGNOSTIC_SPARSE),
+        Set.of(RecordType.DENSE, RecordType.SPARSE),
         IndexType.SCAN.resolveRecordTypes(comparator("jaccard", "identity")));
   }
 
@@ -99,7 +99,7 @@ class IndexTypeTest {
   @Test
   void onlyTheMatrixStructureNamesTheComparatorItComputesItself() {
     assertEquals(
-        Set.of(RecordType.ORDER_AGNOSTIC_DENSE),
+        Set.of(RecordType.DENSE),
         IndexType.MATRIX.resolveRecordTypes(comparator("jaccard", "identity")));
 
     assertEquals(Set.of(ComparatorType.L2), IndexType.MATRIX.getRequiredComparatorTypes());
@@ -120,10 +120,10 @@ class IndexTypeTest {
 
   @Test
   void onlyTheSignatureKeyedStructuresNeedAGenerator() {
-    assertTrue(IndexType.INVERTED_SIGNATURE.requiresSignatureSupport());
-    assertTrue(IndexType.INVERTED_HYBRID.requiresSignatureSupport());
-    assertFalse(IndexType.INVERTED_TERM.requiresSignatureSupport());
-    assertFalse(IndexType.SCAN.requiresSignatureSupport());
+    assertTrue(IndexType.INVERTED_SIGNATURE.keysBySignatures());
+    assertTrue(IndexType.INVERTED_HYBRID.keysBySignatures());
+    assertFalse(IndexType.INVERTED_TERM.keysBySignatures());
+    assertFalse(IndexType.SCAN.keysBySignatures());
   }
 
   /**
@@ -134,14 +134,14 @@ class IndexTypeTest {
   void onlyTermKeyedListsOverSparseRecordsDetermineSimilarity() {
     assertTrue(
         IndexType.INVERTED_TERM.conjunctionDeterminesSimilarity(
-            RecordType.ORDER_AGNOSTIC_SPARSE));
+            RecordType.SPARSE));
     assertFalse(IndexType.INVERTED_TERM.conjunctionDeterminesSimilarity(RecordType.SEQUENCE));
     assertFalse(
         IndexType.INVERTED_SIGNATURE.conjunctionDeterminesSimilarity(
-            RecordType.ORDER_AGNOSTIC_SPARSE));
+            RecordType.SPARSE));
     assertFalse(
         IndexType.INVERTED_HYBRID.conjunctionDeterminesSimilarity(
-            RecordType.ORDER_AGNOSTIC_SPARSE));
+            RecordType.SPARSE));
   }
 
   /**
@@ -170,7 +170,7 @@ class IndexTypeTest {
     // Storing the type is only half of it: scan also imposes neither of the checks that would
     // reject a comparator the pairing otherwise allows.
     assertEquals(Set.of(), IndexType.SCAN.getRequiredComparatorTypes());
-    assertFalse(IndexType.SCAN.requiresSignatureSupport());
+    assertFalse(IndexType.SCAN.keysBySignatures());
   }
 
   private static List<Comparator> everyComparator() {

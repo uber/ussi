@@ -9,7 +9,7 @@ import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
  *
  * <p>The inverted machinery is written against this type, so the indexed form is the record itself.
  */
-final class OrderAgnosticSparseIndexingStrategy implements RecordIndexingStrategy {
+final class SparseIndexingStrategy implements RecordIndexingStrategy {
 
   @Override
   public LongTermsAndValues toIndexedRecord(

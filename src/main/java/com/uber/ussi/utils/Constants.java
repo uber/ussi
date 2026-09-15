@@ -7,7 +7,7 @@ package com.uber.ussi.utils;
  */
 public final class Constants {
   public static final double UNSET_UNI_VALUE = -Double.MAX_VALUE;
-  public static final int NUM_SIGNATURES_PER_ID = 270;
+  public static final int NUM_SIGNATURES_PER_ROW = 270;
   public static final String SIGNATURE_GENERATOR = "signature_generator";
   public static final String SEQUENCE_DISTANCE_TYPE = "sequence_distance_type";
   public static final String MAX_FRACTION_IDS_PER_TERM = "max_fraction_ids_per_term";

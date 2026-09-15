@@ -76,7 +76,7 @@ class SparseComparatorTest {
   @Test
   void bothMeasuresReadSparseAndDenseRecords() {
     Set<RecordType> orderAgnosticTypes =
-        Set.of(RecordType.ORDER_AGNOSTIC_SPARSE, RecordType.ORDER_AGNOSTIC_DENSE);
+        Set.of(RecordType.SPARSE, RecordType.DENSE);
 
     assertEquals(orderAgnosticTypes, comparator("jaccard").getSupportedRecordTypes());
     assertEquals(orderAgnosticTypes, comparator("ruzicka").getSupportedRecordTypes());

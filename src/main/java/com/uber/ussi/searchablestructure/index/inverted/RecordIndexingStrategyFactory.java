@@ -6,8 +6,7 @@ import com.uber.ussi.error.IndexCreationError;
 
 /** Factory pairing a record type with how an inverted index stores it. */
 final class RecordIndexingStrategyFactory {
-  private static final RecordIndexingStrategy ORDER_AGNOSTIC_SPARSE_STRATEGY =
-      new OrderAgnosticSparseIndexingStrategy();
+  private static final RecordIndexingStrategy SPARSE_STRATEGY = new SparseIndexingStrategy();
   private static final RecordIndexingStrategy SEQUENCE_STRATEGY = new SequenceIndexingStrategy();
 
   private RecordIndexingStrategyFactory() {}
@@ -18,9 +17,9 @@ final class RecordIndexingStrategyFactory {
    */
   static RecordIndexingStrategy createRecordIndexingStrategy(RecordType recordType) {
     return switch (recordType) {
-      case ORDER_AGNOSTIC_SPARSE -> ORDER_AGNOSTIC_SPARSE_STRATEGY;
+      case SPARSE -> SPARSE_STRATEGY;
       case SEQUENCE -> SEQUENCE_STRATEGY;
-      case ORDER_AGNOSTIC_DENSE ->
+      case DENSE ->
           throw new IndexCreationError(
               String.format(
                   "No inverted index stores %s records.", recordType.getDisplayName()));

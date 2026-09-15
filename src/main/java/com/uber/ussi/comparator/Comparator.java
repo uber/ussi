@@ -73,7 +73,7 @@ public abstract class Comparator implements Serializable {
    * bound is expressed in the comparator's own units, so anything deriving a bound outside this
    * class converts it here rather than holding the normalizer.
    */
-  public final double toComparatorValue(double normalizedSimilarityValue) {
+  public final double fromSimilarity(double normalizedSimilarityValue) {
     return comparatorNormalizer.normalizedSimilarityValueToComparatorValue(
         normalizedSimilarityValue);
   }

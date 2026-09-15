@@ -46,12 +46,12 @@ public final class CacheConfigValidator implements NamespaceConfigValidator {
     // it stores order-agnostic sparse records.
     Comparator comparator = ComparatorFactory.tryCreateComparator(config);
     if (comparator != null
-        && !comparator.getSupportedRecordTypes().contains(RecordType.ORDER_AGNOSTIC_SPARSE)) {
+        && !comparator.getSupportedRecordTypes().contains(RecordType.SPARSE)) {
       violations.add(
           String.format(
               "cacheType %s stores %s records, which comparatorType %s cannot read.",
               cacheType.getParamValue(),
-              RecordType.ORDER_AGNOSTIC_SPARSE.getDisplayName(),
+              RecordType.SPARSE.getDisplayName(),
               config.getComparatorType()));
     }
     ConfigViolations.checkDoubleAboveMinInRange(

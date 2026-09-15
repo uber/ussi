@@ -139,7 +139,7 @@ public class L2Comparator extends Comparator {
    */
   @Override
   public Set<RecordType> getSupportedRecordTypes() {
-    return Set.of(RecordType.ORDER_AGNOSTIC_DENSE, RecordType.ORDER_AGNOSTIC_SPARSE);
+    return Set.of(RecordType.DENSE, RecordType.SPARSE);
   }
 
   @Override

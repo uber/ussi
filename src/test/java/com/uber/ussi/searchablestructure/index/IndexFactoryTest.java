@@ -130,7 +130,7 @@ class IndexFactoryTest {
 
   private static NamespaceConfig.Builder signatureConfig() {
     return validConfig()
-        .maxTermsAndValuesLength(Constants.NUM_SIGNATURES_PER_ID + 1)
+        .maxTermsAndValuesLength(Constants.NUM_SIGNATURES_PER_ROW + 1)
         .comparatorType("jaccard")
         .comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR, "minhash"))
         .comparatorNormalizerType("identity");

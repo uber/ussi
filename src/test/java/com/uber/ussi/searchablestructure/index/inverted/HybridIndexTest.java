@@ -81,7 +81,7 @@ class HybridIndexTest {
         new HybridIndex(
             config(),
             longObjectMap(
-                1, smallQuery, 2, jaccard(sequentialTerms(Constants.NUM_SIGNATURES_PER_ID + 1, 1))),
+                1, smallQuery, 2, jaccard(sequentialTerms(Constants.NUM_SIGNATURES_PER_ROW + 1, 1))),
             longObjectMap());
 
     assertEquals(
@@ -94,7 +94,7 @@ class HybridIndexTest {
         new HybridIndex(
             config(0, 1000),
             longObjectMap(
-                1, jaccard(sequentialTerms(Constants.NUM_SIGNATURES_PER_ID, 1)), 2, largeQuery),
+                1, jaccard(sequentialTerms(Constants.NUM_SIGNATURES_PER_ROW, 1)), 2, largeQuery),
             longObjectMap());
 
     assertEquals(
@@ -114,7 +114,7 @@ class HybridIndexTest {
             1,
             jaccard(weakExactTerms),
             2,
-            jaccard(sequentialTerms(Constants.NUM_SIGNATURES_PER_ID + 1, 1)));
+            jaccard(sequentialTerms(Constants.NUM_SIGNATURES_PER_ROW + 1, 1)));
     rows.put(3, jaccard(new long[] {1}));
     HybridIndex index = new HybridIndex(config(), rows, longObjectMap());
 
@@ -129,7 +129,7 @@ class HybridIndexTest {
   @Test
   void ruzickaRoutingConservativelySearchesAcrossTheBoundary() {
     LongTermsAndValues query = ruzicka(new long[] {1}, new float[] {100.0f});
-    float[] longValues = new float[Constants.NUM_SIGNATURES_PER_ID + 1];
+    float[] longValues = new float[Constants.NUM_SIGNATURES_PER_ROW + 1];
     Arrays.fill(longValues, 0.001f);
     longValues[0] = 100.0f;
     LongTermsAndValues longRow = ruzicka(sequentialTerms(longValues.length, 1), longValues);
@@ -145,7 +145,7 @@ class HybridIndexTest {
 
   @Test
   void popularityFilteringDisablesUnsafeCardinalityRouting() {
-    LongTermsAndValues target = jaccard(sequentialTerms(Constants.NUM_SIGNATURES_PER_ID, 1));
+    LongTermsAndValues target = jaccard(sequentialTerms(Constants.NUM_SIGNATURES_PER_ROW, 1));
     LongTermsAndValues popularExtraTerms = jaccard(sequentialTerms(30, 271));
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap(1, target, 2, popularExtraTerms);
     rows.put(3, popularExtraTerms);
@@ -222,7 +222,7 @@ class HybridIndexTest {
     Random random = new Random(77_213L);
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
     for (long rowNum = 1; rowNum <= 12; ++rowNum) {
-      // Rows longer than NUM_SIGNATURES_PER_ID go to the signature child, the rest to the exact.
+      // Rows longer than NUM_SIGNATURES_PER_ROW go to the signature child, the rest to the exact.
       int numTerms = rowNum % 2 == 0 ? 271 + random.nextInt(10) : 8 + random.nextInt(20);
       rows.put(rowNum, jaccard(sequentialTerms(numTerms, 1 + random.nextInt(40))));
     }

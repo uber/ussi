@@ -144,7 +144,7 @@ class SignatureIndexOnSequencesTest {
   void theHybridStructureRoutesSequencesByElementCount() {
     Random random = new Random(31_337L);
     long[] shortBase = sequence(random, 20).getTerms();
-    long[] longBase = sequence(random, Constants.NUM_SIGNATURES_PER_ID + 40).getTerms();
+    long[] longBase = sequence(random, Constants.NUM_SIGNATURES_PER_ROW + 40).getTerms();
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
     for (long rowNum = 1; rowNum <= 8; ++rowNum) {
       rows.put(rowNum, perturbed(random, shortBase, 1 + random.nextInt(3)));

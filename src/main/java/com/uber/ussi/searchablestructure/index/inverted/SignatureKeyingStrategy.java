@@ -79,7 +79,7 @@ final class SignatureKeyingStrategy {
     }
     double minSharedSignatureFraction =
         signatureBound.getMinSharedSignatureFraction(
-                recordUniValue, comparator.toComparatorValue(minSimilarity))
+                recordUniValue, comparator.fromSimilarity(minSimilarity))
             - signatureGenerator.getComparisonValueApproximationSafetyMargin();
     double unsharedFraction = 1.0 - Math.min(1.0, Math.max(0.0, minSharedSignatureFraction));
     return Math.min(numSignatures, Math.ceil(numSignatures * unsharedFraction))

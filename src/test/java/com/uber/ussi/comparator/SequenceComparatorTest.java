@@ -331,33 +331,18 @@ class SequenceComparatorTest {
     for (String comparatorType : List.of("gld", "ngld")) {
       Comparator comparator = createComparator(comparatorType, "reciprocal", "levenshtein");
 
-      assertFalse(comparator.supportsMergeCandidateGeneration(), comparatorType);
-      assertFalse(comparator.doesSuffixBoundConjunction(), comparatorType);
-      assertThrows(
-          UnsupportedOperationException.class,
-          () -> comparator.conjunctionContribution(1f, 1f),
-          comparatorType);
-      assertThrows(
-          UnsupportedOperationException.class,
-          () -> comparator.similarityFromConjunction(1.0, 1.0, 1.0, 1.0, 1.0),
-          comparatorType);
-      assertThrows(
-          UnsupportedOperationException.class,
-          () -> comparator.maxSimilarityFromPartialConjunction(1.0, 1.0, 1.0, 1.0, 1.0, 1.0),
-          comparatorType);
+      assertFalse(comparator instanceof ConjunctionScored, comparatorType);
     }
   }
 
-  /** The capability is what a config is validated against, so it must match what is implemented. */
+  /** A merge config is validated against the interface, so implementing it is the whole claim. */
   @Test
-  void theValueComparatorsReportThatTheySupportMerging() {
+  void theValueComparatorsScoreFromAConjunction() {
     for (String comparatorType : List.of("l2", "jaccard", "ruzicka")) {
       Comparator comparator =
           ComparatorFactory.createComparator(comparatorType, Map.of(), normalizer("reciprocal"));
 
-      assertTrue(comparator.supportsMergeCandidateGeneration(), comparatorType);
-      // Implemented rather than throwing.
-      comparator.conjunctionContribution(1f, 1f);
+      assertTrue(comparator instanceof ConjunctionScored, comparatorType);
     }
   }
 

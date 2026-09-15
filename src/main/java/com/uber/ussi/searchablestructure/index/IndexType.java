@@ -2,6 +2,7 @@
 package com.uber.ussi.searchablestructure.index;
 
 import com.uber.ussi.comparator.Comparator;
+import com.uber.ussi.comparator.DotProductScored;
 import com.uber.ussi.config.ConfigVocabulary;
 import com.uber.ussi.entity.termsandvalues.RecordType;
 import java.util.EnumSet;
@@ -67,7 +68,7 @@ public enum IndexType implements ConfigVocabulary {
   /**
    * Returns whether this structure scores every row by one dot product rather than by passing
    * candidates to the comparator, so it has to be configured with a comparator whose similarity a
-   * dot product determines; see {@link Comparator#supportsDotProductScoring}.
+   * dot product determines; see {@link DotProductScored}.
    */
   public boolean scoresByDotProducts() {
     return this == MATRIX;

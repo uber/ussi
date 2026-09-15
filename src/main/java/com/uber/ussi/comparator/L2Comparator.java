@@ -8,7 +8,8 @@ import com.uber.ussi.error.ArraysSizeMismatchError;
 import com.uber.ussi.utils.MathUtils;
 import java.util.Set;
 
-public class L2Comparator extends Comparator {
+public class L2Comparator extends Comparator
+    implements ConjunctionScored, DotProductScored {
 
   L2Comparator(ComparatorNormalizer comparatorNormalizer) {
     super(comparatorNormalizer);
@@ -149,11 +150,6 @@ public class L2Comparator extends Comparator {
   }
 
   @Override
-  public boolean supportsMergeCandidateGeneration() {
-    return true;
-  }
-
-  @Override
   public double conjunctionContribution(float value1, float value2) {
     double gap = (double) value1 - value2;
     return gap * gap;
@@ -190,9 +186,14 @@ public class L2Comparator extends Comparator {
         Math.sqrt(Math.max(0.0, conjunction + unscannedSquaredDistance)));
   }
 
+  /**
+   * A squared gap at one key can exceed the query's squared value there, the row's value being
+   * unbounded, so a suffix of the query's own Uni values bounds nothing about what the unscanned
+   * keys may add.
+   */
   @Override
-  public boolean supportsDotProductScoring() {
-    return true;
+  public boolean doesSuffixBoundConjunction() {
+    return false;
   }
 
   /**

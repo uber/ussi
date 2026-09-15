@@ -161,6 +161,13 @@ public abstract class Comparator implements Serializable {
    * for NGLD. A threshold that counts keys instead states it directly, and no share comes into it:
    * GLD's edits count a sequence's terms, and L2's squared distance is in the units of the squared
    * values its Uni value sums.
+   *
+   * <p>A measure with no useful bound of either shape returns {@code uniValue}, the whole record.
+   * Traversal halts once the keys it has visited accumulate past the prefix sum, and their
+   * accumulation reaches exactly the record's Uni value, so the whole record never halts it: every
+   * key generates candidates and nothing is pruned. That is sound rather than merely permitted,
+   * and it is what {@link #maxPrefixSumFromSharedFraction} already returns for a measure that can
+   * oblige a candidate to share none of the keys.
    */
   protected abstract double getMaxPrefixSumForTermsAndValuesInternal(
       double uniValue, double comparatorValue);
@@ -199,85 +206,4 @@ public abstract class Comparator implements Serializable {
    * {@code IndexType.resolveRecordTypes}.
    */
   public abstract Set<RecordType> getSupportedRecordTypes();
-
-  /*
-   * Merge candidate generation accumulates a conjunction: the part of the similarity the query and
-   * an indexed row derive from the keys they share. It is the intersection of the two rows for
-   * Jaccard and Ruzicka, and the squared distance over the shared keys for L2.
-   */
-
-  /**
-   * Returns whether this comparator can generate candidates by merging inverted lists, which is
-   * exactly whether it implements the conjunction methods below. A comparator that cannot must say
-   * so here, so that the config is rejected up front rather than failing partway through a search.
-   */
-  public boolean supportsMergeCandidateGeneration() {
-    return false;
-  }
-
-  /** Returns what one key the query and an indexed row share adds to the conjunction. */
-  public double conjunctionContribution(float value1, float value2) {
-    throw new UnsupportedOperationException(
-        "conjunctionContribution is not supported by " + getClass().getSimpleName() + ".");
-  }
-
-  /** Returns the normalized similarity implied by a complete conjunction. */
-  public double similarityFromConjunction(
-      double conjunction,
-      double partialUniValue1,
-      double uniValue1,
-      double partialUniValue2,
-      double uniValue2) {
-    throw new UnsupportedOperationException(
-        "similarityFromConjunction is not supported by " + getClass().getSimpleName() + ".");
-  }
-
-  /**
-   * Returns the highest normalized similarity still reachable from a partial conjunction, where
-   * {@code unscannedKeysUniValue} bounds what the query's not-yet-merged keys can add.
-   */
-  public double maxSimilarityFromPartialConjunction(
-      double conjunction,
-      double unscannedKeysUniValue,
-      double partialUniValue1,
-      double uniValue1,
-      double partialUniValue2,
-      double uniValue2) {
-    throw new UnsupportedOperationException(
-        "maxSimilarityFromPartialConjunction is not supported by "
-            + getClass().getSimpleName()
-            + ".");
-  }
-
-  /**
-   * Returns whether a suffix of per-key bounds is a valid bound on what the query's unscanned keys
-   * can still contribute to the conjunction.
-   */
-  public boolean doesSuffixBoundConjunction() {
-    return false;
-  }
-
-  /**
-   * Returns whether this comparator derives its similarity from a dot product, which is exactly
-   * whether it implements {@link #similarityFromDotProduct}. A structure that scores by matrix
-   * multiplication needs that, so a comparator that cannot must say so here, so that the config is
-   * rejected up front rather than a structure scoring by arithmetic that is not the measure's.
-   */
-  public boolean supportsDotProductScoring() {
-    return false;
-  }
-
-  /**
-   * Returns the normalized similarity of two records whose dot product is {@code dotProduct}.
-   *
-   * <p>A measure qualifies when these three quantities determine it. The dot product carries
-   * everything the two records share, so whatever else the measure needs has to come from each
-   * record on its own, which is what its unilateral value is. A measure that needs the values
-   * themselves, rather than a sum over them, does not decompose this way and cannot be scored from
-   * a dot product at all.
-   */
-  public double similarityFromDotProduct(double dotProduct, double uniValue1, double uniValue2) {
-    throw new UnsupportedOperationException(
-        "similarityFromDotProduct is not supported by " + getClass().getSimpleName() + ".");
-  }
 }

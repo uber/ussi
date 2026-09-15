@@ -22,6 +22,10 @@ import org.junit.jupiter.api.Test;
 
 class MatrixIndexTest {
   private static final float DELTA = 1e-6f;
+  // The squared-norm expansion loses precision in proportion to the number of dimensions
+  // summed, so these rows carry the length a dense embedding actually has.
+  private static final int HIGH_DIMENSION = 512;
+  private static final float NEAR_DUPLICATE_SEPARATION = 1e-3f;
 
   @Test
   void constructorMaterializesDenseRows() {
@@ -158,6 +162,30 @@ class MatrixIndexTest {
     assertEquals(
         MetadataFilteringStrategy.IN_FILTERING,
         index.getResolvedMetadataFilteringStrategyForLastSearchForTests());
+  }
+
+  @Test
+  void inFilteringDistinguishesHighDimensionalNearDuplicates() {
+    float[] rowValues = unitVector();
+    float[] nearRowValues = rowValues.clone();
+    nearRowValues[0] += NEAR_DUPLICATE_SEPARATION;
+
+    LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
+    rows.put(10, denseInternal(rowValues));
+    rows.put(11, denseInternal(nearRowValues));
+    LongObjectHashMap<LongMeta> metadata = longObjectMap();
+    metadata.put(10, longMeta("city", "sf"));
+    metadata.put(11, longMeta("city", "sf"));
+    MatrixIndex index = new MatrixIndex(highDimensionalInFilteringConfig(), rows, metadata);
+
+    List<RowNumAndSimilarity> result =
+        index.getNearestNeighborRowNums(
+            2, denseVector(rowValues), new MetaFilter(Map.of("city", List.of("sf"))));
+
+    LongFloatHashMap rowNumToSimilarity = rowNumToSimilarityMap(result);
+    assertEquals(1.0f, rowNumToSimilarity.get(10), DELTA);
+    assertEquals(
+        expectedSimilarity(rowValues, nearRowValues), rowNumToSimilarity.get(11), DELTA);
   }
 
   @Test
@@ -381,6 +409,21 @@ class MatrixIndexTest {
         .build();
   }
 
+  private static NamespaceConfig highDimensionalInFilteringConfig() {
+    return NamespaceConfig.builder()
+        .minTermsAndValuesLength(0)
+        .maxTermsAndValuesLength(HIGH_DIMENSION)
+        .maxCacheSize(100)
+        .cacheType("scan")
+        .indexType("matrix")
+        .indexParams(Map.of(Index.METADATA_FILTERING_STRATEGY, "in_filtering"))
+        .comparatorType("l2")
+        .comparatorNormalizerType("reciprocal")
+        .maxNumSearchableStructures(3)
+        .maxNumSimilarities(10)
+        .build();
+  }
+
   private static LongObjectHashMap<LongTermsAndValues> rows() {
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
     rows.put(10, denseInternal(1f, 0f));
@@ -415,6 +458,30 @@ class MatrixIndexTest {
 
   private static LongTermsAndValues denseVector(float... values) {
     return denseInternal(values);
+  }
+
+  private static float[] unitVector() {
+    float[] values = new float[HIGH_DIMENSION];
+    double squaredNorm = 0.0;
+    for (int i = 0; i < HIGH_DIMENSION; ++i) {
+      values[i] = (float) Math.sin(i * 0.013d);
+      squaredNorm += (double) values[i] * values[i];
+    }
+    float norm = (float) Math.sqrt(squaredNorm);
+    for (int i = 0; i < HIGH_DIMENSION; ++i) {
+      values[i] /= norm;
+    }
+    return values;
+  }
+
+  /** Scores a pair through the distance definition directly, without the squared-norm expansion. */
+  private static float expectedSimilarity(float[] queryValues, float[] rowValues) {
+    double squaredDistance = 0.0;
+    for (int i = 0; i < queryValues.length; ++i) {
+      double difference = (double) queryValues[i] - rowValues[i];
+      squaredDistance += difference * difference;
+    }
+    return (float) (1.0 / (1.0 + Math.sqrt(squaredDistance)));
   }
 
   private static LongMeta longMeta(String key, String value) {

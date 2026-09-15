@@ -12,7 +12,7 @@ import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.index.scan.ScanIndex;
-import com.uber.ussi.utils.Constants;
+import com.uber.ussi.utils.ConfigKeys;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -144,7 +144,7 @@ class SignatureIndexOnSequencesTest {
   void theHybridStructureRoutesSequencesByElementCount() {
     Random random = new Random(31_337L);
     long[] shortBase = sequence(random, 20).getTerms();
-    long[] longBase = sequence(random, Constants.NUM_SIGNATURES_PER_ROW + 40).getTerms();
+    long[] longBase = sequence(random, SignatureIndex.NUM_SIGNATURES_PER_ROW + 40).getTerms();
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
     for (long rowNum = 1; rowNum <= 8; ++rowNum) {
       rows.put(rowNum, perturbed(random, shortBase, 1 + random.nextInt(3)));
@@ -290,7 +290,7 @@ class SignatureIndexOnSequencesTest {
         .cacheType("scan")
         .indexType(indexType)
         .comparatorType(comparatorType)
-        .comparatorParams(Map.of(Constants.SIGNATURE_GENERATOR, "icws"))
+        .comparatorParams(Map.of(ConfigKeys.SIGNATURE_GENERATOR, "icws"))
         // GLD reports an unbounded distance, so it needs a normalizer that maps one onto [0, 1].
         .comparatorNormalizerType(comparatorType.equals("gld") ? "reciprocal" : "complement")
         .maxNumSearchableStructures(3)

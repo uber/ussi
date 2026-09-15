@@ -13,7 +13,7 @@ import com.uber.ussi.comparatornormalizer.ComparatorNormalizerFactory;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.TermsAndValues;
 import com.uber.ussi.error.ComparatorCreationError;
-import com.uber.ussi.utils.Constants;
+import com.uber.ussi.utils.ConfigKeys;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -204,7 +204,7 @@ class SequenceComparatorTest {
           SignatureBounded.class,
           ComparatorFactory.createComparator(
               comparatorType,
-              Map.of(Constants.SIGNATURE_GENERATOR, "icws"),
+              Map.of(ConfigKeys.SIGNATURE_GENERATOR, "icws"),
               normalizer("complement")),
           comparatorType);
 
@@ -214,7 +214,7 @@ class SequenceComparatorTest {
               () ->
                   ComparatorFactory.createComparator(
                       comparatorType,
-                      Map.of(Constants.SIGNATURE_GENERATOR, "minhash"),
+                      Map.of(ConfigKeys.SIGNATURE_GENERATOR, "minhash"),
                       normalizer("complement")),
               comparatorType);
       assertTrue(
@@ -259,7 +259,7 @@ class SequenceComparatorTest {
         () ->
             ComparatorFactory.createComparator(
                 "ngld",
-                Map.of(Constants.SEQUENCE_DISTANCE_TYPE, "hamming"),
+                Map.of(ConfigKeys.SEQUENCE_DISTANCE_TYPE, "hamming"),
                 normalizer("complement")));
   }
 
@@ -416,7 +416,7 @@ class SequenceComparatorTest {
       String comparatorType, String normalizerType, String distanceType) {
     return ComparatorFactory.createComparator(
         comparatorType,
-        Map.of(Constants.SEQUENCE_DISTANCE_TYPE, distanceType),
+        Map.of(ConfigKeys.SEQUENCE_DISTANCE_TYPE, distanceType),
         normalizer(normalizerType));
   }
 

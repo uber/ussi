@@ -6,7 +6,7 @@ import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.TermsAndValues;
 import com.uber.ussi.searchablestructure.index.Index;
-import com.uber.ussi.utils.Constants;
+import com.uber.ussi.utils.ConfigKeys;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -129,13 +129,13 @@ class SparseEndToEndTest {
       int maxCacheSize, double maxFraction, String metadataStrategy) {
     Map<String, String> popularityParams =
         Map.of(
-            Constants.MAX_FRACTION_IDS_PER_TERM,
+            ConfigKeys.MAX_FRACTION_IDS_PER_TERM,
             Double.toString(maxFraction),
-            Constants.MAX_FRACTION_IDS_PER_TERM_CONFIDENCE,
+            ConfigKeys.MAX_FRACTION_IDS_PER_TERM_CONFIDENCE,
             "0.5");
     Map<String, String> indexParams =
         Map.of(
-            Constants.MAX_FRACTION_IDS_PER_TERM,
+            ConfigKeys.MAX_FRACTION_IDS_PER_TERM,
             Double.toString(maxFraction),
             Index.METADATA_FILTERING_STRATEGY,
             metadataStrategy,

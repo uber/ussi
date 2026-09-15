@@ -7,7 +7,6 @@ import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.index.IndexType;
-import com.uber.ussi.utils.Constants;
 import java.util.Arrays;
 
 /**
@@ -16,6 +15,9 @@ import java.util.Arrays;
  * candidate's similarity has to be verified through the comparator.
  */
 public final class SignatureIndex extends BaseInvertedIndex {
+
+  /** How many signatures stand in for one row, which fixes the length of every signature list. */
+  public static final int NUM_SIGNATURES_PER_ROW = 270;
 
   public SignatureIndex(
       NamespaceConfig namespaceConfig,
@@ -59,7 +61,7 @@ public final class SignatureIndex extends BaseInvertedIndex {
     }
     return LongHashSet.from(
             getSignatureKeyingStrategy()
-                .getSignatures(indexedRecord, Constants.NUM_SIGNATURES_PER_ROW))
+                .getSignatures(indexedRecord, NUM_SIGNATURES_PER_ROW))
         .toArray();
   }
 

@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.uber.ussi.utils.Constants;
+import com.uber.ussi.utils.ConfigKeys;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -72,7 +72,7 @@ class NamespaceConfigTest {
   void validateRejectsUnsupportedCandidateGeneratorType() {
     NamespaceConfig config =
         validBuilder()
-            .indexParams(Map.of(Constants.CANDIDATE_GENERATOR, "uni_outward"))
+            .indexParams(Map.of(ConfigKeys.CANDIDATE_GENERATOR, "uni_outward"))
             .build();
 
     assertFalse(config.collectStructuralViolations().isEmpty());
@@ -83,11 +83,11 @@ class NamespaceConfigTest {
   void validateRejectsAnUnsupportedPopularTermDiscardScopeInEitherParamMap() {
     NamespaceConfig indexScope =
         validBuilder()
-            .indexParams(Map.of(Constants.POPULAR_TERM_DISCARD_SCOPE, "verification_only"))
+            .indexParams(Map.of(ConfigKeys.POPULAR_TERM_DISCARD_SCOPE, "verification_only"))
             .build();
     NamespaceConfig cacheScope =
         validBuilder()
-            .cacheParams(Map.of(Constants.POPULAR_TERM_DISCARD_SCOPE, "verification_only"))
+            .cacheParams(Map.of(ConfigKeys.POPULAR_TERM_DISCARD_SCOPE, "verification_only"))
             .build();
 
     for (NamespaceConfig config : List.of(indexScope, cacheScope)) {

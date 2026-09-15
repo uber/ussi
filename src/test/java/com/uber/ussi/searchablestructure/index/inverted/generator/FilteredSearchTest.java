@@ -12,7 +12,6 @@ import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.inverted.KeyAndPrefixFilteringData;
-import com.uber.ussi.utils.Constants;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -153,7 +152,7 @@ class FilteredSearchTest {
         IllegalArgumentException.class,
         () ->
             FilteredSearch.getFirstMatchingUniValue(
-                COMPARATOR, stubContext(), new long[] {1}, Constants.UNSET_UNI_VALUE, 0.5, 0, 1));
+                COMPARATOR, stubContext(), new long[] {1}, Comparator.UNSET_UNI_VALUE, 0.5, 0, 1));
   }
 
   private static FilteredSearch.CandidateIterator candidateIterator(

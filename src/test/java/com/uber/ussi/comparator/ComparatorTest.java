@@ -11,7 +11,6 @@ import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
 import com.uber.ussi.error.ArraysSizeMismatchError;
 import com.uber.ussi.error.ComparatorCreationError;
-import com.uber.ussi.utils.Constants;
 import com.uber.ussi.utils.MathUtils;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -58,7 +57,7 @@ class ComparatorTest {
 
   @Test
   void getSimilarityRejectsUnsetUniValue() {
-    LongTermsAndValues unset = denseVector(new float[] {1f, 0f}, Constants.UNSET_UNI_VALUE);
+    LongTermsAndValues unset = denseVector(new float[] {1f, 0f}, Comparator.UNSET_UNI_VALUE);
     LongTermsAndValues valid = denseVector(new float[] {1f, 0f}, 1.0);
     Comparator comparator = l2Comparator();
 
@@ -141,7 +140,7 @@ class ComparatorTest {
 
     assertThrows(
         IllegalArgumentException.class,
-        () -> comparator.getMinPrefixSumForTermsAndValues(Constants.UNSET_UNI_VALUE, 0.5));
+        () -> comparator.getMinPrefixSumForTermsAndValues(Comparator.UNSET_UNI_VALUE, 0.5));
     assertThrows(
         IllegalArgumentException.class,
         () -> comparator.getMinPrefixSumForTermsAndValues(1.0, -0.1));

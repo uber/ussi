@@ -3,7 +3,7 @@ package com.uber.ussi.searchablestructure.cache;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.uber.ussi.config.NamespaceConfig;
-import com.uber.ussi.utils.Constants;
+import com.uber.ussi.utils.ConfigKeys;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -17,26 +17,26 @@ class CacheConfigValidatorTest {
     new ValidationCase(
         "max fraction at zero",
         builder ->
-            builder.cacheParams(Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "0")),
+            builder.cacheParams(Map.of(ConfigKeys.MAX_FRACTION_IDS_PER_TERM, "0")),
         false),
     new ValidationCase(
         "confidence below one half",
         builder ->
             builder.cacheParams(
-                Map.of(Constants.MAX_FRACTION_IDS_PER_TERM_CONFIDENCE, "0.4")),
+                Map.of(ConfigKeys.MAX_FRACTION_IDS_PER_TERM_CONFIDENCE, "0.4")),
         false),
     new ValidationCase(
         "unparseable reevaluation fraction",
         builder ->
             builder.cacheParams(
-                Map.of(Constants.FULL_REEVALUATION_CACHE_SIZE_DECREASE_FRACTION, "not-a-number")),
+                Map.of(ConfigKeys.FULL_REEVALUATION_CACHE_SIZE_DECREASE_FRACTION, "not-a-number")),
         false),
     new ValidationCase(
         "the scan cache ignores inverted-term params",
         builder ->
             builder
                 .cacheType("scan")
-                .cacheParams(Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "0")),
+                .cacheParams(Map.of(ConfigKeys.MAX_FRACTION_IDS_PER_TERM, "0")),
         true),
     // The inverted term cache needs terms and a value per term, which a sequence does not supply.
     new ValidationCase(
@@ -106,7 +106,7 @@ class CacheConfigValidatorTest {
             .build();
 
     assertEquals(List.of(), violations(config));
-    assertEquals("0.5", config.getCacheParam(Constants.MAX_FRACTION_IDS_PER_TERM));
+    assertEquals("0.5", config.getCacheParam(ConfigKeys.MAX_FRACTION_IDS_PER_TERM));
   }
 
   private static NamespaceConfig.Builder invertedTermCacheBuilder() {

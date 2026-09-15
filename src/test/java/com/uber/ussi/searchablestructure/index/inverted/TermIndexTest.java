@@ -11,6 +11,7 @@ import com.carrotsearch.hppc.LongDoubleHashMap;
 import com.carrotsearch.hppc.LongFloatHashMap;
 import com.carrotsearch.hppc.LongObjectHashMap;
 import com.carrotsearch.hppc.cursors.LongObjectCursor;
+import com.uber.ussi.comparator.Comparator;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.meta.MetaFilter;
@@ -22,7 +23,7 @@ import com.uber.ussi.searchablestructure.index.Index;
 import com.uber.ussi.searchablestructure.index.IndexType;
 import com.uber.ussi.searchablestructure.index.scan.ScanIndex;
 import com.uber.ussi.searchablestructure.metadata.MetadataFilteringStrategy;
-import com.uber.ussi.utils.Constants;
+import com.uber.ussi.utils.ConfigKeys;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -64,7 +65,7 @@ class TermIndexTest {
     rows.put(4, jaccard(new long[] {5}, 1));
     TermIndex index =
         new TermIndex(
-            config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "0.5")),
+            config("jaccard", Map.of(ConfigKeys.MAX_FRACTION_IDS_PER_TERM, "0.5")),
             rows,
             longObjectMap());
 
@@ -85,8 +86,8 @@ class TermIndexTest {
     LongObjectHashMap<LongTermsAndValues> rows = popularTermRows();
     Map<String, String> params =
         Map.of(
-            Constants.MAX_FRACTION_IDS_PER_TERM, "0.5",
-            Constants.POPULAR_TERM_DISCARD_SCOPE, CANDIDATES_ONLY);
+            ConfigKeys.MAX_FRACTION_IDS_PER_TERM, "0.5",
+            ConfigKeys.POPULAR_TERM_DISCARD_SCOPE, CANDIDATES_ONLY);
     TermIndex index = new TermIndex(config("jaccard", params), rows, longObjectMap());
 
     // The scope leaves candidate generation alone and changes only scoring.
@@ -106,7 +107,7 @@ class TermIndexTest {
     LongObjectHashMap<LongTermsAndValues> rows = popularTermRows();
     TermIndex index =
         new TermIndex(
-            config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "0.5")),
+            config("jaccard", Map.of(ConfigKeys.MAX_FRACTION_IDS_PER_TERM, "0.5")),
             rows,
             longObjectMap());
 
@@ -122,8 +123,8 @@ class TermIndexTest {
     LongObjectHashMap<LongTermsAndValues> rows = popularTermRows();
     Map<String, String> params =
         Map.of(
-            Constants.MAX_FRACTION_IDS_PER_TERM, "0.5",
-            Constants.POPULAR_TERM_DISCARD_SCOPE, CANDIDATES_ONLY);
+            ConfigKeys.MAX_FRACTION_IDS_PER_TERM, "0.5",
+            ConfigKeys.POPULAR_TERM_DISCARD_SCOPE, CANDIDATES_ONLY);
     TermIndex index = new TermIndex(config("jaccard", params), rows, longObjectMap());
 
     // Term 1 is the query's only key and the discard emptied its list, so no row is reachable.
@@ -136,8 +137,8 @@ class TermIndexTest {
     LongObjectHashMap<LongTermsAndValues> rows = popularTermRows();
     Map<String, String> params =
         Map.of(
-            Constants.MAX_FRACTION_IDS_PER_TERM, "0.5",
-            Constants.POPULAR_TERM_DISCARD_SCOPE, CANDIDATES_ONLY);
+            ConfigKeys.MAX_FRACTION_IDS_PER_TERM, "0.5",
+            ConfigKeys.POPULAR_TERM_DISCARD_SCOPE, CANDIDATES_ONLY);
     TermIndex index = new TermIndex(config("jaccard", params), rows, longObjectMap());
 
     // Row 1 is two terms of three as supplied, clearing 0.6, but length filtering can only bound
@@ -153,9 +154,9 @@ class TermIndexTest {
     LongObjectHashMap<LongTermsAndValues> rows = popularTermRows();
     Map<String, String> params =
         Map.of(
-            Constants.MAX_FRACTION_IDS_PER_TERM, "0.5",
-            Constants.POPULAR_TERM_DISCARD_SCOPE, CANDIDATES_ONLY,
-            Constants.CANDIDATE_GENERATOR,
+            ConfigKeys.MAX_FRACTION_IDS_PER_TERM, "0.5",
+            ConfigKeys.POPULAR_TERM_DISCARD_SCOPE, CANDIDATES_ONLY,
+            ConfigKeys.CANDIDATE_GENERATOR,
             NamespaceConfig.CandidateGeneratorType.SPARS_MERGE.getParamValue());
     TermIndex index = new TermIndex(config("jaccard", params, "inverted_term"), rows, longObjectMap());
 
@@ -178,7 +179,7 @@ class TermIndexTest {
 
     TermIndex index =
         new TermIndex(
-            config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "0.5")),
+            config("jaccard", Map.of(ConfigKeys.MAX_FRACTION_IDS_PER_TERM, "0.5")),
             rows,
             longObjectMap());
 
@@ -415,14 +416,14 @@ class TermIndexTest {
         () ->
             new TermIndex(
                 config(
-                    "jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "not-a-number")),
+                    "jaccard", Map.of(ConfigKeys.MAX_FRACTION_IDS_PER_TERM, "not-a-number")),
                 longObjectMap(),
                 longObjectMap()));
     assertThrows(
         IllegalArgumentException.class,
         () ->
             new TermIndex(
-                config("jaccard", Map.of(Constants.MAX_FRACTION_IDS_PER_TERM, "0")),
+                config("jaccard", Map.of(ConfigKeys.MAX_FRACTION_IDS_PER_TERM, "0")),
                 longObjectMap(),
                 longObjectMap()));
 
@@ -434,7 +435,7 @@ class TermIndexTest {
         IllegalArgumentException.class,
         () ->
             index.getFirstMatchingUniValueForTests(
-                invertedList, Constants.UNSET_UNI_VALUE, 0.5, 0, 1));
+                invertedList, Comparator.UNSET_UNI_VALUE, 0.5, 0, 1));
     assertThrows(
         IndexOutOfBoundsException.class,
         () -> index.getLastMatchingUniValueForTests(invertedList, 1.0, 0.5, -1, 1));
@@ -663,7 +664,7 @@ class TermIndexTest {
     }
     Map<String, String> popularityParams =
         Map.of(
-            Constants.MAX_FRACTION_IDS_PER_TERM, "0.2",
+            ConfigKeys.MAX_FRACTION_IDS_PER_TERM, "0.2",
             Index.METADATA_FILTERING_STRATEGY, "pre_filtering",
             Index.MAX_PRE_FILTERING_ROWS_RATIO, "0.9");
     TermIndex filteredScanIndex =
@@ -736,7 +737,7 @@ class TermIndexTest {
   private static Map<String, String> withMergeParam(Map<String, String> indexParams) {
     Map<String, String> merged = new LinkedHashMap<>(indexParams);
     merged.put(
-        Constants.CANDIDATE_GENERATOR,
+        ConfigKeys.CANDIDATE_GENERATOR,
         NamespaceConfig.CandidateGeneratorType.SPARS_MERGE.getParamValue());
     return merged;
   }
@@ -745,7 +746,7 @@ class TermIndexTest {
     return config(
         comparatorType,
         Map.of(
-            Constants.CANDIDATE_GENERATOR,
+            ConfigKeys.CANDIDATE_GENERATOR,
             NamespaceConfig.CandidateGeneratorType.SPARS_MERGE.getParamValue()),
         "inverted_term");
   }

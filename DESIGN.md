@@ -34,6 +34,16 @@ hashed to `long` and the comparator-derived `uniValue` cached alongside them.
 So a record is the idea and a `TermsAndValues` is the array pair implementing
 it, which is why the enum is `RecordType` and not `TermsAndValuesType`.
 
+Below these sit two words the code does name. Every record holds **terms**,
+whatever its shape: a sequence's ordered items are terms in the `terms` array
+just as a sparse record's are. A **key** is the collective name for whatever
+an inverted list can be keyed by, which is a term or a signature, so a key is
+not always something the record itself holds.
+
+Prose about sequences says "element" for one of its ordered items, which reads
+better than "term" when order is the point, but it is a reading aid and not a
+third kind of thing; the code has no such concept.
+
 ## Structure Lifecycle
 
 `NearestNeighborSearchIndex` owns one active cache, zero or more graduating
@@ -302,7 +312,7 @@ Each row travels through a search in two forms. The inverted lists are keyed by
 the distinct elements of the row's multiset and carry how many times each
 occurs, which is what length and prefix filtering prune on. The comparator then
 verifies each surviving candidate against the ordered sequences, running the
-banded dynamic program under the budget the active similarity threshold allows.
+banded dynamic program under the budget the current `minSimilarity` allows.
 
 Each row and each query must have non-empty terms and an empty values array. A
 query and a row need not be the same length as each other. Search only
@@ -347,10 +357,10 @@ child and longer rows to the signature child. The configured length range may
 fall entirely below, entirely above, or across this internal boundary.
 
 Queries search the child matching the query length first. Jaccard's cardinality
-bounds can skip the other child when no row on that side can reach the active
-similarity threshold. Ruzicka and popularity-filtered searches conservatively
-search both children, because term count alone cannot prove one side
-irrelevant. Results from the searched children are merged and limited by
+bounds can skip the other child when no row on that side can reach the
+search's current `minSimilarity`. Ruzicka and popularity-filtered searches
+conservatively search both children, because term count alone cannot prove one
+side irrelevant. Results from the searched children are merged and limited by
 `maxNumSimilarities`.
 
 The hybrid requires a comparator with a configured signature generator, which

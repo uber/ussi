@@ -88,41 +88,41 @@ class LongTermsAndValuesTest {
   }
 
   @Test
-  void toElementMultisetSortsAndCountsTheElements() {
+  void toTermMultisetSortsAndCountsTheTerms() {
     Comparator comparator =
         ComparatorFactory.createComparator("ngld", Map.of(), new ComplementComparatorNormalizer());
     LongTermsAndValues sequence =
         new LongTermsAndValues(new long[] {5, 2, 5, 9, 2, 5}, new float[0], 6.0);
 
-    LongTermsAndValues multiset = sequence.toElementMultiset(comparator);
+    LongTermsAndValues multiset = sequence.toTermMultiset(comparator);
 
     assertArrayEquals(new long[] {2, 5, 9}, multiset.getTerms());
     assertArrayEquals(new float[] {2.0f, 3.0f, 1.0f}, multiset.getValues());
     // The counts sum to the sequence length, so both forms report one Uni value.
     assertEquals(sequence.getUniValue(), multiset.getUniValue(), EPSILON_9);
 
-    // One element repeated throughout is the longest a run of equal elements can get.
+    // One term repeated throughout is the longest a run of equal terms can get.
     LongTermsAndValues repeated =
         new LongTermsAndValues(new long[] {4, 4, 4, 4}, new float[0], 4.0)
-            .toElementMultiset(comparator);
+            .toTermMultiset(comparator);
     assertArrayEquals(new long[] {4}, repeated.getTerms());
     assertArrayEquals(new float[] {4.0f}, repeated.getValues());
 
-    // A lone element is the shortest, and has to land in the arrays just the same.
+    // A lone term is the shortest, and has to land in the arrays just the same.
     LongTermsAndValues single =
-        new LongTermsAndValues(new long[] {6}, new float[0], 1.0).toElementMultiset(comparator);
+        new LongTermsAndValues(new long[] {6}, new float[0], 1.0).toTermMultiset(comparator);
     assertArrayEquals(new long[] {6}, single.getTerms());
     assertArrayEquals(new float[] {1.0f}, single.getValues());
   }
 
   @Test
-  void toElementMultisetRejectsARecordCarryingValues() {
+  void toTermMultisetRejectsARecordCarryingValues() {
     Comparator comparator =
         ComparatorFactory.createComparator("ngld", Map.of(), new ComplementComparatorNormalizer());
     LongTermsAndValues sparse = new LongTermsAndValues(new long[] {1, 2}, new float[] {1, 1}, 2.0);
 
-    assertThrows(IllegalArgumentException.class, () -> sparse.toElementMultiset(comparator));
-    assertThrows(NullPointerException.class, () -> sparse.toElementMultiset(null));
+    assertThrows(IllegalArgumentException.class, () -> sparse.toTermMultiset(comparator));
+    assertThrows(NullPointerException.class, () -> sparse.toTermMultiset(null));
   }
 
   @Test
@@ -258,7 +258,7 @@ class LongTermsAndValuesTest {
     LongTermsAndValues emptySequence = new LongTermsAndValues(new long[0], new float[0], 0.0);
 
     LongTermsAndValues.validateComparablePair(sequence, longerSequence);
-    // An empty sequence is a legitimate comparand: every element of the other one is an insertion.
+    // An empty sequence is a legitimate comparand: every term of the other one is an insertion.
     LongTermsAndValues.validateComparablePair(sequence, emptySequence);
   }
 

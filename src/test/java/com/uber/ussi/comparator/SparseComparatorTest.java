@@ -42,7 +42,7 @@ class SparseComparatorTest {
   }
 
   @Test
-  void ruzickaTreatsOppositeSignsAsDistinctElements() {
+  void ruzickaTreatsOppositeSignsAsDistinctTerms() {
     Comparator comparator = comparator("ruzicka");
     LongTermsAndValues first = sparse(comparator, new long[] {1L}, 2f);
     LongTermsAndValues second = sparse(comparator, new long[] {1L}, -2f);
@@ -59,7 +59,7 @@ class SparseComparatorTest {
     assertEquals(4.0 / 7.0, comparator.getSimilarity(first, second, 0.0), EPSILON_9);
   }
 
-  /** A zero coordinate is absent, so a dense record's populated positions are its elements. */
+  /** A zero coordinate is absent, so a dense record's populated positions are its terms. */
   @Test
   void jaccardComparesDenseVectorsByPopulatedPosition() {
     Comparator comparator = comparator("jaccard");

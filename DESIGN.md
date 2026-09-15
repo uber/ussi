@@ -34,15 +34,11 @@ hashed to `long` and the comparator-derived `uniValue` cached alongside them.
 So a record is the idea and a `TermsAndValues` is the array pair implementing
 it, which is why the enum is `RecordType` and not `TermsAndValuesType`.
 
-Below these sit two words the code does name. Every record holds **terms**,
-whatever its shape: a sequence's ordered items are terms in the `terms` array
-just as a sparse record's are. A **key** is the collective name for whatever
+Below these sit two more words. Every record holds **terms**, whatever its
+shape: a sequence's ordered items are terms in the `terms` array just as a
+sparse record's are. A **key** is the collective name for whatever
 an inverted list can be keyed by, which is a term or a signature, so a key is
 not always something the record itself holds.
-
-Prose about sequences says "element" for one of its ordered items, which reads
-better than "term" when order is the point, but it is a reading aid and not a
-third kind of thing; the code has no such concept.
 
 ## Structure Lifecycle
 
@@ -183,7 +179,7 @@ store, and an index holds the one record type its comparator also reads.
   along with the inverted list they walk and the search context, row filter,
   and results heap they walk it with. A generator only ever reads keys and uni
   values, so sequences reuse both unchanged: a sequence is indexed by the
-  multiset of its elements, and only the comparator that scores a candidate
+  multiset of its terms, and only the comparator that scores a candidate
   cares about their order. Every type here is public only to be reachable from
   the indexes in the parent packages.
 
@@ -321,29 +317,29 @@ At build time, terms occurring in more than
 ### Sequences On The Term Index
 
 Paired with a sequence comparator, that same `TermIndex` stores ordered
-sequences, keyed by the elements a sequence carries rather than by the terms of
-a sparse record.
+sequences, whose terms arrive in order and with repeats rather than once each
+alongside a value.
 
-An edit distance depends on the order the elements appear in, so it cannot be
-read off the elements a query and a row share. What those shared elements give
-is a bound: two sequences within edit distance `d` have element multisets
+An edit distance depends on the order the terms appear in, so it cannot be
+read off the terms a query and a row share. What those shared terms give
+is a bound: two sequences within edit distance `d` have term multisets
 within L1 distance `l1BoundFactor * d` of each other, where the factor is `2.0`
 for `levenshtein` and `damerau_levenshtein` and `1.0` for `lcs`. A substitution
-takes one element out of a multiset and puts another in, moving two, while an
+takes one term out of a multiset and puts another in, moving two, while an
 insertion or a deletion moves one, which is why forbidding substitution halves
 the factor and makes `lcs` the more selective choice for candidate generation.
-A row sharing too few elements with the query, disregarding order, therefore
+A row sharing too few terms with the query, disregarding order, therefore
 cannot be close enough in order either.
 
 Each row travels through a search in two forms. The inverted lists are keyed by
-the distinct elements of the row's multiset and carry how many times each
+the distinct terms of the row's multiset and carry how many times each
 occurs, which is what length and prefix filtering prune on. The comparator then
 verifies each surviving candidate against the ordered sequences, running the
 banded dynamic program under the budget the current `minSimilarity` allows.
 
 Each row and each query must have non-empty terms and an empty values array. A
 query and a row need not be the same length as each other. Search only
-considers rows sharing at least one non-discarded element with the query.
+considers rows sharing at least one non-discarded term with the query.
 
 ### Signature Index
 
@@ -354,7 +350,7 @@ Signature collisions generate candidates approximately, but candidates are
 scored using canonical terms and values, in whichever form the configured
 discard scope leaves them, rather than by comparing signatures.
 
-A sequence's signatures are drawn from its element multiset, the same form
+A sequence's signatures are drawn from its term multiset, the same form
 `TermIndex` keys it by, so its counts are what the weighted samplers read and
 MinHash is not among the generators it accepts.
 
@@ -379,8 +375,8 @@ exact.
 ### Hybrid Index
 
 `HybridIndex` combines a `TermIndex` and a `SignatureIndex`. During each build,
-rows with at most 270 terms, or 270 elements for a sequence, go to the term
-child and longer rows to the signature child. The configured length range may
+rows with at most 270 terms go to the term child and longer rows to the
+signature child. The configured length range may
 fall entirely below, entirely above, or across this internal boundary.
 
 Queries search the child matching the query length first. Jaccard's cardinality
@@ -464,7 +460,7 @@ query has many keys and the threshold rejects most rows early.
 When the keys are the terms of a sparse record, the inverted lists also carry
 the row's value at that key, so the accumulated conjunction is the row's exact
 similarity and no further comparison is needed. Signature keys carry no usable
-value, and a sequence's elements bound its similarity without determining it,
+value, and a sequence's terms bound its similarity without determining it,
 so in both cases the merge generator scores each retained candidate with the
 comparator, exactly as the filtered scan does. `inverted_hybrid` applies the
 generator independently to each child, so its term child scores from the

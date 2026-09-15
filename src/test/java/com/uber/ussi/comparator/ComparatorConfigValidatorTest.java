@@ -141,7 +141,7 @@ class ComparatorConfigValidatorTest {
     SequenceDistance distance =
         ComparatorFactory.createSequenceDistance(Map.of("Sequence_Distance_Type", "lcs"));
 
-    // Rewriting an element costs a deletion and an insertion under LCS, one substitution under LD.
+    // Rewriting a term costs a deletion and an insertion under LCS, one substitution under LD.
     assertEquals(2L, distance.getDistance(sequence("ab"), sequence("ac"), 4L));
   }
 
@@ -194,10 +194,10 @@ class ComparatorConfigValidatorTest {
     return config.collectViolations(ComparatorConfigValidator.getInstance());
   }
 
-  private static LongTermsAndValues sequence(String elements) {
-    long[] terms = new long[elements.length()];
+  private static LongTermsAndValues sequence(String characters) {
+    long[] terms = new long[characters.length()];
     for (int index = 0; index < terms.length; ++index) {
-      terms[index] = elements.charAt(index);
+      terms[index] = characters.charAt(index);
     }
     // A sequence's Uni value is its length, and it carries no values.
     return LongTermsAndValuesTestFactory.create(terms, new float[0], terms.length);

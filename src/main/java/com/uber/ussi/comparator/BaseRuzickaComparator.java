@@ -10,7 +10,7 @@ import java.util.Set;
 
 /**
  * Shared Jaccard/Ruzicka implementation with length and position filtering. A negatively weighted
- * element is treated as the corresponding negative element with a positive weight.
+ * term is treated as the corresponding negative term with a positive weight.
  */
 abstract class BaseRuzickaComparator extends Comparator implements KeyShareBounded {
 

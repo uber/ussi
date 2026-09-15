@@ -28,7 +28,7 @@ class SequenceComparatorTest {
     new SimilarityCase("ngld", "complement", "levenshtein", "kitten", "sitting", 0.625),
     new SimilarityCase("ngld", "complement", "levenshtein", "abc", "abd", 5.0 / 7.0),
     new SimilarityCase("ngld", "complement", "levenshtein", "abc", "abc", 1.0),
-    // Every element is an insertion, the worst a pair can do.
+    // Every term is an insertion, the worst a pair can do.
     new SimilarityCase("ngld", "complement", "levenshtein", "abc", "", 0.0),
     // GLD reports the edit count itself, so the same count scores the same at any length.
     new SimilarityCase("gld", "reciprocal", "levenshtein", "kitten", "sitting", 0.25),
@@ -39,7 +39,7 @@ class SequenceComparatorTest {
     new SimilarityCase("gld", "reciprocal", "damerau_levenshtein", "ab", "ba", 0.5),
     new SimilarityCase("gld", "reciprocal", "levenshtein", "ab", "ba", 1.0 / 3.0),
     new SimilarityCase("gld", "reciprocal", "lcs", "ab", "ba", 1.0 / 3.0),
-    // Without substitution a rewritten element costs a delete and an insert instead of one edit.
+    // Without substitution a rewritten term costs a delete and an insert instead of one edit.
     new SimilarityCase("gld", "reciprocal", "lcs", "abc", "abd", 1.0 / 3.0),
     new SimilarityCase("ngld", "complement", "lcs", "abc", "abd", 0.5),
     // Reciprocal compresses NGLD into [0.5, 1.0].
@@ -47,8 +47,8 @@ class SequenceComparatorTest {
   };
 
   private static final LengthFilteringCase[] LENGTH_FILTERING_CASES = {
-    // At 0.5 similarity a 4-element query tolerates a distance of 0.5 * (4 + length2) / 1.5, which
-    // reaches 2 only at 2 elements; shorter candidates differ by more and are rejected.
+    // At 0.5 similarity a 4-term query tolerates a distance of 0.5 * (4 + length2) / 1.5, which
+    // reaches 2 only at 2 terms; shorter candidates differ by more and are rejected.
     new LengthFilteringCase("ngld", "complement", 4, 4, 0.5, true),
     new LengthFilteringCase("ngld", "complement", 4, 2, 0.5, true),
     new LengthFilteringCase("ngld", "complement", 4, 1, 0.5, false),
@@ -174,13 +174,13 @@ class SequenceComparatorTest {
   void theUniValueOfASequenceIsItsLength() {
     Comparator comparator = createComparator("ngld", "complement", "levenshtein");
 
-    // "banana" repeats elements, which a multiset would collapse but a sequence length counts.
+    // "banana" repeats terms, which a multiset would collapse but a sequence length counts.
     assertEquals(6.0, sequence(comparator, "banana").getUniValue(), EPSILON_9);
     assertEquals(0.0, sequence(comparator, "").getUniValue(), EPSILON_9);
   }
 
   @Test
-  void aSequenceKeepsItsElementsInOrderWithRepeats() {
+  void aSequenceKeepsItsTermsInOrderWithRepeats() {
     Comparator comparator = createComparator("ngld", "complement", "levenshtein");
 
     LongTermsAndValues sequence = sequence(comparator, "banana");
@@ -193,9 +193,9 @@ class SequenceComparatorTest {
   }
 
   /**
-   * A sequence's signatures come from its element multiset, whose values are occurrence counts, so
+   * A sequence's signatures come from its term multiset, whose values are occurrence counts, so
    * only a generator colliding at a weighted similarity says anything about them. MinHash reads
-   * distinct terms and would collide at the same rate however often an element repeats.
+   * distinct terms and would collide at the same rate however often a term repeats.
    */
   @Test
   void sequenceComparatorsAcceptWeightedGeneratorsOnly() {
@@ -223,7 +223,7 @@ class SequenceComparatorTest {
   }
 
   /**
-   * Two sequences within {@code d} edits have element multisets within {@code l1BoundFactor * d}
+   * Two sequences within {@code d} edits have term multisets within {@code l1BoundFactor * d}
    * of each other. Writing that as a share {@code u} of their combined length leaves the multiset
    * similarity at {@code (1 - u) / (1 + u)}, which is the rate the signatures collide at.
    */
@@ -235,14 +235,14 @@ class SequenceComparatorTest {
         (BaseSequenceComparator) createComparator("ngld", "complement", "levenshtein");
     assertEquals(7.0 / 11.0, ngld.getMinSharedKeyFraction(6.0, 0.2), EPSILON_9);
 
-    // An LCS edit moves one element rather than two, so the bound collapses to 1 - the budget,
+    // An LCS edit moves one term rather than two, so the bound collapses to 1 - the budget,
     // the same shape Ruzicka's threshold already has.
     BaseSequenceComparator lcs =
         (BaseSequenceComparator) createComparator("ngld", "complement", "lcs");
     assertEquals(0.8, lcs.getMinSharedKeyFraction(6.0, 0.2), EPSILON_9);
 
     // An edit count is not a share, so it takes the shortest candidate length filtering admits:
-    // a 10-element query within 1 edit pairs with 9 elements at least, so u = 2 * 1 / 19.
+    // a 10-term query within 1 edit pairs with 9 terms at least, so u = 2 * 1 / 19.
     BaseSequenceComparator gld =
         (BaseSequenceComparator) createComparator("gld", "reciprocal", "levenshtein");
     assertEquals(17.0 / 21.0, gld.getMinSharedKeyFraction(10.0, 1.0), EPSILON_9);
@@ -325,7 +325,7 @@ class SequenceComparatorTest {
     }
   }
 
-  /** Shared elements only bound an order-sensitive distance, so merging cannot score rows. */
+  /** Shared terms only bound an order-sensitive distance, so merging cannot score rows. */
   @Test
   void sequenceComparatorsCannotGenerateCandidatesByMerging() {
     for (String comparatorType : List.of("gld", "ngld")) {
@@ -381,7 +381,7 @@ class SequenceComparatorTest {
   void bothFormsOfASequenceReportTheSameUniValue() {
     Comparator comparator = createComparator("ngld", "complement", "levenshtein");
     LongTermsAndValues ordered = sequence(comparator, "abcb");
-    LongTermsAndValues multiset = ordered.toElementMultiset(comparator);
+    LongTermsAndValues multiset = ordered.toTermMultiset(comparator);
 
     assertEquals(4.0, comparator.computeUniValue(ordered), EPSILON_9);
     assertEquals(4.0, comparator.computeUniValue(multiset), EPSILON_9);
@@ -405,7 +405,7 @@ class SequenceComparatorTest {
   }
 
   @Test
-  void aNegativeElementCountIsRejected() {
+  void aNegativeTermCountIsRejected() {
     Comparator comparator = createComparator("ngld", "complement", "levenshtein");
 
     assertEquals(2.0, comparator.getUniTransformedValue(2.0f), EPSILON_9);
@@ -424,10 +424,10 @@ class SequenceComparatorTest {
     return ComparatorNormalizerFactory.createComparatorNormalizer(normalizerType, Map.of());
   }
 
-  private static LongTermsAndValues sequence(Comparator comparator, String elements) {
-    String[] terms = new String[elements.length()];
-    for (int i = 0; i < elements.length(); ++i) {
-      terms[i] = String.valueOf(elements.charAt(i));
+  private static LongTermsAndValues sequence(Comparator comparator, String characters) {
+    String[] terms = new String[characters.length()];
+    for (int i = 0; i < characters.length(); ++i) {
+      terms[i] = String.valueOf(characters.charAt(i));
     }
     return LongTermsAndValues.from(
         new TermsAndValues(terms, new float[0]), term -> term.charAt(0), comparator);

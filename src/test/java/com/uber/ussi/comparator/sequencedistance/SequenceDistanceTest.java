@@ -44,10 +44,10 @@ class SequenceDistanceTest {
   };
 
   private static final BoundFactorCase[] BOUND_FACTOR_CASES = {
-    // A substitution can move one element out of one multiset and another into the other.
+    // A substitution can move one term out of one multiset and another into the other.
     new BoundFactorCase(SequenceDistanceType.LEVENSHTEIN, 2.0),
     new BoundFactorCase(SequenceDistanceType.DAMERAU_LEVENSHTEIN, 2.0),
-    // Without substitution each edit moves exactly one element, which halves the bound.
+    // Without substitution each edit moves exactly one term, which halves the bound.
     new BoundFactorCase(SequenceDistanceType.LCS, 1.0),
   };
 
@@ -79,28 +79,28 @@ class SequenceDistanceTest {
   }
 
   /**
-   * Each edit moves at most {@code l1BoundFactor} elements between the multisets, which is what
+   * Each edit moves at most {@code l1BoundFactor} terms between the multisets, which is what
    * lets an inverted index over them generate candidates.
    */
   @Test
-  void everyEditMovesAtMostTheBoundFactorManyElements() {
+  void everyEditMovesAtMostTheBoundFactorManyTerms() {
     Random random = new Random(9_001L);
     for (SequenceDistanceType type : SequenceDistanceType.values()) {
       SequenceDistance distance = SequenceDistanceFactory.createSequenceDistance(type);
       for (int trial = 0; trial < 400; ++trial) {
-        long[] elements1 = randomElements(random);
-        long[] elements2 = randomElements(random);
+        long[] terms1 = randomTerms(random);
+        long[] terms2 = randomTerms(random);
         long editDistance =
-            distance.getDistance(sequence(elements1), sequence(elements2), GENEROUS_BUDGET);
+            distance.getDistance(sequence(terms1), sequence(terms2), GENEROUS_BUDGET);
 
         assertTrue(
-            l1Distance(elements1, elements2)
+            l1Distance(terms1, terms2)
                 <= distance.getL1BoundFactor() * editDistance + EPSILON_9,
             String.format(
                 "%s trial=%d: L1 distance %d exceeds %s * edit distance %d.",
                 type,
                 trial,
-                l1Distance(elements1, elements2),
+                l1Distance(terms1, terms2),
                 distance.getL1BoundFactor(),
                 editDistance));
       }
@@ -143,11 +143,11 @@ class SequenceDistanceTest {
     for (SequenceDistanceType type : SequenceDistanceType.values()) {
       SequenceDistance distance = SequenceDistanceFactory.createSequenceDistance(type);
       for (int trial = 0; trial < 400; ++trial) {
-        long[] elements1 = randomElements(random);
-        long[] elements2 = randomElements(random);
-        LongTermsAndValues sequence1 = sequence(elements1);
-        LongTermsAndValues sequence2 = sequence(elements2);
-        long expected = fullTableDistance(type, elements1, elements2);
+        long[] terms1 = randomTerms(random);
+        long[] terms2 = randomTerms(random);
+        LongTermsAndValues sequence1 = sequence(terms1);
+        LongTermsAndValues sequence2 = sequence(terms2);
+        long expected = fullTableDistance(type, terms1, terms2);
 
         assertEquals(
             expected,
@@ -179,13 +179,13 @@ class SequenceDistanceTest {
     for (SequenceDistanceType type : SequenceDistanceType.values()) {
       SequenceDistance distance = SequenceDistanceFactory.createSequenceDistance(type);
       for (int trial = 0; trial < 200; ++trial) {
-        long[] elements1 = randomLongElements(random);
-        long[] elements2 = fewEditsAway(elements1, random);
-        LongTermsAndValues sequence1 = sequence(elements1);
-        LongTermsAndValues sequence2 = sequence(elements2);
-        long expected = fullTableDistance(type, elements1, elements2);
+        long[] terms1 = randomLongTerms(random);
+        long[] terms2 = fewEditsAway(terms1, random);
+        LongTermsAndValues sequence1 = sequence(terms1);
+        LongTermsAndValues sequence2 = sequence(terms2);
+        long expected = fullTableDistance(type, terms1, terms2);
         ++totalTrials;
-        if (2L * expected + 1L < Math.min(elements1.length, elements2.length)) {
+        if (2L * expected + 1L < Math.min(terms1.length, terms2.length)) {
           ++narrowTrials;
         }
 
@@ -232,35 +232,35 @@ class SequenceDistanceTest {
   }
 
   private static LongTermsAndValues sequence(String text) {
-    return sequence(elements(text));
+    return sequence(terms(text));
   }
 
-  private static LongTermsAndValues sequence(long[] elements) {
+  private static LongTermsAndValues sequence(long[] terms) {
     // A sequence's Uni value is its length, and it carries no values.
-    return LongTermsAndValuesTestFactory.create(elements, new float[0], elements.length);
+    return LongTermsAndValuesTestFactory.create(terms, new float[0], terms.length);
   }
 
-  private static long[] randomElements(Random random) {
-    long[] elements = new long[random.nextInt(9)];
-    for (int index = 0; index < elements.length; ++index) {
-      elements[index] = random.nextInt(4);
+  private static long[] randomTerms(Random random) {
+    long[] terms = new long[random.nextInt(9)];
+    for (int index = 0; index < terms.length; ++index) {
+      terms[index] = random.nextInt(4);
     }
-    return elements;
+    return terms;
   }
 
-  private static long[] randomLongElements(Random random) {
-    long[] elements = new long[40 + random.nextInt(160)];
-    for (int index = 0; index < elements.length; ++index) {
-      elements[index] = random.nextInt(26);
+  private static long[] randomLongTerms(Random random) {
+    long[] terms = new long[40 + random.nextInt(160)];
+    for (int index = 0; index < terms.length; ++index) {
+      terms[index] = random.nextInt(26);
     }
-    return elements;
+    return terms;
   }
 
   /** Applies a handful of random edits, keeping the distance small next to the length. */
-  private static long[] fewEditsAway(long[] elements, Random random) {
-    List<Long> edited = new ArrayList<>(elements.length);
-    for (long element : elements) {
-      edited.add(element);
+  private static long[] fewEditsAway(long[] terms, Random random) {
+    List<Long> edited = new ArrayList<>(terms.length);
+    for (long term : terms) {
+      edited.add(term);
     }
     int numEdits = 1 + random.nextInt(5);
     for (int edit = 0; edit < numEdits; ++edit) {
@@ -283,14 +283,14 @@ class SequenceDistanceTest {
     return result;
   }
 
-  /** The L1 distance between the two sequences' element multisets. */
-  private static long l1Distance(long[] elements1, long[] elements2) {
+  /** The L1 distance between the two sequences' term multisets. */
+  private static long l1Distance(long[] terms1, long[] terms2) {
     Map<Long, Integer> counts = new HashMap<>();
-    for (long element : elements1) {
-      counts.merge(element, 1, Integer::sum);
+    for (long term : terms1) {
+      counts.merge(term, 1, Integer::sum);
     }
-    for (long element : elements2) {
-      counts.merge(element, -1, Integer::sum);
+    for (long term : terms2) {
+      counts.merge(term, -1, Integer::sum);
     }
     long total = 0L;
     for (int count : counts.values()) {
@@ -358,12 +358,12 @@ class SequenceDistanceTest {
     }
   }
 
-  private static long[] elements(String text) {
-    long[] elements = new long[text.length()];
+  private static long[] terms(String text) {
+    long[] terms = new long[text.length()];
     for (int index = 0; index < text.length(); ++index) {
-      elements[index] = text.charAt(index);
+      terms[index] = text.charAt(index);
     }
-    return elements;
+    return terms;
   }
 
   private record DistanceCase(

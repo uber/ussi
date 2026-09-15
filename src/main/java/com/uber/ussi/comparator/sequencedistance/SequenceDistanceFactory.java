@@ -13,18 +13,18 @@ public final class SequenceDistanceFactory {
    */
   public enum SequenceDistanceType implements ConfigVocabulary {
     /**
-     * Levenshtein plus transposition of two adjacent elements, so a pair of elements in the wrong
+     * Levenshtein plus transposition of two adjacent terms, so a pair of terms in the wrong
      * order costs one edit rather than two.
      */
     DAMERAU_LEVENSHTEIN,
 
     /**
-     * Insertion and deletion of one element, and nothing else, complementing the longest common
-     * subsequence (LCS). Rewriting an element costs both, so this is never below Levenshtein.
+     * Insertion and deletion of one term, and nothing else, complementing the longest common
+     * subsequence (LCS). Rewriting a term costs both, so this is never below Levenshtein.
      */
     LCS,
 
-    /** Insertion, deletion, and substitution of one element. */
+    /** Insertion, deletion, and substitution of one term. */
     LEVENSHTEIN
   }
 

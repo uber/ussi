@@ -129,12 +129,12 @@ public final class LongTermsAndValues {
   }
 
   /**
-   * Returns this sequence's element multiset as a sparse record: distinct elements ascending,
+   * Returns this sequence's term multiset as a sparse record: distinct terms ascending,
    * values are occurrence counts. Candidate generation for an order-sensitive distance runs over
    * this form because two sequences within a given edit distance have multisets within a bounded
    * L1 distance, and the counts sum to the sequence length so the Uni value is unchanged.
    */
-  public LongTermsAndValues toElementMultiset(Comparator comparator) {
+  public LongTermsAndValues toTermMultiset(Comparator comparator) {
     Objects.requireNonNull(comparator, "comparator is null.");
     if (values.length != 0) {
       throw new IllegalArgumentException(
@@ -142,26 +142,26 @@ public final class LongTermsAndValues {
               "Only a record without values is a sequence, got terms=%s values=%s.",
               Arrays.toString(terms), Arrays.toString(values)));
     }
-    // Sorting a copy and counting equal runs avoids boxing every element in a sorted map.
-    long[] sortedElements = terms.clone();
-    Arrays.sort(sortedElements);
-    int numDistinctElements = 0;
-    for (int i = 0; i < sortedElements.length; ++i) {
-      if (i == 0 || sortedElements[i] != sortedElements[i - 1]) {
-        ++numDistinctElements;
+    // Sorting a copy and counting equal runs avoids boxing every term in a sorted map.
+    long[] sortedTerms = terms.clone();
+    Arrays.sort(sortedTerms);
+    int numDistinctTerms = 0;
+    for (int i = 0; i < sortedTerms.length; ++i) {
+      if (i == 0 || sortedTerms[i] != sortedTerms[i - 1]) {
+        ++numDistinctTerms;
       }
     }
-    long[] distinctElements = new long[numDistinctElements];
-    float[] counts = new float[numDistinctElements];
+    long[] distinctTerms = new long[numDistinctTerms];
+    float[] counts = new float[numDistinctTerms];
     int index = -1;
-    for (int i = 0; i < sortedElements.length; ++i) {
-      if (i == 0 || sortedElements[i] != sortedElements[i - 1]) {
-        distinctElements[++index] = sortedElements[i];
+    for (int i = 0; i < sortedTerms.length; ++i) {
+      if (i == 0 || sortedTerms[i] != sortedTerms[i - 1]) {
+        distinctTerms[++index] = sortedTerms[i];
       }
       ++counts[index];
     }
     return new LongTermsAndValues(
-        distinctElements, counts, comparator.computeUniValue(distinctElements, counts));
+        distinctTerms, counts, comparator.computeUniValue(distinctTerms, counts));
   }
 
   /** Validates that two records can be aligned by the comparator that is about to score them. */
@@ -169,7 +169,7 @@ public final class LongTermsAndValues {
       LongTermsAndValues termsAndValues1, LongTermsAndValues termsAndValues2) {
     Objects.requireNonNull(termsAndValues1, "termsAndValues1 is null.");
     Objects.requireNonNull(termsAndValues2, "termsAndValues2 is null.");
-    // A sequence carries its elements in terms and no values, so two sequences need no length
+    // A sequence carries no values, so two sequences need no length
     // agreement, but a sequence cannot be aligned against a record that carries values.
     boolean isSequence1 = termsAndValues1.valuesLength() == 0;
     boolean isSequence2 = termsAndValues2.valuesLength() == 0;

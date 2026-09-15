@@ -101,7 +101,7 @@ read it:
 | --- | --- | --- | --- |
 | Sparse, addressed by its own terms | non-empty | one per term | `l2`, `jaccard`, `ruzicka` |
 | Dense, addressed by position | empty | a vector of a fixed dimension | `l2`, `jaccard`, `ruzicka` |
-| Sequence, ordered elements | the elements in arrival order, repeats included | empty | `gld`, `ngld` |
+| Sequence, ordered terms | the terms in arrival order, repeats included | empty | `gld`, `ngld` |
 
 Sparse means addressed by terms, not that most coordinates are zero. A sparse
 record with every coordinate populated is fine.
@@ -201,11 +201,11 @@ the row that matches your records and the guarantee you need:
 | `scan` | any | `l2`, `jaccard`, `ruzicka`, `gld`, `ngld` | Exact. Scores every row. Start here when in doubt. |
 | `matrix` | dense | `l2` only | Exact, with OpenBLAS dot products where available and a Java fallback otherwise. |
 | `inverted_term` | sparse | `l2`, `jaccard`, `ruzicka` | Exact, and much faster than `scan` when a term selects few rows. |
-| `inverted_term` | sequence | `gld`, `ngld` | Exact. Generates candidates from element multisets, then verifies with the edit distance. |
+| `inverted_term` | sequence | `gld`, `ngld` | Exact. Generates candidates from term multisets, then verifies with the edit distance. |
 | `inverted_signature` | sparse | `jaccard` or `ruzicka`, with `signature_generator` | Approximate. Qualifying rows can be missed; the scores that come back are exact. |
-| `inverted_signature` | sequence | `gld`, `ngld`, with `signature_generator` | Approximate. Draws signatures from the element multiset, then verifies with the edit distance. |
+| `inverted_signature` | sequence | `gld`, `ngld`, with `signature_generator` | Approximate. Draws signatures from the term multiset, then verifies with the edit distance. |
 | `inverted_hybrid` | sparse | `jaccard` or `ruzicka`, with `signature_generator` | Exact for rows with at most 270 terms, approximate above that. |
-| `inverted_hybrid` | sequence | `gld`, `ngld`, with `signature_generator` | Exact for sequences of at most 270 elements, approximate above that. |
+| `inverted_hybrid` | sequence | `gld`, `ngld`, with `signature_generator` | Exact for sequences of at most 270 terms, approximate above that. |
 
 Any pairing not listed is reported when you create the namespace. Note that
 `matrix` takes `l2` and nothing else, even though it stores records `jaccard`
@@ -273,18 +273,18 @@ generation.
 
 `jaccard` reads a record's distinct terms, so `minhash` serves it. The other
 comparators read counts, whether a sparse record's values or how often a
-sequence repeats an element, so they take a weighted sampler instead.
+sequence repeats a term, so they take a weighted sampler instead.
 
-`gld` reports the number of single-element edits that turn one sequence into
+`gld` reports the number of single-term edits that turn one sequence into
 the other. `ngld` divides that count by the two lengths as
 `2 * d / (length1 + length2 + d)`, which makes scores comparable across
 sequences of different lengths. `sequence_distance_type` chooses which edits
 count:
 
 - `levenshtein`: insertion, deletion, and substitution.
-- `damerau_levenshtein`: the above plus transposing two adjacent elements, so a
+- `damerau_levenshtein`: the above plus transposing two adjacent terms, so a
   swapped pair costs one edit rather than two.
-- `lcs`: insertion and deletion only. Rewriting an element costs both, so an
+- `lcs`: insertion and deletion only. Rewriting a term costs both, so an
   `lcs` distance is never below the `levenshtein` distance for the same pair.
 
 ## Metadata Filtering
@@ -314,7 +314,7 @@ changes, and each is something you opt into.
 **Signature indexes are approximate.** `inverted_signature`, and
 `inverted_hybrid` above 270 terms, find candidates by signature collision. The
 scores returned are exact, but qualifying rows can be missed. For sequences the
-signatures come from the element multiset, so the collision rate estimates a
+signatures come from the term multiset, so the collision rate estimates a
 bound on the edit distance rather than the distance itself, and recall is
 looser than it is for a comparator the signatures estimate directly.
 

@@ -32,7 +32,7 @@ public enum ComparatorType implements ConfigVocabulary {
     return supportedSignatureGeneratorTypes;
   }
 
-  /** Returns whether this comparator compares sequences of elements rather than values. */
+  /** Returns whether this comparator compares sequences of terms rather than values. */
   public boolean comparesSequences() {
     return this == GLD || this == NGLD;
   }
@@ -45,7 +45,7 @@ public enum ComparatorType implements ConfigVocabulary {
 
     /**
      * Weighted generators, so they collide at the multiset similarity of records whose values are
-     * counts. The sequence comparators need that over an element multiset, and Ruzicka over a
+     * counts. The sequence comparators need that over a term multiset, and Ruzicka over a
      * sparse record's values.
      */
     private static final Set<SignatureGeneratorType> CONSISTENT_WEIGHTED_SAMPLING =

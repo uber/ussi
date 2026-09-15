@@ -6,7 +6,7 @@ import com.uber.ussi.comparatornormalizer.ComparatorNormalizer;
 import com.uber.ussi.utils.MathUtils;
 
 /**
- * The number of single-element edits that turn one sequence into the other, the raw generalized
+ * The number of single-term edits that turn one sequence into the other, the raw generalized
  * Levenshtein distance (GLD). It is generalized in that the composed {@link SequenceDistance}
  * decides which edits count, so the same comparator measures a Levenshtein, Damerau-Levenshtein,
  * or longest-common-subsequence distance.
@@ -44,7 +44,7 @@ public class GldComparator extends BaseSequenceComparator {
 
   /**
    * A query within {@code d} edits of a candidate has at most {@link
-   * SequenceDistance#getL1BoundFactor()} {@code * d} of its own elements unmatched by that
+   * SequenceDistance#getL1BoundFactor()} {@code * d} of its own terms unmatched by that
    * candidate, disregarding order, so only a prefix that long has to generate candidates.
    *
    * <p>An edit count states the prefix sum directly rather than through a share, because it
@@ -62,10 +62,10 @@ public class GldComparator extends BaseSequenceComparator {
   }
 
   /**
-   * An edit count is a number of elements rather than a share of anything, so expressing it as one
+   * An edit count is a number of terms rather than a share of anything, so expressing it as one
    * takes the shortest combined length a candidate can have. Length filtering admits only
-   * candidates within the budget's worth of elements of the query, so the shortest runs {@code
-   * recordUniValue - comparatorValue} elements and cannot run shorter than empty.
+   * candidates within the budget's worth of terms of the query, so the shortest runs {@code
+   * recordUniValue - comparatorValue} terms and cannot run shorter than empty.
    *
    * <p>Signature keys are why this detour is needed: over terms the budget counts the keys
    * directly and no length comes into it.

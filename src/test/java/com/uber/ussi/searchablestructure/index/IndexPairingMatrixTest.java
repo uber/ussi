@@ -108,7 +108,7 @@ class IndexPairingMatrixTest {
       ComparatorCase comparator,
       IndexType indexType,
       CandidateGeneratorType candidateGeneratorType) {
-    if (indexType.requiresSignatureSupport() && !comparator.generatesSignatures()) {
+    if (indexType.keysBySignatures() && !comparator.generatesSignatures()) {
       return Expectation.NO_SIGNATURES;
     }
     if (candidateGeneratorType == CandidateGeneratorType.SPARS_MERGE
@@ -163,7 +163,7 @@ class IndexPairingMatrixTest {
     NamespaceConfig.Builder builder =
         NamespaceConfig.builder()
             .minTermsAndValuesLength(0)
-            .maxTermsAndValuesLength(Constants.NUM_SIGNATURES_PER_ID + 1)
+            .maxTermsAndValuesLength(Constants.NUM_SIGNATURES_PER_ROW + 1)
             .maxCacheSize(10)
             .cacheType("scan")
             .indexType(cell.indexType().getParamValue())

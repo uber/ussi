@@ -59,7 +59,7 @@ public final class SignatureIndex extends BaseInvertedIndex {
     }
     return LongHashSet.from(
             getSignatureKeyingStrategy()
-                .getSignatures(indexedRecord, Constants.NUM_SIGNATURES_PER_ID))
+                .getSignatures(indexedRecord, Constants.NUM_SIGNATURES_PER_ROW))
         .toArray();
   }
 

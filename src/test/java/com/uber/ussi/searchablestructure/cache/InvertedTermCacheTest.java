@@ -600,7 +600,7 @@ class InvertedTermCacheTest {
 
     @Override
     public Set<RecordType> getSupportedRecordTypes() {
-      return Set.of(RecordType.ORDER_AGNOSTIC_SPARSE);
+      return Set.of(RecordType.SPARSE);
     }
 
     @Override

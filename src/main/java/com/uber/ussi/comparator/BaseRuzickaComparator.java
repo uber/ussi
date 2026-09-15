@@ -149,7 +149,7 @@ abstract class BaseRuzickaComparator extends Comparator implements SignatureBoun
    */
   @Override
   public Set<RecordType> getSupportedRecordTypes() {
-    return Set.of(RecordType.ORDER_AGNOSTIC_SPARSE, RecordType.ORDER_AGNOSTIC_DENSE);
+    return Set.of(RecordType.SPARSE, RecordType.DENSE);
   }
 
   @Override

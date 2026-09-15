@@ -81,7 +81,7 @@ abstract class BaseInvertedIndex extends Index {
     // keys below, and eagerly so that an empty structure is rejected on the same grounds as a
     // populated one.
     this.signatureKeyingStrategy =
-        indexType.requiresSignatureSupport()
+        indexType.keysBySignatures()
             ? SignatureKeyingStrategy.create(namespaceConfig, comparator)
             : null;
     RecordType recordType = resolveRecordType(indexType);

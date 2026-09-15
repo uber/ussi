@@ -25,7 +25,7 @@ public final class HybridIndex extends Index {
    * entries and buying no pruning. The two quantities are derived separately and happen to
    * coincide, so the cutoff names itself rather than reading as a signature count here.
    */
-  private static final int MAX_NUM_TERMS_FOR_TERM_KEYS = Constants.NUM_SIGNATURES_PER_ID;
+  private static final int TERM_KEYING_CUTOFF = Constants.NUM_SIGNATURES_PER_ROW;
 
   private final TermIndex termIndex;
   private final SignatureIndex signatureIndex;
@@ -39,7 +39,7 @@ public final class HybridIndex extends Index {
     LongObjectHashMap<LongTermsAndValues> exactRows = new LongObjectHashMap<>();
     LongObjectHashMap<LongTermsAndValues> signatureRows = new LongObjectHashMap<>();
     for (LongObjectCursor<LongTermsAndValues> entry : rowNumToTermsAndValuesMap) {
-      if (entry.value.termsLength() <= MAX_NUM_TERMS_FOR_TERM_KEYS) {
+      if (entry.value.termsLength() <= TERM_KEYING_CUTOFF) {
         exactRows.put(entry.key, entry.value);
       } else {
         signatureRows.put(entry.key, entry.value);
@@ -59,7 +59,7 @@ public final class HybridIndex extends Index {
       throw new IllegalArgumentException("k must be greater than 0.");
     }
     int maxResults = Math.min(k, namespaceConfig.getMaxNumSimilarities());
-    boolean queryUsesExactIndex = record.termsLength() <= MAX_NUM_TERMS_FOR_TERM_KEYS;
+    boolean queryUsesExactIndex = record.termsLength() <= TERM_KEYING_CUTOFF;
     Index firstIndex = queryUsesExactIndex ? termIndex : signatureIndex;
     Index secondIndex = queryUsesExactIndex ? signatureIndex : termIndex;
     boolean secondIndexIsExact = !queryUsesExactIndex;
@@ -129,8 +129,8 @@ public final class HybridIndex extends Index {
     if (termPopularityFilteringEnabled) {
       return true;
     }
-    int minNumTerms = exactIndex ? 0 : MAX_NUM_TERMS_FOR_TERM_KEYS + 1;
-    int maxNumTerms = exactIndex ? MAX_NUM_TERMS_FOR_TERM_KEYS : Integer.MAX_VALUE;
+    int minNumTerms = exactIndex ? 0 : TERM_KEYING_CUTOFF + 1;
+    int maxNumTerms = exactIndex ? TERM_KEYING_CUTOFF : Integer.MAX_VALUE;
     return comparator.mayPassNumTermsFiltering(query, minNumTerms, maxNumTerms, minSimilarity);
   }
 

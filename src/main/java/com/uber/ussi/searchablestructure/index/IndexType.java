@@ -20,26 +20,26 @@ public enum IndexType implements ConfigVocabulary {
    * Sequential scan that scores every row through the comparator, so it never reads a record's
    * type itself and stores whichever type the comparator reads.
    */
-  SCAN(RecordType.ORDER_AGNOSTIC_DENSE, RecordType.SEQUENCE, RecordType.ORDER_AGNOSTIC_SPARSE),
+  SCAN(RecordType.DENSE, RecordType.SEQUENCE, RecordType.SPARSE),
 
   /** Matrix scan over fixed-dimension dense vectors. */
-  MATRIX(RecordType.ORDER_AGNOSTIC_DENSE),
+  MATRIX(RecordType.DENSE),
 
   /**
    * Inverted lists keyed by the terms of the record itself: a sparse record's own terms carrying
    * its own values, or the distinct elements of a sequence carrying how often each occurs.
    */
-  INVERTED_TERM(RecordType.SEQUENCE, RecordType.ORDER_AGNOSTIC_SPARSE),
+  INVERTED_TERM(RecordType.SEQUENCE, RecordType.SPARSE),
 
   /**
    * Inverted lists keyed by similarity-preserving signatures, which only a comparator with a
    * configured signature generator can produce. A sequence's signatures are drawn from its element
    * multiset, the same form the term-keyed lists index it as.
    */
-  INVERTED_SIGNATURE(RecordType.SEQUENCE, RecordType.ORDER_AGNOSTIC_SPARSE),
+  INVERTED_SIGNATURE(RecordType.SEQUENCE, RecordType.SPARSE),
 
   /** Term-keyed lists for the short rows and signature-keyed lists for the long ones. */
-  INVERTED_HYBRID(RecordType.SEQUENCE, RecordType.ORDER_AGNOSTIC_SPARSE);
+  INVERTED_HYBRID(RecordType.SEQUENCE, RecordType.SPARSE);
 
   private final Set<RecordType> storableRecordTypes;
 
@@ -81,7 +81,7 @@ public enum IndexType implements ConfigVocabulary {
   }
 
   /** Returns whether this structure's keys are signatures the comparator has to generate. */
-  public boolean requiresSignatureSupport() {
+  public boolean keysBySignatures() {
     return this == INVERTED_SIGNATURE || this == INVERTED_HYBRID;
   }
 
@@ -91,6 +91,6 @@ public enum IndexType implements ConfigVocabulary {
    * elements are keyed without the order its similarity depends on, so they only bound it.
    */
   public boolean conjunctionDeterminesSimilarity(RecordType recordType) {
-    return this == INVERTED_TERM && recordType == RecordType.ORDER_AGNOSTIC_SPARSE;
+    return this == INVERTED_TERM && recordType == RecordType.SPARSE;
   }
 }

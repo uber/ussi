@@ -115,7 +115,7 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
       IndexType indexType,
       @Nullable ComparatorType comparatorType,
       List<String> violations) {
-    if (!indexType.requiresSignatureSupport()) {
+    if (!indexType.keysBySignatures()) {
       return;
     }
     Comparator comparator = ComparatorFactory.tryCreateComparator(config);

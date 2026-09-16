@@ -1,11 +1,13 @@
 /* AUTHOR: Shijie Lu (shijie@uber.com), Shalini Kedlaya (skedlaya@uber.com), Ahmed Metwally (ametwally@uber.com) */
 package com.uber.ussi.searchablestructure.index.inverted;
 
+import com.carrotsearch.hppc.LongHashSet;
 import com.carrotsearch.hppc.LongObjectHashMap;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.index.IndexType;
+import javax.annotation.Nullable;
 
 /**
  * Inverted index keyed by the terms of the record itself rather than by a signature derived from
@@ -21,7 +23,21 @@ public final class TermIndex extends BaseInvertedIndex {
       NamespaceConfig namespaceConfig,
       LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
       LongObjectHashMap<LongMeta> rowNumToMetaMap) {
-    super(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap, IndexType.INVERTED_TERM);
+    this(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap, null);
+  }
+
+  /** An index over part of a structure's rows, discarding the terms the structure found popular. */
+  public TermIndex(
+      NamespaceConfig namespaceConfig,
+      LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
+      LongObjectHashMap<LongMeta> rowNumToMetaMap,
+      @Nullable LongHashSet structureDiscardedTerms) {
+    super(
+        namespaceConfig,
+        rowNumToTermsAndValuesMap,
+        rowNumToMetaMap,
+        IndexType.INVERTED_TERM,
+        structureDiscardedTerms);
   }
 
   @Override

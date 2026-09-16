@@ -79,6 +79,22 @@ abstract class BaseInvertedIndex extends Index {
       LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
       LongObjectHashMap<LongMeta> rowNumToMetaMap,
       IndexType indexType) {
+    this(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap, indexType, null);
+  }
+
+  /**
+   * An index over a part of a structure's rows, discarding the terms the structure found popular.
+   *
+   * <p>A structure holding its rows in parts must hand each part the same terms to discard, since
+   * popularity is a property of the whole. A part left to observe popularity for itself would find
+   * its own share of a term to be its whole share, and would discard terms the structure keeps.
+   */
+  protected BaseInvertedIndex(
+      NamespaceConfig namespaceConfig,
+      LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
+      LongObjectHashMap<LongMeta> rowNumToMetaMap,
+      IndexType indexType,
+      @Nullable LongHashSet structureDiscardedTerms) {
     super(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);
     // Null exactly when the structure keys by terms, which is a property of the index type and
     // not of what the comparator happens to support. Created here because the constructor derives
@@ -100,7 +116,10 @@ abstract class BaseInvertedIndex extends Index {
             && popularTermDiscardScope == PopularTermDiscardScope.CANDIDATES_AND_VERIFICATION;
     this.maxFractionIdsPerTerm = parseMaxFractionIdsPerTerm(namespaceConfig);
     validateRows();
-    this.discardedTerms = buildDiscardedTerms();
+    this.discardedTerms =
+        structureDiscardedTerms == null
+            ? discardedTermsOf(rowNumToTermsAndValuesMap, maxFractionIdsPerTerm)
+            : structureDiscardedTerms;
     LongObjectHashMap<LongTermsAndValues> discardedTermFreeRows = buildDiscardedTermFreeRows();
     this.verificationRowNumToTermsAndValuesMap =
         popularTermDiscardScope == PopularTermDiscardScope.CANDIDATES_ONLY
@@ -442,12 +461,22 @@ abstract class BaseInvertedIndex extends Index {
     return keyData;
   }
 
+  /** The terms a structure holding {@code rowNumToTermsAndValuesMap} discards as popular. */
+  static LongHashSet discardedTermsOf(
+      NamespaceConfig namespaceConfig,
+      LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap) {
+    return discardedTermsOf(
+        rowNumToTermsAndValuesMap, parseMaxFractionIdsPerTerm(namespaceConfig));
+  }
+
   /**
-   * Identifies the high-popularity terms to discard. The index sees the complete dataset, so
+   * Identifies the high-popularity terms to discard. The structure sees the complete dataset, so
    * observed popularity is true popularity: a term is discarded when it occurs in more than
    * floor(numRows * maxFractionIdsPerTerm) rows.
    */
-  private LongHashSet buildDiscardedTerms() {
+  private static LongHashSet discardedTermsOf(
+      LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
+      double maxFractionIdsPerTerm) {
     LongIntHashMap numRowsByTerm = new LongIntHashMap();
     // A row counts once per distinct term, so a term repeated within one row stays one row.
     LongHashSet termsInRow = new LongHashSet();

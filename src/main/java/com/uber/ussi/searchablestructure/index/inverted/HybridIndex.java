@@ -1,6 +1,7 @@
 /* AUTHOR: Shijie Lu (shijie@uber.com), Shalini Kedlaya (skedlaya@uber.com), Ahmed Metwally (ametwally@uber.com) */
 package com.uber.ussi.searchablestructure.index.inverted;
 
+import com.carrotsearch.hppc.LongHashSet;
 import com.carrotsearch.hppc.LongObjectHashMap;
 import com.carrotsearch.hppc.cursors.LongObjectCursor;
 import com.uber.ussi.config.NamespaceConfig;
@@ -11,6 +12,7 @@ import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.index.Index;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
 import java.util.List;
+import javax.annotation.Nullable;
 
 /** Hybrid inverted index using exact keys for short rows and signatures for long rows. */
 public final class HybridIndex extends Index {
@@ -34,7 +36,26 @@ public final class HybridIndex extends Index {
       NamespaceConfig namespaceConfig,
       LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
       LongObjectHashMap<LongMeta> rowNumToMetaMap) {
+    this(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap, null);
+  }
+
+  /**
+   * A hybrid index over a part of a structure's rows, discarding the terms the structure found
+   * popular. Given none, it finds them over its own rows, which are then the structure's.
+   */
+  public HybridIndex(
+      NamespaceConfig namespaceConfig,
+      LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
+      LongObjectHashMap<LongMeta> rowNumToMetaMap,
+      @Nullable LongHashSet structureDiscardedTerms) {
     super(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);
+    // Both halves discard the terms the whole found popular. A half left to observe popularity for
+    // itself would find a term's share of its own rows, and the halves hold rows of a kind: the
+    // terms of the long rows are not the terms of the short ones.
+    LongHashSet discardedTerms =
+        structureDiscardedTerms == null
+            ? BaseInvertedIndex.discardedTermsOf(namespaceConfig, rowNumToTermsAndValuesMap)
+            : structureDiscardedTerms;
     LongObjectHashMap<LongTermsAndValues> exactRows = new LongObjectHashMap<>();
     LongObjectHashMap<LongTermsAndValues> signatureRows = new LongObjectHashMap<>();
     for (LongObjectCursor<LongTermsAndValues> entry : rowNumToTermsAndValuesMap) {
@@ -46,8 +67,9 @@ public final class HybridIndex extends Index {
     }
     // The signature half is built first so a comparator without a generator is rejected before
     // the term half is populated.
-    this.signatureIndex = new SignatureIndex(namespaceConfig, signatureRows, rowNumToMetaMap);
-    this.termIndex = new TermIndex(namespaceConfig, exactRows, rowNumToMetaMap);
+    this.signatureIndex =
+        new SignatureIndex(namespaceConfig, signatureRows, rowNumToMetaMap, discardedTerms);
+    this.termIndex = new TermIndex(namespaceConfig, exactRows, rowNumToMetaMap, discardedTerms);
     this.termPopularityFilteringEnabled = termIndex.discardsPopularTerms();
   }
 

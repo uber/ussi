@@ -7,6 +7,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 import java.util.function.IntSupplier;
+import javax.annotation.Nullable;
 
 /**
  * How many threads one search may use.
@@ -31,7 +32,8 @@ public final class ParallelismBudget {
   private final int maxThreadsPerSearch;
   private volatile int budget;
   private volatile IntConsumer onChange = threads -> {};
-  private boolean attached;
+  private int attachments;
+  @Nullable private ScheduledExecutorService rebudgeter;
 
   ParallelismBudget(int maxThreadsPerSearch) {
     if (maxThreadsPerSearch < 1) {
@@ -58,16 +60,18 @@ public final class ParallelismBudget {
 
   /**
    * Starts re-deriving the budget, from the concurrency {@code concurrencySource} reports for each
-   * interval and using {@code exclusively} to reach a moment with no search in flight. Called once
-   * by the engine; an unattached budget stays at its full value.
+   * interval and using {@code exclusively} to reach a moment with no search in flight. An
+   * unattached budget stays at its full value.
+   *
+   * <p>Each engine attaches and {@link #detach() detaches}, and the work runs while at least one is
+   * attached. Concurrency is measured process-wide, so every engine reports the same thing and the
+   * first attachment's source is the one used.
    */
-  public synchronized void attach(
-      IntSupplier concurrencySource, Consumer<Runnable> exclusively) {
-    if (attached) {
-      throw new IllegalStateException("The budget is already attached.");
+  public synchronized void attach(IntSupplier concurrencySource, Consumer<Runnable> exclusively) {
+    if (attachments++ > 0) {
+      return;
     }
-    attached = true;
-    ScheduledExecutorService rebudgeter =
+    rebudgeter =
         Executors.newSingleThreadScheduledExecutor(
             runnable -> {
               Thread thread = new Thread(runnable, "ussi-parallelism-budget");
@@ -79,6 +83,23 @@ public final class ParallelismBudget {
         REBUDGET_INTERVAL_MILLIS,
         REBUDGET_INTERVAL_MILLIS,
         TimeUnit.MILLISECONDS);
+  }
+
+  /** Stops re-deriving the budget once the last engine has detached. */
+  public synchronized void detach() {
+    if (attachments == 0 || --attachments > 0) {
+      return;
+    }
+    rebudgeter.shutdownNow();
+    rebudgeter = null;
+  }
+
+  int attachments() {
+    return attachments;
+  }
+
+  boolean isRebudgeting() {
+    return rebudgeter != null;
   }
 
   /**

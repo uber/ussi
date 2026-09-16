@@ -20,6 +20,7 @@ import com.uber.ussi.searchablestructure.cache.CacheFactory;
 import com.uber.ussi.searchablestructure.index.Index;
 import com.uber.ussi.searchablestructure.index.IndexConfigValidator;
 import com.uber.ussi.searchablestructure.index.IndexFactory;
+import com.uber.ussi.searchablestructure.index.inverted.generator.TopResults;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -631,8 +632,9 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
   }
 
   private List<OrderedSearchableStructure> orderedSearchableStructuresLocked(boolean newestFirst) {
-    // Deletes and searches scan newest-first so an updated rowNum is found before older versions;
-    // snapshot and merge paths use oldest-first when reconstructing all visible rows.
+    // Deletes scan newest-first so an updated rowNum is found before older versions. Searches and
+    // the snapshot and merge paths use oldest-first, the former because the oldest structure is the
+    // largest and so raises a result floor the rest can use.
     List<OrderedSearchableStructure> structures =
         new ArrayList<>(graduatingCaches.size() + indexes.size());
     for (int i = 0; i < indexes.size(); ++i) {
@@ -664,6 +666,20 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
     return structures;
   }
 
+  /**
+   * The floor the next structure may search above, once enough rows are held to have one. Nothing
+   * below what {@code rows} already holds can reach the answer, so the weakest held score is the
+   * floor, one step below it so that a row scoring exactly as well still qualifies. The floor only
+   * rises, and never below what the caller asked for.
+   */
+  static float tightenedFloor(
+      BoundedSizeMaxHeap<RowNumAndSimilarity> rows, float floor) {
+    if (!rows.isFull()) {
+      return floor;
+    }
+    return Math.max(floor, (float) TopResults.getConservativeMinSimilarity(rows));
+  }
+
   private SearchResults mergeSearchResultsLocked(
       boolean topK,
       TermsAndValues record,
@@ -673,16 +689,40 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
     LongTermsAndValues encodedRecord = toLongTermsAndValues(record);
     BoundedSizeMaxHeap<RowNumAndSimilarity> rows =
         new BoundedSizeMaxHeap<>(maxResults, RowNumAndSimilarity.TOP_RESULTS_HEAP_ORDER);
+    // Each structure is told the weakest score the answer already holds enough of, so it can stop
+    // scoring rows that cannot reach the answer. Both searches are capped at their result count, so
+    // both may raise the floor, and both visit the structures in the same order so that they prune
+    // alike. An update deletes a row before re-inserting it, so one structure holds any given row:
+    // which order the structures are visited in cannot change the version a search finds, and the
+    // rows counted towards the floor are that many distinct rows. The order is therefore free, and
+    // what it decides is how soon the floor rises.
+    //
+    // The structures are visited one after another rather than at once. Their sizes differ by
+    // orders of magnitude, so the longest search would decide the latency either way, and visiting
+    // them in turn lets each one narrow the next, which searches running side by side cannot do.
+    // Oldest structure first, which is the largest: caches graduate at one size and older indexes
+    // are consolidated into bigger ones, so the oldest holds the most rows and is the likeliest to
+    // hold the answer's best. Raising the floor there first is what the structures after it spend.
+    // The active cache is the newest and smallest, so it comes last. Order is free to choose: an
+    // update deletes a row before re-inserting it, so one structure holds any given row and no
+    // order can change the version a search finds.
+    float floor = minSimilarity;
     if (topK) {
-      rows.addAll(cache.getNearestNeighborRowNums(maxResults, encodedRecord, metadataFilter));
-      for (OrderedSearchableStructure structure : orderedSearchableStructuresLocked(true)) {
-        rows.addAll(structure.getNearestNeighborRowNums(maxResults, encodedRecord, metadataFilter));
+      for (OrderedSearchableStructure structure : orderedSearchableStructuresLocked(false)) {
+        floor = tightenedFloor(rows, floor);
+        rows.addAll(
+            structure.getNearestNeighborRowNums(maxResults, encodedRecord, metadataFilter, floor));
       }
+      floor = tightenedFloor(rows, floor);
+      rows.addAll(
+          cache.getNearestNeighborRowNums(maxResults, encodedRecord, metadataFilter, floor));
     } else {
-      rows.addAll(cache.getSimilarRowNums(minSimilarity, encodedRecord, metadataFilter));
-      for (OrderedSearchableStructure structure : orderedSearchableStructuresLocked(true)) {
-        rows.addAll(structure.getSimilarRowNums(minSimilarity, encodedRecord, metadataFilter));
+      for (OrderedSearchableStructure structure : orderedSearchableStructuresLocked(false)) {
+        floor = tightenedFloor(rows, floor);
+        rows.addAll(structure.getSimilarRowNums(floor, encodedRecord, metadataFilter));
       }
+      floor = tightenedFloor(rows, floor);
+      rows.addAll(cache.getSimilarRowNums(floor, encodedRecord, metadataFilter));
     }
     List<RowNumAndSimilarity> sortedRows = rows.toSortedList(RowNumAndSimilarity.NEAREST_FIRST);
     long[] rowNums = new long[sortedRows.size()];
@@ -727,11 +767,12 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
     }
 
     private List<RowNumAndSimilarity> getNearestNeighborRowNums(
-        int k, LongTermsAndValues record, MetaFilter metadataFilter) {
+        int k, LongTermsAndValues record, MetaFilter metadataFilter, float minSimilarity) {
       if (cache != null) {
-        return cache.getNearestNeighborRowNums(k, record, metadataFilter);
+        return cache.getNearestNeighborRowNums(k, record, metadataFilter, minSimilarity);
       }
-      return Objects.requireNonNull(index).getNearestNeighborRowNums(k, record, metadataFilter);
+      return Objects.requireNonNull(index)
+          .getNearestNeighborRowNums(k, record, metadataFilter, minSimilarity);
     }
 
     private List<RowNumAndSimilarity> getSimilarRowNums(

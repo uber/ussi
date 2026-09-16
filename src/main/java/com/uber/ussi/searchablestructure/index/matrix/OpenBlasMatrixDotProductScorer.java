@@ -6,6 +6,11 @@ import static org.bytedeco.openblas.global.openblas.CblasRowMajor;
 
 import com.uber.ussi.searchablestructure.ParallelismBudget;
 import com.uber.ussi.utils.Utils;
+import java.util.Queue;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 import java.util.function.IntConsumer;
 import org.bytedeco.javacpp.FloatPointer;
@@ -19,6 +24,8 @@ final class OpenBlasMatrixDotProductScorer implements MatrixDotProductScorer {
   static FloatSizePointerFactory floatSizePointerFactory = FloatPointer::new;
   static FloatPointerDeallocator floatPointerDeallocator = FloatPointer::deallocate;
   static FloatPointerArrayReader floatPointerArrayReader = FloatPointer::get;
+  static FloatPointerArrayWriter floatPointerArrayWriter =
+      (pointer, values, length) -> pointer.put(values, 0, length);
   static SgemvOperation sgemvOperation = openblas::cblas_sgemv;
   static Runnable blasNativeLoadProbe = openblas_nolapack::blas_get_num_threads;
   static IntConsumer blasThreadCountSetter = CachedBlasThreadCountSetter::setNumThreads;
@@ -33,7 +40,16 @@ final class OpenBlasMatrixDotProductScorer implements MatrixDotProductScorer {
   // One native copy per chunk, in the same order, so a chunk can be multiplied where it lies.
   private final FloatPointer[] nativeChunks;
   private final DenseMatrix matrix;
-  private boolean closed;
+  // The native buffers a score needs, reused rather than allocated per score. Allocating them each
+  // time puts every pointer through the pointer library's process-wide bookkeeping, which several
+  // scores at once contend on. Scores run concurrently, so a buffer belongs to one score at a time:
+  // it is taken from here and returned when the score finishes.
+  private final int maxRowsInAChunk;
+  private final int maxScratches;
+  private final BlockingQueue<Scratch> availableScratches;
+  private final Queue<Scratch> allScratches = new ConcurrentLinkedQueue<>();
+  private final AtomicInteger scratchesCreated = new AtomicInteger();
+  private volatile boolean closed;
 
   OpenBlasMatrixDotProductScorer(DenseMatrix matrix, BooleanSupplier availabilitySupplier) {
     if (!availabilitySupplier.getAsBoolean()) {
@@ -48,6 +64,12 @@ final class OpenBlasMatrixDotProductScorer implements MatrixDotProductScorer {
     for (int chunk = 0; chunk < nativeChunks.length; ++chunk) {
       nativeChunks[chunk] = floatArrayPointerFactory.create(matrix.chunk(chunk));
     }
+    this.maxRowsInAChunk = widestChunk(matrix);
+    // Matches the bound on searches in flight, so a score never waits for a buffer. They are
+    // created on demand rather than up front, because for a matrix of few columns the buffers are
+    // a noticeable fraction of the matrix itself.
+    this.maxScratches = Math.max(1, Runtime.getRuntime().availableProcessors());
+    this.availableScratches = new ArrayBlockingQueue<>(maxScratches);
     this.closed = false;
   }
 
@@ -82,37 +104,92 @@ final class OpenBlasMatrixDotProductScorer implements MatrixDotProductScorer {
     }
     MatrixDotProductScorers.validateScoreInputs(matrix, queryValues, dotProducts);
     int dimension = matrix.dimension();
-    try (FloatPointer nativeQuery = floatArrayPointerFactory.create(queryValues)) {
+    Scratch scratch = takeScratch();
+    try {
+      floatPointerArrayWriter.write(scratch.query, queryValues, dimension);
       for (int chunk = 0; chunk < nativeChunks.length; ++chunk) {
         int rowsInChunk = matrix.numRowsInChunk(chunk);
-        try (FloatPointer nativeDotProducts = floatSizePointerFactory.create(rowsInChunk)) {
-          sgemvOperation.run(
-              /* Order */ CblasRowMajor,
-              /* transA */ CblasNoTrans,
-              /* numRowsA */ rowsInChunk,
-              /* numColsA */ dimension,
-              /* alpha */ 1.0f,
-              /* A */ nativeChunks[chunk],
-              /* lda */ dimension,
-              /* X */ nativeQuery,
-              /* incX */ 1,
-              /* beta */ 0.0f,
-              /* Y */ nativeDotProducts,
-              /* incY */ 1);
-          floatPointerArrayReader.read(
-              nativeDotProducts, dotProducts, matrix.firstRowInChunk(chunk), rowsInChunk);
-        }
+        sgemvOperation.run(
+            /* Order */ CblasRowMajor,
+            /* transA */ CblasNoTrans,
+            /* numRowsA */ rowsInChunk,
+            /* numColsA */ dimension,
+            /* alpha */ 1.0f,
+            /* A */ nativeChunks[chunk],
+            /* lda */ dimension,
+            /* X */ scratch.query,
+            /* incX */ 1,
+            /* beta */ 0.0f,
+            /* Y */ scratch.scores,
+            /* incY */ 1);
+        floatPointerArrayReader.read(
+            scratch.scores, dotProducts, matrix.firstRowInChunk(chunk), rowsInChunk);
       }
+    } finally {
+      availableScratches.offer(scratch);
+    }
+  }
+
+  /**
+   * Rows in the chunk holding the most of them. One score buffer of this size serves every chunk,
+   * and it must be the widest rather than any particular one, since a multiply writes a row per
+   * row of its chunk and a short buffer would be written past its end.
+   */
+  static int widestChunk(DenseMatrix matrix) {
+    int widest = 0;
+    for (int chunk = 0; chunk < matrix.numChunks(); ++chunk) {
+      widest = Math.max(widest, matrix.numRowsInChunk(chunk));
+    }
+    return widest;
+  }
+
+  /**
+   * A free set of buffers, making one more if the bound allows. Waiting cannot normally happen,
+   * since searches in flight are bounded by the same number.
+   */
+  private Scratch takeScratch() {
+    Scratch reused = availableScratches.poll();
+    if (reused != null) {
+      return reused;
+    }
+    if (scratchesCreated.incrementAndGet() <= maxScratches) {
+      Scratch created = new Scratch(matrix.dimension(), maxRowsInAChunk);
+      allScratches.add(created);
+      return created;
+    }
+    scratchesCreated.decrementAndGet();
+    try {
+      return availableScratches.take();
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new IllegalStateException("Interrupted while waiting for a scoring buffer.", e);
     }
   }
 
   @Override
   public void close() {
     if (!closed) {
+      closed = true;
       for (FloatPointer nativeChunk : nativeChunks) {
         floatPointerDeallocator.deallocate(nativeChunk);
       }
-      closed = true;
+      for (Scratch scratch : allScratches) {
+        floatPointerDeallocator.deallocate(scratch.query);
+        floatPointerDeallocator.deallocate(scratch.scores);
+      }
+      allScratches.clear();
+      availableScratches.clear();
+    }
+  }
+
+  /** The buffers one score needs. Used by one score at a time, never shared concurrently. */
+  private static final class Scratch {
+    private final FloatPointer query;
+    private final FloatPointer scores;
+
+    Scratch(int dimension, int maxRowsInAChunk) {
+      this.query = floatSizePointerFactory.create(dimension);
+      this.scores = floatSizePointerFactory.create(maxRowsInAChunk);
     }
   }
 
@@ -130,6 +207,10 @@ final class OpenBlasMatrixDotProductScorer implements MatrixDotProductScorer {
 
   interface FloatPointerArrayReader {
     void read(FloatPointer pointer, float[] values, int offset, int length);
+  }
+
+  interface FloatPointerArrayWriter {
+    void write(FloatPointer pointer, float[] values, int length);
   }
 
   interface SgemvOperation {

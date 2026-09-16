@@ -50,7 +50,9 @@ class MatrixDotProductScorersTest {
 
     assertEquals(1, fakeOpenBlas.gemvCalls);
     assertEquals(2, fakeOpenBlas.nativeLoadProbeCalls);
-    assertEquals(3, fakeOpenBlas.deallocateCalls);
+    // One probe buffer per availability check, the matrix chunk, and the two buffers of the one
+    // scratch that scoring needed.
+    assertEquals(5, fakeOpenBlas.deallocateCalls);
   }
 
   @Test
@@ -256,6 +258,8 @@ class MatrixDotProductScorersTest {
         OpenBlasMatrixDotProductScorer.floatPointerArrayReader;
     OpenBlasMatrixDotProductScorer.SgemvOperation originalSgemvOperation =
         OpenBlasMatrixDotProductScorer.sgemvOperation;
+    OpenBlasMatrixDotProductScorer.FloatPointerArrayWriter originalArrayWriter =
+        OpenBlasMatrixDotProductScorer.floatPointerArrayWriter;
     Runnable originalNativeLoadProbe = OpenBlasMatrixDotProductScorer.blasNativeLoadProbe;
     java.util.function.IntConsumer originalThreadCountSetter =
         OpenBlasMatrixDotProductScorer.blasThreadCountSetter;
@@ -266,6 +270,8 @@ class MatrixDotProductScorersTest {
           pointer -> fakeOpenBlas.deallocateCalls++;
       OpenBlasMatrixDotProductScorer.floatPointerArrayReader =
           (pointer, values, offset, length) -> values[offset] = 2f;
+      OpenBlasMatrixDotProductScorer.floatPointerArrayWriter =
+          (pointer, values, length) -> fakeOpenBlas.queryWrites++;
       OpenBlasMatrixDotProductScorer.sgemvOperation =
           (order,
               transA,
@@ -289,6 +295,7 @@ class MatrixDotProductScorersTest {
       OpenBlasMatrixDotProductScorer.floatSizePointerFactory = originalSizePointerFactory;
       OpenBlasMatrixDotProductScorer.floatPointerDeallocator = originalDeallocator;
       OpenBlasMatrixDotProductScorer.floatPointerArrayReader = originalArrayReader;
+      OpenBlasMatrixDotProductScorer.floatPointerArrayWriter = originalArrayWriter;
       OpenBlasMatrixDotProductScorer.sgemvOperation = originalSgemvOperation;
       OpenBlasMatrixDotProductScorer.blasNativeLoadProbe = originalNativeLoadProbe;
       OpenBlasMatrixDotProductScorer.blasThreadCountSetter = originalThreadCountSetter;
@@ -299,6 +306,7 @@ class MatrixDotProductScorersTest {
     private int nativeLoadProbeCalls;
     private int deallocateCalls;
     private int gemvCalls;
+    private int queryWrites;
     private final List<Integer> threadCountUpdates = new ArrayList<>();
   }
 }

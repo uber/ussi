@@ -2,82 +2,53 @@
 package com.uber.ussi.searchablestructure.index.matrix;
 
 import java.util.function.Supplier;
-import javax.annotation.Nullable;
 
-/** Factory and validation helpers for dense matrix-vector dot-product scorers. */
+/** Chooses the dense scorer to use and checks the inputs both of them require. */
 final class MatrixDotProductScorers {
 
   private MatrixDotProductScorers() {}
 
-  static MatrixDotProductScorer create(float[] rowMajorValues, int numRows, int dimension) {
-    validateMatrix(rowMajorValues, numRows, dimension);
+  static MatrixDotProductScorer create(DenseMatrix matrix) {
     return create(
-        rowMajorValues,
-        numRows,
-        dimension,
+        matrix,
         OpenBlasMatrixDotProductScorer.isAvailable(),
         () ->
             new OpenBlasMatrixDotProductScorer(
-                rowMajorValues, numRows, dimension, OpenBlasMatrixDotProductScorer::isAvailable));
+                matrix, OpenBlasMatrixDotProductScorer::isAvailable));
   }
 
   static MatrixDotProductScorer create(
-      float[] rowMajorValues,
-      int numRows,
-      int dimension,
+      DenseMatrix matrix,
       boolean openBlasAvailable,
       Supplier<MatrixDotProductScorer> openBlasScorerSupplier) {
-    validateMatrix(rowMajorValues, numRows, dimension);
     if (openBlasAvailable) {
       try {
         return openBlasScorerSupplier.get();
       } catch (LinkageError e) {
-        return new JavaMatrixDotProductScorer(rowMajorValues, numRows, dimension);
+        return new JavaMatrixDotProductScorer(matrix);
       } catch (RuntimeException e) {
         if (isCausedByLinkageError(e)) {
-          return new JavaMatrixDotProductScorer(rowMajorValues, numRows, dimension);
+          return new JavaMatrixDotProductScorer(matrix);
         }
         throw e;
       }
     }
-    return new JavaMatrixDotProductScorer(rowMajorValues, numRows, dimension);
-  }
-
-  static void validateMatrix(@Nullable float[] rowMajorValues, int numRows, int dimension) {
-    if (numRows < 0) {
-      throw new IllegalArgumentException("numRows must be >= 0.");
-    }
-    if (dimension < 0) {
-      throw new IllegalArgumentException("dimension must be >= 0.");
-    }
-    long expectedLength = (long) numRows * dimension;
-    if (expectedLength > Integer.MAX_VALUE) {
-      throw new IllegalArgumentException("Dense matrix dimensions exceed Integer.MAX_VALUE.");
-    }
-    if (rowMajorValues != null && rowMajorValues.length != (int) expectedLength) {
-      throw new IllegalArgumentException(
-          String.format(
-              "rowMajorValues length mismatch. Expected %s, got %s.",
-              expectedLength, rowMajorValues.length));
-    }
+    return new JavaMatrixDotProductScorer(matrix);
   }
 
   static void validateScoreInputs(
-      @Nullable float[] rowMajorValues,
-      int numRows,
-      int dimension,
-      float[] queryValues,
-      float[] dotProducts) {
-    validateMatrix(rowMajorValues, numRows, dimension);
-    if (queryValues.length != dimension) {
+      DenseMatrix matrix, float[] queryValues, float[] dotProducts) {
+    if (queryValues.length != matrix.dimension()) {
       throw new IllegalArgumentException(
           String.format(
-              "queryValues length mismatch. Expected %s, got %s.", dimension, queryValues.length));
+              "queryValues length mismatch. Expected %s, got %s.",
+              matrix.dimension(), queryValues.length));
     }
-    if (dotProducts.length != numRows) {
+    if (dotProducts.length != matrix.numRows()) {
       throw new IllegalArgumentException(
           String.format(
-              "dotProducts length mismatch. Expected %s, got %s.", numRows, dotProducts.length));
+              "dotProducts length mismatch. Expected %s, got %s.",
+              matrix.numRows(), dotProducts.length));
     }
   }
 

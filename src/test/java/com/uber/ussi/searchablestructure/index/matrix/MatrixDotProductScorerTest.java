@@ -1,5 +1,6 @@
 package com.uber.ussi.searchablestructure.index.matrix;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -25,19 +26,57 @@ class MatrixDotProductScorerTest {
     float[] javaDots = new float[3];
     float[] openBlasDots = new float[3];
     JavaMatrixDotProductScorer javaScorer =
-        new JavaMatrixDotProductScorer(matrix, /* numRows */ 3, /* dimension */ 3);
+        new JavaMatrixDotProductScorer(TestDenseMatrices.of(matrix, 3, 3));
     try (OpenBlasMatrixDotProductScorer openBlasScorer =
-        new OpenBlasMatrixDotProductScorer(
-            matrix,
-            /* numRows */ 3,
-            /* dimension */ 3,
-            OpenBlasMatrixDotProductScorer::isAvailable)) {
+        new OpenBlasMatrixDotProductScorer(TestDenseMatrices.of(matrix, 3, 3), OpenBlasMatrixDotProductScorer::isAvailable)) {
       javaScorer.score(query, javaDots);
       openBlasScorer.score(query, openBlasDots);
     }
 
     for (int i = 0; i < javaDots.length; ++i) {
       assertEquals(javaDots[i], openBlasDots[i], DELTA);
+    }
+  }
+
+  /**
+   * Both scorers must place a chunk's results at the rows that chunk holds, not at the start of the
+   * output. A single-chunk matrix cannot catch that, since there the two are the same.
+   */
+  @Test
+  void bothScorersPlaceChunkResultsAtTheRightRows() {
+    int numRows = 5;
+    int dimension = 3;
+    float[] values =
+        new float[] {
+          1.0f, 0.0f, 2.0f,
+          0.5f, 0.5f, 0.5f,
+          0.0f, 3.0f, 1.0f,
+          2.0f, 1.0f, 0.0f,
+          1.0f, 1.0f, 1.0f
+        };
+    float[] query = new float[] {0.25f, 0.5f, 0.75f};
+
+    float[] reference = new float[numRows];
+    new JavaMatrixDotProductScorer(TestDenseMatrices.of(values, numRows, dimension))
+        .score(query, reference);
+
+    // Two rows per chunk, so three chunks with the last one short.
+    DenseMatrix chunked = TestDenseMatrices.of(values, numRows, dimension, /* maxChunkValues */ 7);
+    assertEquals(3, chunked.numChunks());
+
+    float[] fromJava = new float[numRows];
+    new JavaMatrixDotProductScorer(chunked).score(query, fromJava);
+
+    assertArrayEquals(reference, fromJava, DELTA);
+
+    try (OpenBlasMatrixDotProductScorer openBlasScorer =
+        new OpenBlasMatrixDotProductScorer(
+            chunked, OpenBlasMatrixDotProductScorer::isAvailable)) {
+      float[] fromOpenBlas = new float[numRows];
+
+      openBlasScorer.score(query, fromOpenBlas);
+
+      assertArrayEquals(reference, fromOpenBlas, DELTA);
     }
   }
 
@@ -62,11 +101,12 @@ class MatrixDotProductScorerTest {
     float[] javaDots = new float[numRows];
     float[] openBlasDots = new float[numRows];
     JavaMatrixDotProductScorer javaScorer =
-        new JavaMatrixDotProductScorer(matrix, numRows, dimension);
+        new JavaMatrixDotProductScorer(TestDenseMatrices.of(matrix, numRows, dimension));
 
     try (OpenBlasMatrixDotProductScorer openBlasScorer =
         new OpenBlasMatrixDotProductScorer(
-            matrix, numRows, dimension, OpenBlasMatrixDotProductScorer::isAvailable)) {
+            TestDenseMatrices.of(matrix, numRows, dimension),
+            OpenBlasMatrixDotProductScorer::isAvailable)) {
       javaScorer.score(query, javaDots);
       openBlasScorer.score(query, openBlasDots);
     }

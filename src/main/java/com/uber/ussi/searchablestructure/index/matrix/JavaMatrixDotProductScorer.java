@@ -3,27 +3,28 @@ package com.uber.ussi.searchablestructure.index.matrix;
 
 /** Pure Java dense matrix-vector dot-product scorer. */
 final class JavaMatrixDotProductScorer implements MatrixDotProductScorer {
-  private final float[] rowMajorValues;
-  private final int numRows;
-  private final int dimension;
+  private final DenseMatrix matrix;
 
-  JavaMatrixDotProductScorer(float[] rowMajorValues, int numRows, int dimension) {
-    this.rowMajorValues = rowMajorValues;
-    this.numRows = numRows;
-    this.dimension = dimension;
+  JavaMatrixDotProductScorer(DenseMatrix matrix) {
+    this.matrix = matrix;
   }
 
   @Override
   public void score(float[] queryValues, float[] dotProducts) {
-    MatrixDotProductScorers.validateScoreInputs(
-        rowMajorValues, numRows, dimension, queryValues, dotProducts);
-    for (int row = 0; row < numRows; ++row) {
-      int offset = row * dimension;
-      float dotProduct = 0.0f;
-      for (int col = 0; col < dimension; ++col) {
-        dotProduct += rowMajorValues[offset + col] * queryValues[col];
+    MatrixDotProductScorers.validateScoreInputs(matrix, queryValues, dotProducts);
+    int dimension = matrix.dimension();
+    for (int chunk = 0; chunk < matrix.numChunks(); ++chunk) {
+      float[] values = matrix.chunk(chunk);
+      int firstRow = matrix.firstRowInChunk(chunk);
+      int rowsInChunk = matrix.numRowsInChunk(chunk);
+      for (int row = 0; row < rowsInChunk; ++row) {
+        int offset = row * dimension;
+        float dotProduct = 0.0f;
+        for (int col = 0; col < dimension; ++col) {
+          dotProduct += values[offset + col] * queryValues[col];
+        }
+        dotProducts[firstRow + row] = dotProduct;
       }
-      dotProducts[row] = dotProduct;
     }
   }
 }

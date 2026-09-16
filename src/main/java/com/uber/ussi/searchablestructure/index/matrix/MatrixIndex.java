@@ -35,7 +35,8 @@ public final class MatrixIndex extends Index {
   private final MatrixDotProductScorer dotProductScorer;
   private final int dimension;
   private final long[] rowNums;
-  private final float[] rowMajorValues;
+  private final DenseMatrix matrix;
+  private final int maxChunkValues;
   private final double[] rowUniValues;
   private final LongIntHashMap rowNumToMatrixRowIndex;
   private final MetadataFilteredSearchExecutor metadataFilteredSearchExecutor;
@@ -44,16 +45,29 @@ public final class MatrixIndex extends Index {
       NamespaceConfig namespaceConfig,
       LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
       LongObjectHashMap<LongMeta> rowNumToMetaMap) {
+    this(
+        namespaceConfig,
+        rowNumToTermsAndValuesMap,
+        rowNumToMetaMap,
+        DenseMatrix.DEFAULT_MAX_CHUNK_VALUES);
+  }
+
+  /** Takes the chunk size, so a test can span several chunks without a matrix of that size. */
+  MatrixIndex(
+      NamespaceConfig namespaceConfig,
+      LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
+      LongObjectHashMap<LongMeta> rowNumToMetaMap,
+      int maxChunkValues) {
     super(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);
     this.dotProductScored = (DotProductScored) comparator;
+    this.maxChunkValues = maxChunkValues;
     MatrixData matrixData = buildMatrixData();
     this.dimension = matrixData.dimension;
     this.rowNums = matrixData.rowNums;
-    this.rowMajorValues = matrixData.rowMajorValues;
+    this.matrix = matrixData.matrix;
     this.rowUniValues = matrixData.rowUniValues;
     this.rowNumToMatrixRowIndex = matrixData.rowNumToMatrixRowIndex;
-    this.dotProductScorer =
-        MatrixDotProductScorers.create(rowMajorValues, rowNums.length, dimension);
+    this.dotProductScorer = MatrixDotProductScorers.create(matrix);
     // Dense bulk scoring cannot push metadata filters down, so AUTO pre-filters or post-filters.
     this.metadataFilteredSearchExecutor =
         new MetadataFilteredSearchExecutor(
@@ -226,10 +240,9 @@ public final class MatrixIndex extends Index {
   /** Scores one row without the bulk multiply, for a search that reaches only some of them. */
   private float computeSimilarityForMatrixRow(
       float[] queryValues, double queryUniValue, int matrixRowIndex) {
-    int offset = matrixRowIndex * dimension;
     double dotProduct = 0.0d;
     for (int i = 0; i < dimension; ++i) {
-      dotProduct += (double) queryValues[i] * rowMajorValues[offset + i];
+      dotProduct += (double) queryValues[i] * matrix.valueAt(matrixRowIndex, i);
     }
     return computeSimilarityFromDotProduct(queryUniValue, matrixRowIndex, dotProduct);
   }
@@ -265,17 +278,19 @@ public final class MatrixIndex extends Index {
     int numRows = rowNumToTermsAndValuesMap.size();
     if (numRows == 0) {
       return new MatrixData(
-          /* dimension */ 0, new long[0], new float[0], new double[0], new LongIntHashMap());
+          /* dimension */ 0,
+          new long[0],
+          DenseMatrix.allocate(0, 0, maxChunkValues),
+          new double[0],
+          new LongIntHashMap());
     }
 
     int inferredDimension = -1;
     for (LongObjectCursor<LongTermsAndValues> entry : rowNumToTermsAndValuesMap) {
       inferredDimension = validateDenseRow(entry.key, entry.value, inferredDimension);
     }
-    long numCells = validateMatrixCellCount(numRows, inferredDimension);
-
     long[] matrixRowNums = new long[numRows];
-    float[] matrixValues = new float[(int) numCells];
+    DenseMatrix matrixValues = DenseMatrix.allocate(numRows, inferredDimension, maxChunkValues);
     double[] matrixRowUniValues = new double[numRows];
     LongIntHashMap matrixRowIndexByRowNum = new LongIntHashMap(numRows);
 
@@ -285,8 +300,7 @@ public final class MatrixIndex extends Index {
       float[] values = entry.value.getValues();
       matrixRowNums[matrixRowIndex] = rowNum;
       matrixRowIndexByRowNum.put(rowNum, matrixRowIndex);
-      System.arraycopy(
-          values, 0, matrixValues, matrixRowIndex * inferredDimension, inferredDimension);
+      matrixValues.setRow(matrixRowIndex, values);
       matrixRowUniValues[matrixRowIndex] = comparator.computeUniValue(values);
       ++matrixRowIndex;
     }
@@ -319,37 +333,22 @@ public final class MatrixIndex extends Index {
     return dimension;
   }
 
-  static long validateMatrixCellCountForTests(int numRows, int dimension) {
-    return validateMatrixCellCount(numRows, dimension);
-  }
-
-  private static long validateMatrixCellCount(int numRows, int dimension) {
-    long numCells = (long) numRows * dimension;
-    if (numCells > Integer.MAX_VALUE) {
-      throw new IllegalArgumentException(
-          String.format(
-              "Dense matrix is too large. Rows (%s) * dimensions (%s) exceeds Integer.MAX_VALUE.",
-              numRows, dimension));
-    }
-    return numCells;
-  }
-
   private static final class MatrixData {
     private final int dimension;
     private final long[] rowNums;
-    private final float[] rowMajorValues;
+    private final DenseMatrix matrix;
     private final double[] rowUniValues;
     private final LongIntHashMap rowNumToMatrixRowIndex;
 
     private MatrixData(
         int dimension,
         long[] rowNums,
-        float[] rowMajorValues,
+        DenseMatrix matrix,
         double[] rowUniValues,
         LongIntHashMap rowNumToMatrixRowIndex) {
       this.dimension = dimension;
       this.rowNums = rowNums;
-      this.rowMajorValues = rowMajorValues;
+      this.matrix = matrix;
       this.rowUniValues = rowUniValues;
       this.rowNumToMatrixRowIndex = rowNumToMatrixRowIndex;
     }

@@ -19,7 +19,8 @@ class MatrixDotProductScorersTest {
   @Test
   void createReturnsUsableScorer() {
     try (MatrixDotProductScorer scorer =
-        MatrixDotProductScorers.create(new float[] {1f, 2f, 3f, 4f}, 2, 2)) {
+        MatrixDotProductScorers.create(
+            TestDenseMatrices.of(new float[] {1f, 2f, 3f, 4f}, 2, 2))) {
       float[] dotProducts = new float[2];
 
       scorer.score(new float[] {0.5f, 2f}, dotProducts);
@@ -38,7 +39,7 @@ class MatrixDotProductScorersTest {
         fakeOpenBlas,
         () -> {
           try (MatrixDotProductScorer scorer =
-              MatrixDotProductScorers.create(new float[] {1f}, 1, 1)) {
+              MatrixDotProductScorers.create(TestDenseMatrices.of(new float[] {1f}, 1, 1))) {
             float[] dotProducts = new float[1];
 
             scorer.score(new float[] {2f}, dotProducts);
@@ -62,7 +63,8 @@ class MatrixDotProductScorersTest {
 
     try (MatrixDotProductScorer scorer =
         MatrixDotProductScorers.create(
-            new float[] {1f, 2f}, 1, 2, /* openBlasAvailable */ true, () -> expectedScorer)) {
+            TestDenseMatrices.of(new float[] {1f, 2f}, 1, 2),
+            /* openBlasAvailable */ true, () -> expectedScorer)) {
       assertSame(expectedScorer, scorer);
     }
   }
@@ -71,9 +73,7 @@ class MatrixDotProductScorersTest {
   void createBuildsJavaScorerWhenOpenBlasUnavailable() {
     try (MatrixDotProductScorer scorer =
         MatrixDotProductScorers.create(
-            new float[] {1f, 2f},
-            1,
-            2,
+            TestDenseMatrices.of(new float[] {1f, 2f}, 1, 2),
             /* openBlasAvailable */ false,
             () -> {
               throw new AssertionError(
@@ -87,9 +87,7 @@ class MatrixDotProductScorersTest {
   void createFallsBackToJavaScorerOnLinkageError() {
     try (MatrixDotProductScorer scorer =
         MatrixDotProductScorers.create(
-            new float[] {1f, 2f},
-            1,
-            2,
+            TestDenseMatrices.of(new float[] {1f, 2f}, 1, 2),
             /* openBlasAvailable */ true,
             () -> {
               throw new UnsatisfiedLinkError("native missing");
@@ -102,9 +100,7 @@ class MatrixDotProductScorersTest {
   void createFallsBackToJavaScorerWhenRuntimeExceptionWrapsLinkageError() {
     try (MatrixDotProductScorer scorer =
         MatrixDotProductScorers.create(
-            new float[] {1f, 2f},
-            1,
-            2,
+            TestDenseMatrices.of(new float[] {1f, 2f}, 1, 2),
             /* openBlasAvailable */ true,
             () -> {
               throw new RuntimeException(new UnsatisfiedLinkError("native missing"));
@@ -119,9 +115,7 @@ class MatrixDotProductScorersTest {
         IllegalStateException.class,
         () ->
             MatrixDotProductScorers.create(
-                new float[] {1f, 2f},
-                1,
-                2,
+                TestDenseMatrices.of(new float[] {1f, 2f}, 1, 2),
                 /* openBlasAvailable */ true,
                 () -> {
                   throw new IllegalStateException("boom");
@@ -134,7 +128,8 @@ class MatrixDotProductScorersTest {
         IllegalStateException.class,
         () ->
             new OpenBlasMatrixDotProductScorer(
-                new float[] {1f}, 1, 1, /* availabilitySupplier */ () -> false));
+                  TestDenseMatrices.of(new float[] {1f}, 1, 1),
+                  /* availabilitySupplier */ () -> false));
   }
 
   @Test
@@ -146,7 +141,8 @@ class MatrixDotProductScorersTest {
         () -> {
           try (OpenBlasMatrixDotProductScorer scorer =
               new OpenBlasMatrixDotProductScorer(
-                  new float[] {1f}, 1, 1, /* availabilitySupplier */ () -> true)) {
+                  TestDenseMatrices.of(new float[] {1f}, 1, 1),
+                  /* availabilitySupplier */ () -> true)) {
             float[] dotProducts = new float[1];
 
             scorer.score(new float[] {2f}, dotProducts);
@@ -212,7 +208,8 @@ class MatrixDotProductScorersTest {
         () -> {
           OpenBlasMatrixDotProductScorer scorer =
               new OpenBlasMatrixDotProductScorer(
-                  new float[] {1f}, 1, 1, /* availabilitySupplier */ () -> true);
+                  TestDenseMatrices.of(new float[] {1f}, 1, 1),
+                  /* availabilitySupplier */ () -> true);
 
           scorer.close();
 
@@ -225,45 +222,12 @@ class MatrixDotProductScorersTest {
   }
 
   @Test
-  void validateMatrixRejectsNegativeNumRows() {
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> MatrixDotProductScorers.validateMatrix(new float[0], -1, 2));
-  }
-
-  @Test
-  void validateMatrixRejectsNegativeDimension() {
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> MatrixDotProductScorers.validateMatrix(new float[0], 1, -1));
-  }
-
-  @Test
-  void validateMatrixRejectsLengthMismatch() {
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> MatrixDotProductScorers.validateMatrix(new float[] {1f}, 1, 2));
-  }
-
-  @Test
-  void validateMatrixRejectsHugeDimensions() {
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> MatrixDotProductScorers.validateMatrix(null, 46_342, 46_342));
-  }
-
-  @Test
-  void validateMatrixAcceptsMatchingLength() {
-    MatrixDotProductScorers.validateMatrix(new float[] {1f, 2f}, 1, 2);
-  }
-
-  @Test
   void validateScoreInputsRejectsQueryLengthMismatch() {
     assertThrows(
         IllegalArgumentException.class,
         () ->
             MatrixDotProductScorers.validateScoreInputs(
-                new float[] {1f, 2f}, 1, 2, new float[] {1f}, new float[] {0f}));
+                TestDenseMatrices.of(new float[] {1f, 2f}, 1, 2), new float[] {1f}, new float[] {0f}));
   }
 
   @Test
@@ -272,13 +236,13 @@ class MatrixDotProductScorersTest {
         IllegalArgumentException.class,
         () ->
             MatrixDotProductScorers.validateScoreInputs(
-                new float[] {1f, 2f}, 1, 2, new float[] {1f, 2f}, new float[] {0f, 0f}));
+                TestDenseMatrices.of(new float[] {1f, 2f}, 1, 2), new float[] {1f, 2f}, new float[] {0f, 0f}));
   }
 
   @Test
   void validateScoreInputsAcceptsConsistentDimensions() {
     MatrixDotProductScorers.validateScoreInputs(
-        new float[] {1f, 2f}, 1, 2, new float[] {1f, 2f}, new float[] {0f});
+                TestDenseMatrices.of(new float[] {1f, 2f}, 1, 2), new float[] {1f, 2f}, new float[] {0f});
   }
 
   private static void withFakeOpenBlas(FakeOpenBlas fakeOpenBlas, Runnable runnable) {
@@ -300,7 +264,8 @@ class MatrixDotProductScorersTest {
       OpenBlasMatrixDotProductScorer.floatSizePointerFactory = size -> null;
       OpenBlasMatrixDotProductScorer.floatPointerDeallocator =
           pointer -> fakeOpenBlas.deallocateCalls++;
-      OpenBlasMatrixDotProductScorer.floatPointerArrayReader = (pointer, values) -> values[0] = 2f;
+      OpenBlasMatrixDotProductScorer.floatPointerArrayReader =
+          (pointer, values, offset, length) -> values[offset] = 2f;
       OpenBlasMatrixDotProductScorer.sgemvOperation =
           (order,
               transA,

@@ -41,10 +41,11 @@ public final class IndexFactory {
           rowNumToTermsAndValuesMap,
           rowNumToMetaMap,
           numShards,
+          indexType,
           (shardRows, shardMetadata, discardedTerms) ->
-              createOne(indexType, namespaceConfig, shardRows, shardMetadata, discardedTerms));
+              createOneIndex(indexType, namespaceConfig, shardRows, shardMetadata, discardedTerms));
     }
-    return createOne(
+    return createOneIndex(
         indexType, namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap, null);
   }
 
@@ -52,7 +53,7 @@ public final class IndexFactory {
    * One index over the rows given. A {@code discardedTerms} of null leaves the index to find the
    * popular terms over those rows, which is right only when they are the whole structure's.
    */
-  private static Index createOne(
+  private static Index createOneIndex(
       IndexType indexType,
       NamespaceConfig namespaceConfig,
       LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
@@ -76,10 +77,9 @@ public final class IndexFactory {
   /**
    * Shards to build {@code numRows} into, which is more than one only for the inverted indexes.
    *
-   * <p>A scan index and a scan cache already divide the rows of one search between threads, and a
-   * matrix index already divides one search inside its native scorer, both off the same budget. A
-   * shard on top of either would divide rows already being divided and would be spending threads
-   * the budget has already promised.
+   * <p>A scan index already divides the rows of one search between threads, and a matrix index
+   * already divides one search inside its native scorer, both off the same budget. A shard on top
+   * of either would divide rows already being divided and spend threads the budget has promised.
    */
   private static int numShardsFor(IndexType indexType, int numRows) {
     return switch (indexType) {

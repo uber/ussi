@@ -527,13 +527,13 @@ rules out `l2` and any other comparator left without one.
 
 ### Sharded Inverted Index
 
-An inverted index large enough holds its rows in shards, one per core, each an
-inverted index of its own over a share of the rows. `ShardedInvertedIndex` is
-the structure the engine sees, and it searches every shard and keeps the best
-rows across all of them, as many shards at a time as `ParallelismBudget` allows.
-Rows are divided by row number modulo the shard count, which divides them evenly
-because row numbers are handed out in turn, and evenly is what makes the shards
-cost the same to search.
+An inverted index holds its rows in shards, one per core, each an inverted index
+of its own over a share of the rows. `ShardedInvertedIndex` is the structure the
+engine sees, and it searches every shard and keeps the best rows across all of
+them, as many shards at a time as `ParallelismBudget` allows. Rows are divided by
+row number modulo the shard count, which divides them evenly because row numbers
+are handed out in turn, and evenly is what makes the shards cost the same to
+search.
 
 Shards divide the whole of a search rather than a phase of one, which is what
 makes them the axis worth dividing along. Dividing verification alone reaches
@@ -554,8 +554,11 @@ threads, in waves, and cannot rebuild them.
 Against that, every shard costs a search a heap, a walk of the query's keys and
 a seek into each of their lists, whatever threads the search has. That cost is
 per shard and does not shrink with the shard, so it bounds the shard count from
-above, and a shard must be able to hold a minimum number of rows before the
-index is divided that finely. A small index is left whole.
+above: an index takes one shard per core only once every shard has a minimum
+number of rows to hold, and fewer shards while they have not. That minimum sizes
+the count rather than switching sharding on and off, and an index is built once
+from the rows it is given and never grows, so the count is settled at build time
+and no index is converted from unsharded to sharded while it is being searched.
 
 Only the inverted indexes are sharded. A scan index divides the rows of one
 search between threads already, and a matrix index divides one search inside its
@@ -571,12 +574,19 @@ shards are there.
 A term occurring in most rows generates most of the index as candidates without
 narrowing anything down, so both the inverted cache and the inverted indexes
 can discard terms above a configured popularity. Popularity is measured over the
-whole structure and never over a part of one: an index divided into shards, and a
-hybrid index divided into its two halves, find the popular terms once over all
-their rows and hand the same terms to every part. A part left to measure for
-itself would find a term's share of its own rows rather than of the structure's,
-and would discard terms the structure keeps, so dividing a structure would change
-what it finds. What a discard means is
+whole structure and never over a part of one: an index divided into shards finds
+the popular terms once over all its rows and hands the same terms to every shard.
+A shard left to measure for itself would find a term's share of its own rows
+rather than of the index's, and would discard terms the index keeps, so sharding
+an index would change what it finds.
+
+Inside a hybrid index only the term-keyed half discards, and its popular terms
+are counted over the rows that half holds. Discarding shortens the lists a
+popular term would otherwise generate most of the index as candidates from, which
+is a saving only the term-keyed half can make: a signature list holds one entry
+per row whatever that row's terms are, so discarding buys the signature half no
+shorter lists and only moves the signatures its rows are keyed by. What a discard
+means is
 `popular_term_discard_scope`, and the two settings differ in which half of the
 answer stays exact rather than in how aggressive they are.
 
@@ -605,9 +615,11 @@ the comparator under this scope.
 
 Popularity is counted over terms, never over the keys the lists end up under,
 and discarding runs before signature generation rather than after. A
-signature-keyed structure therefore draws its signatures from a record the
-popular terms are already gone from, so a discard changes which signatures a
-record has rather than removing signatures it already had. Nothing discards a
+signature-keyed structure that discards therefore draws its signatures from a
+record the popular terms are already gone from, so a discard changes which
+signatures a record has rather than removing signatures it already had. That is
+why the signature half of a hybrid discards nothing: moving a row's signatures
+buys the shorter lists a term-keyed half gets from a discard. Nothing discards a
 signature that ends up in most rows, which is deliberate: a term that popular
 carries no signal, while signatures collide at a rate tracking the multiset
 similarity of the records behind them, so a popular signature is a similarity

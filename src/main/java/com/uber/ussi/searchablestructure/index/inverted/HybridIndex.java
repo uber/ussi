@@ -40,8 +40,9 @@ public final class HybridIndex extends Index {
   }
 
   /**
-   * A hybrid index over a part of a structure's rows, discarding the terms the structure found
-   * popular. Given none, it finds them over its own rows, which are then the structure's.
+   * A hybrid index over part of a structure's rows, discarding the terms the structure found
+   * popular in its term-keyed rows. Given none, it finds them over its own term-keyed rows, which
+   * are then the structure's.
    */
   public HybridIndex(
       NamespaceConfig namespaceConfig,
@@ -49,13 +50,6 @@ public final class HybridIndex extends Index {
       LongObjectHashMap<LongMeta> rowNumToMetaMap,
       @Nullable LongHashSet structureDiscardedTerms) {
     super(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);
-    // Both halves discard the terms the whole found popular. A half left to observe popularity for
-    // itself would find a term's share of its own rows, and the halves hold rows of a kind: the
-    // terms of the long rows are not the terms of the short ones.
-    LongHashSet discardedTerms =
-        structureDiscardedTerms == null
-            ? BaseInvertedIndex.discardedTermsOf(namespaceConfig, rowNumToTermsAndValuesMap)
-            : structureDiscardedTerms;
     LongObjectHashMap<LongTermsAndValues> exactRows = new LongObjectHashMap<>();
     LongObjectHashMap<LongTermsAndValues> signatureRows = new LongObjectHashMap<>();
     for (LongObjectCursor<LongTermsAndValues> entry : rowNumToTermsAndValuesMap) {
@@ -65,10 +59,18 @@ public final class HybridIndex extends Index {
         signatureRows.put(entry.key, entry.value);
       }
     }
+    // Only the term half discards. A popular term shortens the lists it would otherwise generate
+    // most of as candidates, which is a saving the term half alone can make: a signature list holds
+    // one entry per row whatever its terms, so discarding buys the signature half no shorter lists
+    // and only moves the signatures its rows are keyed by.
+    LongHashSet discardedTerms =
+        structureDiscardedTerms == null
+            ? BaseInvertedIndex.discardedTermsOf(namespaceConfig, exactRows)
+            : structureDiscardedTerms;
     // The signature half is built first so a comparator without a generator is rejected before
     // the term half is populated.
     this.signatureIndex =
-        new SignatureIndex(namespaceConfig, signatureRows, rowNumToMetaMap, discardedTerms);
+        new SignatureIndex(namespaceConfig, signatureRows, rowNumToMetaMap, new LongHashSet());
     this.termIndex = new TermIndex(namespaceConfig, exactRows, rowNumToMetaMap, discardedTerms);
     this.termPopularityFilteringEnabled = termIndex.discardsPopularTerms();
   }
@@ -128,6 +130,22 @@ public final class HybridIndex extends Index {
     return mergeResults(exactResults, signatureResults, namespaceConfig.getMaxNumSimilarities());
   }
 
+  /**
+   * The terms a hybrid index over these rows discards as popular, which are counted over its
+   * term-keyed rows because those are the only rows it discards from.
+   */
+  static LongHashSet discardedTermsOf(
+      NamespaceConfig namespaceConfig,
+      LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap) {
+    LongObjectHashMap<LongTermsAndValues> exactRows = new LongObjectHashMap<>();
+    for (LongObjectCursor<LongTermsAndValues> entry : rowNumToTermsAndValuesMap) {
+      if (entry.value.termsLength() <= TERM_KEYING_CUTOFF) {
+        exactRows.put(entry.key, entry.value);
+      }
+    }
+    return BaseInvertedIndex.discardedTermsOf(namespaceConfig, exactRows);
+  }
+
   @Override
   protected void onRowDeleted(long rowNum) {
     if (!termIndex.delete(rowNum)) {
@@ -147,6 +165,14 @@ public final class HybridIndex extends Index {
 
   int getNumSignatureRowsForTests() {
     return signatureIndex.size();
+  }
+
+  long[] getExactDiscardedTermsForTests() {
+    return termIndex.getDiscardedTermsForTests();
+  }
+
+  long[] getSignatureDiscardedTermsForTests() {
+    return signatureIndex.getDiscardedTermsForTests();
   }
 
   private boolean maySearchIndex(

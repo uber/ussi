@@ -14,6 +14,7 @@ import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.index.Index;
+import com.uber.ussi.searchablestructure.index.IndexType;
 import com.uber.ussi.utils.ConfigKeys;
 import java.util.ArrayList;
 import java.util.List;
@@ -161,18 +162,18 @@ class ShardedInvertedIndexTest {
   }
 
   @Test
-  void shardsOncePerCoreOnlyWhenEveryShardCanBeFull() {
-    int cores = Math.max(1, Runtime.getRuntime().availableProcessors());
-    int minRows = ShardedInvertedIndex.MIN_ROWS_PER_SHARD;
+  void takesAsManyShardsAsItHasRowsForUpToOnePerCore() {
+    int numCores = Math.max(1, Runtime.getRuntime().availableProcessors());
+    int minNumRows = ShardedInvertedIndex.MIN_NUM_ROWS_PER_SHARD;
 
     assertEquals(1, ShardedInvertedIndex.numShardsFor(0));
-    assertEquals(1, ShardedInvertedIndex.numShardsFor(minRows - 1));
-    assertEquals(1, ShardedInvertedIndex.numShardsFor(minRows));
-    assertEquals(2, ShardedInvertedIndex.numShardsFor(2 * minRows));
-    assertEquals(cores, ShardedInvertedIndex.numShardsFor(cores * minRows));
+    assertEquals(1, ShardedInvertedIndex.numShardsFor(minNumRows - 1));
+    assertEquals(1, ShardedInvertedIndex.numShardsFor(minNumRows));
+    assertEquals(2, ShardedInvertedIndex.numShardsFor(2 * minNumRows));
+    assertEquals(numCores, ShardedInvertedIndex.numShardsFor(numCores * minNumRows));
     assertEquals(
-        cores,
-        ShardedInvertedIndex.numShardsFor(1000 * cores * minRows),
+        numCores,
+        ShardedInvertedIndex.numShardsFor(1000 * numCores * minNumRows),
         "the shard count is bounded by the cores however many rows there are");
   }
 
@@ -211,6 +212,7 @@ class ShardedInvertedIndexTest {
         rows,
         longObjectMap(),
         numShards,
+        IndexType.INVERTED_TERM,
         (shardRows, shardMetadata, discardedTerms) ->
             new TermIndex(namespaceConfig, shardRows, shardMetadata, discardedTerms));
   }

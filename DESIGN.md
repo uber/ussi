@@ -110,6 +110,25 @@ and never in-place inserts or updates. Consolidation later rebuilds older
 indexed rows into a newer index and drops deleted rows from that rebuilt
 snapshot.
 
+## Concurrent Searches
+
+`QueryAdmission` bounds the searches in flight, across every index and cache in
+the process, to the number of cores, and admits waiting searches in the order
+they arrived. Past the core count searches contend for the same cores without
+any of them finishing sooner, so the bound gives up no throughput that was
+otherwise reachable, and arrival order keeps a search from losing its turn to one
+that arrived later. The bound is process-wide because the cores it rations are
+not divided between indexes.
+
+Keeping within the cores is sound practice on its own, and for some index
+implementations it is more than that. A native scorer may hold a per-thread
+resource whose supply its library fixes when the binary is built and does not
+check before using: OpenBLAS keeps one memory buffer per thread inside the
+library, and past that count its allocator faults rather than failing, so enough
+concurrent dense searches abort the process rather than merely slowing it down.
+The supply the shipped binaries are built with is above the core count on the
+machines tested, so a bound of the cores keeps them inside it.
+
 ## Configuration Validation
 
 A namespace validates its whole configuration before building any layer, so

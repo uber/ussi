@@ -14,8 +14,14 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Searches the shards of one structure and keeps the nearest rows across all of them.
  *
  * <p>Every shard is searched. A structure's rows are divided between its shards, so a shard left
- * out would take its rows out of the answer. What the thread budget decides is only how many
- * shards are searched at the same time.
+ * out would take its rows out of the answer.
+ *
+ * <p>A search hands off all of its shards at once rather than a few at a time, which is what keeps
+ * searches served in the order they arrived. The pool takes them in the order they were submitted,
+ * so a search that handed off part of its shards and came back for the rest would find a search that
+ * arrived later already queued in front of it. Handing them off together instead leaves the threads
+ * a search may use to the pool, which is sized to the cores and is therefore already the bound the
+ * budget would have applied.
  *
  * <p>Shards keep their own heaps and are merged at the end. Each therefore prunes using its own
  * k-th nearest row rather than the answer's.
@@ -28,10 +34,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class ShardFanOut {
 
   /**
-   * Threads for the shards a search hands off. Sized to the cores for the same reason {@link
-   * ScanSplit}'s pool is: searches are admitted up to the core count, and each divides the cores
-   * among its own shards. A structure hands off to one pool or the other and never to both, because
-   * the structures divided into shards are not the ones that divide the rows of a single search.
+   * Threads for the shards searches hand off. Sized to the cores, which is what the searches in
+   * flight demand together: searches are admitted up to the core count, and a search's shards are
+   * worth no more threads than that. A structure hands off to this pool or to {@link ScanSplit}'s
+   * and never to both, because the structures divided into shards are not the ones that divide the
+   * rows of a single search.
    */
   private static final ExecutorService SEARCHERS = createSearchers();
 
@@ -43,34 +50,24 @@ public final class ShardFanOut {
   }
 
   /**
-   * The nearest {@code maxResults} rows across {@code numShards} shards, searching {@code
-   * numShardsAtOnce} of them at the same time.
+   * The nearest {@code maxResults} rows across {@code numShards} shards.
    *
    * <p>The calling thread searches one of the shards it is waiting on. This uses the thread already
    * here, and it keeps the search moving when every pool thread is busy.
    */
   public static List<RowNumAndSimilarity> search(
-      int numShards, int numShardsAtOnce, int maxResults, ShardSearch shardSearch) {
+      int numShards, int maxResults, ShardSearch shardSearch) {
     BoundedSizeMaxHeap<RowNumAndSimilarity> nearestRowNums =
         new BoundedSizeMaxHeap<>(maxResults, RowNumAndSimilarity.TOP_RESULTS_HEAP_ORDER);
-    if (numShardsAtOnce <= 1) {
-      // Searched on the calling thread, so a search without threads to spare pays no hand-off.
-      for (int shard = 0; shard < numShards; shard++) {
-        nearestRowNums.addAll(shardSearch.search(shard));
-      }
-      return nearestRowNums.toList();
+    List<Future<List<RowNumAndSimilarity>>> handedOffShards = new ArrayList<>(numShards);
+    for (int shard = 1; shard < numShards; shard++) {
+      int handedOffShard = shard;
+      handedOffShards.add(SEARCHERS.submit(() -> shardSearch.search(handedOffShard)));
     }
-    for (int firstShard = 0; firstShard < numShards; firstShard += numShardsAtOnce) {
-      int afterLastShard = Math.min(numShards, firstShard + numShardsAtOnce);
-      List<Future<List<RowNumAndSimilarity>>> handedOffShards =
-          new ArrayList<>(afterLastShard - firstShard - 1);
-      for (int shard = firstShard + 1; shard < afterLastShard; shard++) {
-        int handedOffShard = shard;
-        handedOffShards.add(SEARCHERS.submit(() -> shardSearch.search(handedOffShard)));
-      }
-      nearestRowNums.addAll(shardSearch.search(firstShard));
-      addHandedOffShards(handedOffShards, nearestRowNums);
+    if (numShards > 0) {
+      nearestRowNums.addAll(shardSearch.search(0));
     }
+    addHandedOffShards(handedOffShards, nearestRowNums);
     return nearestRowNums.toList();
   }
 
@@ -92,13 +89,13 @@ public final class ShardFanOut {
         nearestRowNums.addAll(shard.get());
       } catch (InterruptedException e) {
         interrupted = true;
-        failure = failure != null ? failure : new IllegalStateException(searchFailed(), e);
+        failure = failure != null ? failure : new IllegalStateException(SEARCH_FAILED, e);
       } catch (ExecutionException e) {
         // A search of every shard in turn would have thrown this from the caller's thread.
         RuntimeException thrown =
             e.getCause() instanceof RuntimeException runtimeCause
                 ? runtimeCause
-                : new IllegalStateException(searchFailed(), e.getCause());
+                : new IllegalStateException(SEARCH_FAILED, e.getCause());
         failure = failure != null ? failure : thrown;
       }
     }
@@ -110,9 +107,7 @@ public final class ShardFanOut {
     }
   }
 
-  private static String searchFailed() {
-    return "Failed to search a shard of the structure.";
-  }
+  private static final String SEARCH_FAILED = "Failed to search a shard of the structure.";
 
   private static ExecutorService createSearchers() {
     AtomicInteger threadNumber = new AtomicInteger(1);

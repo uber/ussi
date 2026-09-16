@@ -59,16 +59,16 @@ public final class HybridIndex extends Index {
         signatureRows.put(entry.key, entry.value);
       }
     }
-    // Only the term child discards. What discarding buys is shorter inverted lists, and only the
-    // term child can collect it: a signature list holds one entry per row whatever that row's
-    // terms are, so discarding leaves the signature child's lists exactly as long and only moves
-    // the signatures its rows are keyed by.
+    // Only the term index discards. What discarding buys is shorter inverted lists, and only a
+    // term index can collect it: a signature list holds one entry per row whatever that row's
+    // terms are, so discarding leaves a signature index's lists exactly as long and only moves the
+    // signatures its rows are keyed by.
     LongHashSet discardedTerms =
         structureDiscardedTerms == null
             ? BaseInvertedIndex.discardedTermsOf(namespaceConfig, exactRows)
             : structureDiscardedTerms;
-    // The signature child is built first so a comparator without a generator is rejected before
-    // the term child is populated.
+    // The signature index is built first so a comparator without a generator is rejected before
+    // the term index is populated.
     this.signatureIndex =
         new SignatureIndex(namespaceConfig, signatureRows, rowNumToMetaMap, new LongHashSet());
     this.termIndex = new TermIndex(namespaceConfig, exactRows, rowNumToMetaMap, discardedTerms);

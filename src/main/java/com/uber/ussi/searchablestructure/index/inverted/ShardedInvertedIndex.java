@@ -19,10 +19,10 @@ import java.util.Objects;
 /**
  * An inverted index holding its rows in shards, each an inverted index over a share of them.
  *
- * <p>A search searches every shard and keeps the best rows across all of them, as many shards at a
- * time as the thread budget allows. Rows are divided by row number modulo the shard count, which
- * divides them evenly because row numbers are handed out in turn, and evenly is what makes the
- * shards cost the same to search.
+ * <p>A search searches every shard and keeps the nearest rows across all of them, handing them all
+ * off together so that searches stay served in the order they arrived. Rows are divided by row
+ * number modulo the shard count. Row numbers are handed out in turn, so this divides the rows
+ * evenly, and an even division is what makes the shards cost the same to search as each other.
  *
  * <p>Shards divide the whole of a search rather than a phase of one, which is what makes them worth
  * dividing along. They also make a search cheaper before any thread is involved: an inverted list
@@ -46,6 +46,10 @@ public final class ShardedInvertedIndex extends Index {
    *
    * <p>An index is built once from the rows it is given and never grows, so the count is settled at
    * build time and no index is ever converted from unsharded to sharded.
+   *
+   * <p>The value is conservative rather than measured. Sharding was measured to pay at around
+   * 60,000 rows per shard and to cost more than it returned at around 15,000, so this sits at the
+   * safe end of a range whose crossover has not been located.
    */
   public static final int MIN_NUM_ROWS_PER_SHARD = 50_000;
 
@@ -77,7 +81,7 @@ public final class ShardedInvertedIndex extends Index {
     List<Index> builtShards = new ArrayList<>(numShards);
     for (int shard = 0; shard < numShards; shard++) {
       // Every shard is handed the metadata of every row and keeps that of the rows it was given,
-      // exactly as the hybrid index hands the same metadata to both of its children.
+      // exactly as the hybrid index hands the same metadata to its term and signature indexes.
       builtShards.add(shardBuilder.build(rowsByShard.get(shard), rowNumToMetaMap, discardedTerms));
     }
     this.shards = List.copyOf(builtShards);
@@ -118,7 +122,6 @@ public final class ShardedInvertedIndex extends Index {
     int maxResults = Math.min(k, namespaceConfig.getMaxNumSimilarities());
     return ShardFanOut.search(
         shards.size(),
-        numShardsAtOnce(),
         maxResults,
         shard -> {
           Index index = shards.get(shard);
@@ -136,7 +139,6 @@ public final class ShardedInvertedIndex extends Index {
     }
     return ShardFanOut.search(
         shards.size(),
-        numShardsAtOnce(),
         namespaceConfig.getMaxNumSimilarities(),
         shard -> {
           Index index = shards.get(shard);
@@ -169,10 +171,6 @@ public final class ShardedInvertedIndex extends Index {
   /** The shard a row belongs to, which is where the row was put when the index was built. */
   private static int shardOf(long rowNum, int numShards) {
     return Math.floorMod(rowNum, numShards);
-  }
-
-  private int numShardsAtOnce() {
-    return Math.max(1, Math.min(shards.size(), searchParallelism()));
   }
 
   private List<LongObjectHashMap<LongTermsAndValues>> partitionRows(int numShards) {

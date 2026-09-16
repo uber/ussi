@@ -125,6 +125,10 @@ abstract class BaseInvertedIndex extends Index {
         popularTermDiscardScope == PopularTermDiscardScope.CANDIDATES_ONLY
             ? rowNumToTermsAndValuesMap
             : discardedTermFreeRows;
+    // The keys the lists are under are derived from the rows the popular terms are already gone
+    // from, which is the order the discard depends on: a term is discarded while it is still a
+    // term, so a structure keyed by signatures generates them from a row already stripped rather
+    // than dropping signatures it has generated. Nothing here counts the frequency of a key.
     this.indexedRowNumToTermsAndValuesMap = buildIndexedRows(discardedTermFreeRows);
     this.rowNumToUniValue = buildRowNumToUniValue(indexedRowNumToTermsAndValuesMap);
     this.keyToInvertedList = buildInvertedLists(indexedRowNumToTermsAndValuesMap);
@@ -473,6 +477,10 @@ abstract class BaseInvertedIndex extends Index {
    * Identifies the high-popularity terms to discard. The structure sees the complete dataset, so
    * observed popularity is true popularity: a term is discarded when it occurs in more than
    * floor(numRows * maxFractionIdsPerTerm) rows.
+   *
+   * <p>Counted over the terms of each row, never over the keys the rows are indexed under, so a
+   * frequent key is never discarded for being frequent. Where the keys are signatures they are
+   * generated afterwards, from the rows these terms have been removed from.
    */
   private static LongHashSet discardedTermsOf(
       LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,

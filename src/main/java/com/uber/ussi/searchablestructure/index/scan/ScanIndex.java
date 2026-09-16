@@ -3,13 +3,12 @@ package com.uber.ussi.searchablestructure.index.scan;
 
 import com.carrotsearch.hppc.LongHashSet;
 import com.carrotsearch.hppc.LongObjectHashMap;
-import com.carrotsearch.hppc.cursors.LongCursor;
-import com.carrotsearch.hppc.cursors.LongObjectCursor;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
+import com.uber.ussi.searchablestructure.ScanSplit;
 import com.uber.ussi.searchablestructure.index.Index;
 import com.uber.ussi.searchablestructure.index.MetadataFilteredSearchExecutor;
 import com.uber.ussi.searchablestructure.metadata.MetadataFilteringStrategy;
@@ -19,7 +18,7 @@ import java.util.List;
 import java.util.Objects;
 import javax.annotation.Nullable;
 
-/** Generic delete-only index implemented with a sequential scan search. */
+/** Generic delete-only index implemented with a full scan search. */
 public final class ScanIndex extends Index {
   private final MetadataFilteredSearchExecutor metadataFilteredSearchExecutor;
 
@@ -86,12 +85,19 @@ public final class ScanIndex extends Index {
       @Nullable MetaFilter metadataFilter,
       float minSimilarity,
       int maxResults) {
-    BoundedSizeMaxHeap<RowNumAndSimilarity> rows = createTopResultsHeap(maxResults);
-    for (LongObjectCursor<LongTermsAndValues> entry : rowNumToTermsAndValuesMap) {
-      addMatchingRow(
-          rows, entry.key, entry.value, requestTermsAndValues, metadataFilter, minSimilarity);
-    }
-    return rows.toList();
+    return ScanSplit.search(
+        rowNumToTermsAndValuesMap,
+        requestTermsAndValues,
+        searchParallelism(),
+        maxResults,
+        (rowNum, termsAndValues, rows) ->
+            addMatchingRow(
+                rows,
+                rowNum,
+                termsAndValues,
+                requestTermsAndValues,
+                metadataFilter,
+                minSimilarity));
   }
 
   private List<RowNumAndSimilarity> searchRowNums(
@@ -100,14 +106,19 @@ public final class ScanIndex extends Index {
       @Nullable MetaFilter metadataFilter,
       float minSimilarity,
       int maxResults) {
-    BoundedSizeMaxHeap<RowNumAndSimilarity> rows = createTopResultsHeap(maxResults);
-    for (LongCursor rowNum : rowNums) {
-      LongTermsAndValues termsAndValues =
-          Objects.requireNonNull(rowNumToTermsAndValuesMap.get(rowNum.value));
-      addMatchingRow(
-          rows, rowNum.value, termsAndValues, requestTermsAndValues, metadataFilter, minSimilarity);
-    }
-    return rows.toList();
+    return ScanSplit.searchCandidates(
+        rowNums,
+        requestTermsAndValues,
+        searchParallelism(),
+        maxResults,
+        (rowNum, rows) ->
+            addMatchingRow(
+                rows,
+                rowNum,
+                Objects.requireNonNull(rowNumToTermsAndValuesMap.get(rowNum)),
+                requestTermsAndValues,
+                metadataFilter,
+                minSimilarity));
   }
 
   private void addMatchingRow(

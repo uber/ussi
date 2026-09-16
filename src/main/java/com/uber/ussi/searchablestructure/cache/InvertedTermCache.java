@@ -11,6 +11,7 @@ import com.uber.ussi.config.NamespaceConfig.PopularTermDiscardScope;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
+import com.uber.ussi.searchablestructure.ScanSplit;
 import com.uber.ussi.searchablestructure.inverted.KeyAndPrefixFilteringData;
 import com.uber.ussi.searchablestructure.metadata.PreFilteringResult;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
@@ -159,18 +160,22 @@ public final class InvertedTermCache extends Cache {
 
   private List<RowNumAndSimilarity> bruteForceSearch(
       LongTermsAndValues query, LongHashSet matchingRowNums, float minSimilarity, int maxResults) {
-    BoundedSizeMaxHeap<RowNumAndSimilarity> rows = createTopResultsHeap(maxResults);
-    for (LongCursor rowNum : matchingRowNums) {
-      LongTermsAndValues verificationRow = getVerificationRow(rowNum.value);
-      if (verificationRow == null || !query.sharesAnyTerm(verificationRow)) {
-        continue;
-      }
-      float similarity = (float) comparator.getSimilarity(query, verificationRow, minSimilarity);
-      if (similarity >= minSimilarity) {
-        rows.add(new RowNumAndSimilarity(rowNum.value, similarity));
-      }
-    }
-    return rows.toList();
+    return ScanSplit.searchCandidates(
+        matchingRowNums,
+        query,
+        searchParallelism(),
+        maxResults,
+        (rowNum, rows) -> {
+          LongTermsAndValues verificationRow = getVerificationRow(rowNum);
+          if (verificationRow == null || !query.sharesAnyTerm(verificationRow)) {
+            return;
+          }
+          float similarity =
+              (float) comparator.getSimilarity(query, verificationRow, minSimilarity);
+          if (similarity >= minSimilarity) {
+            rows.add(new RowNumAndSimilarity(rowNum, similarity));
+          }
+        });
   }
 
   /**

@@ -18,9 +18,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  *
  * <p>A search hands off all of its shards at once rather than a few at a time, which is what keeps
  * searches served in the order they arrived. The pool takes them in the order they were submitted,
- * so a search that handed off part of its shards and came back for the rest would find a search that
- * arrived later already queued in front of it. Handing them off together instead leaves the threads
- * a search may use to the pool, which is sized to the cores and is therefore already the bound the
+ * so a search that handed off part of its shards and came back for the rest would find a search
+ * that arrived later already queued in front of it. Handing them off together leaves the threads a
+ * search may use to the pool, which is sized to the cores and is therefore already the bound the
  * budget would have applied.
  *
  * <p>Shards keep their own heaps and are merged at the end. Each therefore prunes using its own

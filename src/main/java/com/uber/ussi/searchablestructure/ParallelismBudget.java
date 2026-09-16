@@ -32,6 +32,8 @@ public final class ParallelismBudget {
   private final int maxThreadsPerSearch;
   private volatile int budget;
   private volatile IntConsumer onChange = threads -> {};
+  // Until an engine attaches there are no searches, so running a change inline is already exclusive.
+  private volatile Consumer<Runnable> exclusively = Runnable::run;
   private int attachments;
   @Nullable private ScheduledExecutorService rebudgeter;
 
@@ -52,10 +54,20 @@ public final class ParallelismBudget {
     return budget;
   }
 
-  /** Registers the holder of a process-global thread count. The last registration wins. */
+  /**
+   * Registers the holder of a process-global thread count and applies the current budget to it. The
+   * last registration wins.
+   *
+   * <p>Applied with no search in flight, because registration happens whenever a structure is built
+   * and a structure can be built while other searches are running. Such a setting is shared by every
+   * search in flight, so changing it underneath one is not safe.
+   */
   public void onChange(IntConsumer applier) {
-    this.onChange = applier;
-    applier.accept(budget);
+    exclusively.accept(
+        () -> {
+          this.onChange = applier;
+          applier.accept(budget);
+        });
   }
 
   /**
@@ -71,6 +83,7 @@ public final class ParallelismBudget {
     if (attachments++ > 0) {
       return;
     }
+    this.exclusively = exclusively;
     rebudgeter =
         Executors.newSingleThreadScheduledExecutor(
             runnable -> {
@@ -79,7 +92,7 @@ public final class ParallelismBudget {
               return thread;
             });
     rebudgeter.scheduleWithFixedDelay(
-        () -> update(concurrencySource.getAsInt(), exclusively),
+        () -> update(concurrencySource.getAsInt()),
         REBUDGET_INTERVAL_MILLIS,
         REBUDGET_INTERVAL_MILLIS,
         TimeUnit.MILLISECONDS);
@@ -111,12 +124,8 @@ public final class ParallelismBudget {
     return Math.max(1, maxThreadsPerSearch / Math.max(1, concurrency));
   }
 
-  /**
-   * Re-derives the budget from the concurrency just observed. A registered process-global thread
-   * count is changed through {@code exclusively}, which must run its argument with no search in
-   * flight, since such a setting cannot be changed underneath a search that is using it.
-   */
-  void update(int concurrency, Consumer<Runnable> exclusively) {
+  /** Re-derives the budget from the concurrency just observed. */
+  void update(int concurrency) {
     int updated = budgetFor(concurrency);
     if (updated == budget) {
       return;

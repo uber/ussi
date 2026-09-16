@@ -23,10 +23,10 @@ import java.util.function.IntSupplier;
  */
 public final class ParallelismBudget {
 
+  private static final long REBUDGET_INTERVAL_MILLIS = 1_000;
+
   private static final ParallelismBudget SHARED =
       new ParallelismBudget(Math.max(1, Runtime.getRuntime().availableProcessors()));
-
-  private static final long REBUDGET_INTERVAL_MILLIS = 1_000;
 
   private final int maxThreadsPerSearch;
   private volatile int budget;

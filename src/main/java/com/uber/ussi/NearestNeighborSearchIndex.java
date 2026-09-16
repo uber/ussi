@@ -12,6 +12,7 @@ import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.TermsAndValues;
+import com.uber.ussi.searchablestructure.ParallelismBudget;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.cache.Cache;
 import com.uber.ussi.searchablestructure.cache.CacheConfigValidator;
@@ -38,7 +39,15 @@ import javax.annotation.Nullable;
 
 /** Top-level memory-only USSI facade described by the ERD. */
 public final class NearestNeighborSearchIndex implements AutoCloseable {
+
   private static final int MAX_BACKGROUND_THREADS = 4;
+
+  static {
+    // Composition lives here: admission counts the searches and can quiet them, the budget decides
+    // what that concurrency is worth, and neither needs to know about the other.
+    ParallelismBudget.shared()
+        .attach(QueryAdmission.shared()::takePeakInFlight, QueryAdmission.shared()::runExclusively);
+  }
 
   private final NamespaceConfig namespaceConfig;
   private final List<Index> indexes;

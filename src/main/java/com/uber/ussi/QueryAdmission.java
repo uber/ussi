@@ -1,30 +1,24 @@
 /* AUTHOR: Ahmed Metwally (ametwally@uber.com) */
 package com.uber.ussi;
 
-import com.uber.ussi.searchablestructure.ParallelismBudget;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Bounds how many searches run at once and admits waiting searches in the order they arrived.
  *
- * <p>The bound is the core count. Beyond that, searches contend for the same cores without finishing
- * any sooner, and a native scorer may hold a per-thread resource whose count its library fixes at
- * build time, which it does not check before using.
+ * <p>The bound is the core count: beyond it searches contend for the same cores without any of them
+ * finishing sooner.
  *
  * <p>Admission is in arrival order so that a search does not lose its turn to one that arrived
  * later. Ordering is per search rather than per scored structure, so a search covering several
  * structures keeps its place for all of them.
  *
- * <p>Holding the permits also measures the concurrency that {@link ParallelismBudget} divides the
- * cores by, and draining them provides the quiet moment a process-global thread count needs in order
- * to change. The peak of an interval is used rather than the mean, because too much parallelism
- * costs far more than too little, and because it is stable enough that steady load does not keep
- * changing a setting that is expensive to change.
+ * <p>Holding the permits also makes two things available to whoever needs them: how many searches
+ * ran at once, and a moment with none running.
  *
- * <p>{@link #shared()} is process-wide rather than per index, because the resources it protects are
- * the machine's cores and a process-global native library, neither of which is divided between
- * indexes.
+ * <p>{@link #shared()} is process-wide rather than per index, because the cores it rations are not
+ * divided between indexes.
  */
 final class QueryAdmission {
 
@@ -34,10 +28,6 @@ final class QueryAdmission {
   private final int maxConcurrentSearches;
   private final Semaphore permits;
   private final AtomicInteger peakInFlight = new AtomicInteger();
-
-  static {
-    ParallelismBudget.shared().attach(SHARED::takePeakInFlight, SHARED::runExclusively);
-  }
 
   QueryAdmission(int maxConcurrentSearches) {
     if (maxConcurrentSearches < 1) {
@@ -92,7 +82,8 @@ final class QueryAdmission {
     return peakInFlight.getAndSet(inFlight());
   }
 
-  /** Runs the task with no search in flight. Admission is fair, so this is not starved. */
+  /** Runs the task with no search in flight. Admission is fair, so this waits for at most the
+   * searches already running. */
   void runExclusively(Runnable task) {
     permits.acquireUninterruptibly(maxConcurrentSearches);
     try {

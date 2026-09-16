@@ -83,11 +83,13 @@ final class QueryAdmission {
   /**
    * The most searches in flight at once since this was last called.
    *
-   * <p>Counts both the searches that started during the interval and those still running at the end
-   * of it, since a search outlasting the interval arrives in one and occupies every later one.
+   * <p>In flight only rises when a search is admitted, so sampling it on admission catches every
+   * peak within an interval. The next interval is seeded with what is in flight now, because a
+   * search outlasting its interval is already running when the next one opens and would otherwise go
+   * uncounted until it finished.
    */
   int takePeakInFlight() {
-    return Math.max(peakInFlight.getAndSet(0), inFlight());
+    return peakInFlight.getAndSet(inFlight());
   }
 
   /** Runs the task with no search in flight. Admission is fair, so this is not starved. */

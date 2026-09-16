@@ -42,13 +42,6 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
 
   private static final int MAX_BACKGROUND_THREADS = 4;
 
-  static {
-    // Composition lives here: admission counts the searches and can quiet them, the budget decides
-    // what that concurrency is worth, and neither needs to know about the other.
-    ParallelismBudget.shared()
-        .attach(QueryAdmission.shared()::takePeakInFlight, QueryAdmission.shared()::runExclusively);
-  }
-
   private final NamespaceConfig namespaceConfig;
   private final List<Index> indexes;
   private final List<Cache> graduatingCaches;
@@ -67,6 +60,7 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
   private long nextRowNum;
   private int nextStructureGeneration;
   private boolean consolidationInFlight;
+  private boolean closed;
 
   public NearestNeighborSearchIndex(NamespaceConfig namespaceConfig) {
     this(namespaceConfig, createBackgroundExecutor());
@@ -90,9 +84,14 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
     this.backgroundExecutor = Objects.requireNonNull(backgroundExecutor, "backgroundExecutor");
     this.lock = new ReentrantReadWriteLock();
     this.queryAdmission = QueryAdmission.shared();
+    // Composition lives here: admission counts the searches and can quiet them, the budget decides
+    // what that concurrency is worth, and neither needs to know about the other.
+    ParallelismBudget.shared()
+        .attach(queryAdmission::takePeakInFlight, queryAdmission::runExclusively);
     this.nextRowNum = 0;
     this.nextStructureGeneration = 0;
     this.consolidationInFlight = false;
+    this.closed = false;
   }
 
   public static NearestNeighborSearchIndex create(NamespaceConfig namespaceConfig) {
@@ -288,6 +287,11 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
   public void close() {
     lock.writeLock().lock();
     try {
+      if (closed) {
+        return;
+      }
+      closed = true;
+      ParallelismBudget.shared().detach();
       for (Index index : indexes) {
         index.close();
       }

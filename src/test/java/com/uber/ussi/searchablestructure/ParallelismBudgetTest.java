@@ -1,6 +1,7 @@
 package com.uber.ussi.searchablestructure;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -110,6 +111,49 @@ class ParallelismBudgetTest {
 
     assertEquals(List.of(), applied);
     assertEquals(List.of(), exclusiveCalls, "an unchanged budget must not quiesce the engine");
+  }
+
+  @Test
+  void rebudgetsWhileAtLeastOneEngineIsAttached() {
+    ParallelismBudget budget = new ParallelismBudget(CORES);
+
+    budget.attach(() -> 1, Runnable::run);
+    budget.attach(() -> 1, Runnable::run);
+
+    assertEquals(2, budget.attachments());
+    assertTrue(budget.isRebudgeting());
+
+    // One engine closing must not stop the other engine's budget.
+    budget.detach();
+
+    assertEquals(1, budget.attachments());
+    assertTrue(budget.isRebudgeting());
+
+    budget.detach();
+
+    assertEquals(0, budget.attachments());
+    assertFalse(budget.isRebudgeting(), "the last engine detaching stops the work");
+  }
+
+  @Test
+  void detachingMoreOftenThanAttachingDoesNothing() {
+    ParallelismBudget budget = new ParallelismBudget(CORES);
+
+    budget.detach();
+    budget.attach(() -> 1, Runnable::run);
+    budget.detach();
+    budget.detach();
+
+    assertEquals(0, budget.attachments());
+    assertFalse(budget.isRebudgeting());
+  }
+
+  @Test
+  void anUnattachedBudgetStaysAtItsFullValue() {
+    ParallelismBudget budget = new ParallelismBudget(CORES);
+
+    assertFalse(budget.isRebudgeting());
+    assertEquals(CORES, budget.budget());
   }
 
   @Test

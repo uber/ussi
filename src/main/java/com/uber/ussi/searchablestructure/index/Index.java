@@ -72,7 +72,7 @@ public abstract class Index implements SearchableStructure, AutoCloseable {
     return true;
   }
 
-  /** Hook invoked after a row is marked deleted so composite indexes can update child indexes. */
+  /** Hook invoked after a row is marked deleted, so an index built of others can update them. */
   protected void onRowDeleted(long rowNum) {}
 
   @Override

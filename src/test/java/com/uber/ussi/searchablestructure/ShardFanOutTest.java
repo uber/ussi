@@ -18,23 +18,16 @@ class ShardFanOutTest {
   private static final long SLOW_SHARD_MILLIS = 300;
 
   @Test
-  void keepsTheBestRowsAcrossShardsHoweverManyRunAtOnce() {
-    int[][] shardCountsAndWidths = {
-      {1, 1}, {1, 8}, {2, 1}, {2, 2}, {4, 1}, {4, 2}, {4, 4}, {4, 8},
-      {7, 3}, {16, 1}, {16, 5}, {16, 16}, {48, 6}, {48, 48},
-    };
-    for (int[] testCase : shardCountsAndWidths) {
-      int numShards = testCase[0];
-      int numShardsAtOnce = testCase[1];
-      String message = "numShards=" + numShards + " numShardsAtOnce=" + numShardsAtOnce;
+  void keepsTheNearestRowsAcrossEveryShard() {
+    for (int numShards : new int[] {1, 2, 4, 7, 16, 48}) {
+      String message = "numShards=" + numShards;
       for (int maxResults : new int[] {1, 3, 10}) {
-        List<RowNumAndSimilarity> keptRows =
-            ShardFanOut.search(
-                numShards, numShardsAtOnce, maxResults, shard -> rowsOfShard(shard, numShards));
+        List<RowNumAndSimilarity> keptRowNums =
+            ShardFanOut.search(numShards, maxResults, shard -> rowsOfShard(shard, numShards));
 
         assertEquals(
-            bestRowsOfAllShards(numShards, maxResults),
-            similaritiesOf(keptRows),
+            nearestRowNumsOfAllShards(numShards, maxResults),
+            similaritiesOf(keptRowNums),
             message + " maxResults=" + maxResults);
       }
     }
@@ -42,16 +35,11 @@ class ShardFanOutTest {
 
   @Test
   void searchesEveryShardExactlyOnce() {
-    int[][] shardCountsAndWidths = {{4, 2}, {16, 5}, {16, 1}, {48, 6}, {9, 9}};
-    for (int[] testCase : shardCountsAndWidths) {
-      int numShards = testCase[0];
-      int numShardsAtOnce = testCase[1];
-      String message = "numShards=" + numShards + " numShardsAtOnce=" + numShardsAtOnce;
+    for (int numShards : new int[] {4, 9, 16, 48}) {
       AtomicIntegerArray numSearchesByShard = new AtomicIntegerArray(numShards);
 
       ShardFanOut.search(
           numShards,
-          numShardsAtOnce,
           ROWS_PER_SHARD,
           shard -> {
             numSearchesByShard.incrementAndGet(shard);
@@ -59,39 +47,34 @@ class ShardFanOutTest {
           });
 
       for (int shard = 0; shard < numShards; shard++) {
-        assertEquals(1, numSearchesByShard.get(shard), message + " shard=" + shard);
+        assertEquals(
+            1, numSearchesByShard.get(shard), "numShards=" + numShards + " shard=" + shard);
       }
     }
   }
 
   @Test
   void holdsNothingWhenThereIsNoShardToSearch() {
-    assertTrue(ShardFanOut.search(0, 4, 10, shard -> rowsOfShard(shard, 1)).isEmpty());
+    assertTrue(ShardFanOut.search(0, 10, shard -> rowsOfShard(shard, 1)).isEmpty());
   }
 
   @Test
   void throwsWhatAShardThrew() {
-    for (int numShardsAtOnce : new int[] {1, 2, 8}) {
-      IllegalStateException thrown =
-          assertThrows(
-              IllegalStateException.class,
-              () ->
-                  ShardFanOut.search(
-                      8,
-                      numShardsAtOnce,
-                      ROWS_PER_SHARD,
-                      shard -> {
-                        if (shard == 5) {
-                          throw new IllegalStateException("shard five could not be searched");
-                        }
-                        return rowsOfShard(shard, 8);
-                      }));
+    IllegalStateException thrown =
+        assertThrows(
+            IllegalStateException.class,
+            () ->
+                ShardFanOut.search(
+                    8,
+                    ROWS_PER_SHARD,
+                    shard -> {
+                      if (shard == 5) {
+                        throw new IllegalStateException("shard five could not be searched");
+                      }
+                      return rowsOfShard(shard, 8);
+                    }));
 
-      assertEquals(
-          "shard five could not be searched",
-          thrown.getMessage(),
-          "numShardsAtOnce=" + numShardsAtOnce);
-    }
+    assertEquals("shard five could not be searched", thrown.getMessage());
   }
 
   @Test
@@ -108,7 +91,6 @@ class ShardFanOutTest {
         () ->
             ShardFanOut.search(
                 numShards,
-                8,
                 ROWS_PER_SHARD,
                 shard -> {
                   if (shard == 1) {
@@ -137,8 +119,8 @@ class ShardFanOutTest {
     return rows;
   }
 
-  /** The similarities a search of every shard in turn would have kept, best first. */
-  private static List<Float> bestRowsOfAllShards(int numShards, int maxResults) {
+  /** The similarities a search of every shard in turn would have kept, nearest first. */
+  private static List<Float> nearestRowNumsOfAllShards(int numShards, int maxResults) {
     List<Float> similarities = new ArrayList<>();
     for (int shard = 0; shard < numShards; shard++) {
       similarities.addAll(similaritiesOf(rowsOfShard(shard, numShards)));

@@ -104,11 +104,14 @@ where the first structure holding a row must be the current one.
 
 How much this saves depends on how many structures there are, since a floor needs
 somewhere to be spent. Measured over an inverted index with several structures, it
-cuts the candidates scored by about half and the inverted lists visited by rather
-more. With only the active cache and one index it saves nothing.
+cuts by about half the rows a search scores, and by rather more the per-key row
+lists it walks to find them. Those lists are the index's **inverted lists**, and
+a row it proposes for scoring is a **candidate**; Indexes and Candidate
+Generation describe both. With only the active cache and one index it saves
+nothing.
 
-The hybrid index already searched its own two children this way, and now takes a
-floor from its caller as well as raising one between them.
+The hybrid index already searched its own term index and signature index this
+way, and now takes a floor from its caller as well as raising one between them.
 
 The structures are visited one after another rather than at the same time.
 Their sizes differ by orders of magnitude, since an active cache is bounded by
@@ -513,15 +516,15 @@ exact.
 ### Hybrid Index
 
 `HybridIndex` combines a `TermIndex` and a `SignatureIndex`. During each build,
-rows with at most 270 terms go to the term child and longer rows to the
-signature child. The configured length range may
+rows with at most 270 terms go to its term index and longer rows to its
+signature index. The configured length range may
 fall entirely below, entirely above, or across this internal boundary.
 
-Queries search the child matching the query length first. Jaccard's cardinality
-bounds can skip the other child when no row on that side can reach the
+Queries search whichever of the two matches the query length first. Jaccard's
+cardinality bounds can skip the other when no row on that side can reach the
 search's current `minSimilarity`. Ruzicka and popularity-filtered searches
-conservatively search both children, because term count alone cannot prove one
-side irrelevant. Results from the searched children are merged and limited by
+conservatively search both, because term count alone cannot prove one side
+irrelevant. Results from the ones searched are merged and limited by
 `maxNumSimilarities`.
 
 The hybrid requires a comparator with a configured signature generator, which
@@ -532,8 +535,15 @@ rules out `l2` and any other comparator left without one.
 A **shard** is one of several smaller inverted indexes an inverted index is built
 as, each holding a disjoint share of the rows. `ShardedInvertedIndex` is the
 structure the engine sees. It searches every shard and keeps the nearest rows
-across all of them, searching as many shards at a time as `ParallelismBudget`
-allows.
+across all of them.
+
+A search hands off all of its shards at once rather than a few at a time, which
+is what keeps searches served in the order they arrived. The pool takes shards in
+the order they were submitted, so a search that handed off some of its shards and
+came back for the rest would find a search that arrived later already queued in
+front of it. Handing them off together leaves the threads a search may use to the
+pool, which is sized to the cores and is therefore already the bound
+`ParallelismBudget` would have applied.
 
 Rows are divided between shards by row number modulo the shard count. Row numbers
 are handed out in turn, so this divides the rows evenly, and an even division is
@@ -541,9 +551,10 @@ what makes the shards cost the same to search as each other.
 
 Shards divide the whole of a search rather than one phase of it, and that is what
 makes them worth dividing along. Dividing verification reaches only the phase
-that scores candidates. Dividing the query's keys between threads makes a row
-appearing under several of those keys be visited once per thread, whereas
-consolidating a row's keys into one visit is what the merge frontier exists for.
+that scores candidates. Dividing the query's keys between threads is worse than
+it appears: a row appearing under several of those keys is then visited once per
+thread that holds one of them, where a single thread walking all the keys
+together visits that row once.
 
 A shard also makes a search cheaper before any thread is involved. An inverted
 list grows with the rows in its index, and a search walks the lists of the
@@ -553,9 +564,9 @@ would. A sharded index is faster than an unsharded one even when searched by a
 single thread.
 
 That last property is what makes a fixed shard count workable. The count is
-settled when the index is built, whereas the budget varies with the load, so a
-search under load searches the same shards with fewer threads and cannot rebuild
-them to suit.
+settled when the index is built, whereas the threads available vary with the
+load, so a search under load searches the same shards with fewer threads and
+cannot rebuild them to suit.
 
 Against all of this, every shard costs a search a heap, a walk of the query's
 keys, and a seek into each of their lists. A search pays that cost per shard
@@ -566,6 +577,11 @@ until then. That minimum sizes the shard count of a small index; it does not
 switch sharding on and off. An index is built once from the rows it is given and
 never grows, so no index is ever converted from unsharded to sharded while it is
 being searched.
+
+The minimum is set at 50,000 rows, which is a conservative choice rather than a
+measured one. Sharding was measured to pay at around 60,000 rows per shard and to
+cost more than it returned at around 15,000, so the value sits at the safe end of
+a range whose crossover has not been located.
 
 Only the inverted indexes are sharded. A scan index already divides the rows of
 one search between threads, and a matrix index scored by OpenBLAS divides one
@@ -591,11 +607,12 @@ A shard left to measure for itself would find a term's share of its own rows
 rather than of the index's, and would discard terms the index keeps, so sharding
 an index would change what it finds.
 
-Inside a hybrid index, only the term child discards, and its popular terms are
-counted over the rows that child holds. What discarding buys is shorter inverted
-lists, and only the term child can collect it. A signature list holds one entry
-per row whatever that row's terms are, so discarding leaves the signature child's
-lists exactly as long and only moves the signatures its rows are keyed by. What a
+Inside a hybrid index, only its term index discards, and its popular terms are
+counted over the rows that term index holds. What discarding buys is shorter
+inverted lists, and only a term index can collect it. A signature list holds one
+entry per row whatever that row's terms are, so discarding leaves a signature
+index's lists exactly as long and only moves the signatures its rows are keyed
+by. What a
 discard means is
 `popular_term_discard_scope`, and the two settings differ in which half of the
 answer stays exact rather than in how aggressive they are.
@@ -670,8 +687,8 @@ similarity and no further comparison is needed. Signature keys carry no usable
 value, and a sequence's terms bound its similarity without determining it,
 so in both cases the merge generator scores each retained candidate with the
 comparator, exactly as the filtered scan does. `inverted_hybrid` applies the
-generator independently to each child, so its term child scores from the
-conjunction while its signature child verifies.
+generator independently to each of the two, so its term index scores from the
+conjunction while its signature index verifies.
 
 A comparator opts into the merge generator by implementing its conjunction
 hooks. Jaccard, Ruzicka, and L2 all do, so `spars_merge` is available for every

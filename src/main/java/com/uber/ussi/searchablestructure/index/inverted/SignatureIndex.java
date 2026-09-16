@@ -8,6 +8,7 @@ import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.index.IndexType;
 import java.util.Arrays;
+import javax.annotation.Nullable;
 
 /**
  * Approximate inverted index whose keys are similarity-preserving signatures rather than the terms
@@ -23,8 +24,21 @@ public final class SignatureIndex extends BaseInvertedIndex {
       NamespaceConfig namespaceConfig,
       LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
       LongObjectHashMap<LongMeta> rowNumToMetaMap) {
+    this(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap, null);
+  }
+
+  /** An index over part of a structure's rows, discarding the terms the structure found popular. */
+  public SignatureIndex(
+      NamespaceConfig namespaceConfig,
+      LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
+      LongObjectHashMap<LongMeta> rowNumToMetaMap,
+      @Nullable LongHashSet structureDiscardedTerms) {
     super(
-        namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap, IndexType.INVERTED_SIGNATURE);
+        namespaceConfig,
+        rowNumToTermsAndValuesMap,
+        rowNumToMetaMap,
+        IndexType.INVERTED_SIGNATURE,
+        structureDiscardedTerms);
   }
 
   @Override

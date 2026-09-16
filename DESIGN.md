@@ -199,9 +199,18 @@ Only a scan whose rows all score against the same threshold is split. A scan
 that raises its threshold as its heap fills prunes using what it has already
 scored, and parts each raising a threshold from their own heap would prune less
 than the whole scan does, so such a scan keeps its single heap and its pruning.
-The inverted index scores its candidates that way and is left alone. How much
-pruning splitting would cost there depends on the data rather than on the
-machine, so no measurement would settle it.
+The inverted index scores its candidates that way, so no part of one inverted
+search is divided between threads. How much pruning that would cost depends on
+the data rather than on the machine, so no measurement would settle it.
+
+An inverted index takes its threads a different way, by holding its rows in
+shards and searching several of them at once, each a search complete in itself
+with its own heap and its own pruning. That the shards prune independently is
+the same weakening described above, and it is paid for rather than avoided: a
+shard's lists are shorter than the whole index's in proportion to the rows it
+holds, so the shards together score fewer candidates than one undivided search
+would, which is a saving no division of a single search can offer. See Sharded
+Inverted Index.
 
 Whether to split at all is worth deciding, because a scan can be short enough
 that handing its parts out costs more than the scan. How finely to split is not,
@@ -516,11 +525,58 @@ side irrelevant. Results from the searched children are merged and limited by
 The hybrid requires a comparator with a configured signature generator, which
 rules out `l2` and any other comparator left without one.
 
+### Sharded Inverted Index
+
+An inverted index large enough holds its rows in shards, one per core, each an
+inverted index of its own over a share of the rows. `ShardedInvertedIndex` is
+the structure the engine sees, and it searches every shard and keeps the best
+rows across all of them, as many shards at a time as `ParallelismBudget` allows.
+Rows are divided by row number modulo the shard count, which divides them evenly
+because row numbers are handed out in turn, and evenly is what makes the shards
+cost the same to search.
+
+Shards divide the whole of a search rather than a phase of one, which is what
+makes them the axis worth dividing along. Dividing verification alone reaches
+only the part of a search that scores candidates, and dividing the query's keys
+between threads makes a row appearing under several of them be visited once per
+thread, where consolidating a row's keys into one visit is what the merge
+frontier exists for.
+
+A shard also makes a search cheaper before any thread is involved. An inverted
+list grows with the rows in its index, and a search walks the lists of the
+query's keys, so a shard holding a fraction of the rows has lists shorter by
+that fraction and the shards together do less work than the whole would. A
+sharded index is therefore faster than an unsharded one even given a single
+thread, which matters because the shard count is fixed when the index is built
+while the budget is not: a search under load searches the same shards on fewer
+threads, in waves, and cannot rebuild them.
+
+Against that, every shard costs a search a heap, a walk of the query's keys and
+a seek into each of their lists, whatever threads the search has. That cost is
+per shard and does not shrink with the shard, so it bounds the shard count from
+above, and a shard must be able to hold a minimum number of rows before the
+index is divided that finely. A small index is left whole.
+
+Only the inverted indexes are sharded. A scan index divides the rows of one
+search between threads already, and a matrix index divides one search inside its
+native scorer, both off the same budget, so a shard on top of either would divide
+rows already being divided and spend threads the budget has already promised.
+
+The rows a sharded index returns are the rows its caller inserted. A shard holds
+a subset of the rows and never a renumbering of them, so no caller can tell the
+shards are there.
+
 ## Discarding Popular Terms
 
 A term occurring in most rows generates most of the index as candidates without
 narrowing anything down, so both the inverted cache and the inverted indexes
-can discard terms above a configured popularity. What a discard means is
+can discard terms above a configured popularity. Popularity is measured over the
+whole structure and never over a part of one: an index divided into shards, and a
+hybrid index divided into its two halves, find the popular terms once over all
+their rows and hand the same terms to every part. A part left to measure for
+itself would find a term's share of its own rows rather than of the structure's,
+and would discard terms the structure keeps, so dividing a structure would change
+what it finds. What a discard means is
 `popular_term_discard_scope`, and the two settings differ in which half of the
 answer stays exact rather than in how aggressive they are.
 

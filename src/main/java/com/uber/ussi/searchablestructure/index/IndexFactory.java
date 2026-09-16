@@ -78,8 +78,10 @@ public final class IndexFactory {
    * Shards to build {@code numRows} into, which is more than one only for the inverted indexes.
    *
    * <p>A scan index already divides the rows of one search between threads, and a matrix index
-   * already divides one search inside its native scorer, both off the same budget. A shard on top
-   * of either would divide rows already being divided and spend threads the budget has promised.
+   * scored by OpenBLAS divides one search inside that scorer, both drawing on the same budget. A
+   * shard on top of either would divide rows already divided and spend threads the budget has
+   * promised elsewhere. A matrix index scored by the pure-Java scorer divides nothing and draws
+   * nothing from the budget, so sharding it is unexplored rather than ruled out.
    */
   private static int numShardsFor(IndexType indexType, int numRows) {
     return switch (indexType) {

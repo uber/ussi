@@ -7,11 +7,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerArray;
 import org.junit.jupiter.api.Test;
 
 class ShardFanOutTest {
   private static final int ROWS_PER_SHARD = 5;
+
+  /** Long enough that a search returning on a failure would return while a shard still ran. */
+  private static final long SLOW_SHARD_MILLIS = 300;
 
   @Test
   void keepsTheBestRowsAcrossShardsHoweverManyRunAtOnce() {
@@ -88,6 +92,39 @@ class ShardFanOutTest {
           thrown.getMessage(),
           "numShardsAtOnce=" + numShardsAtOnce);
     }
+  }
+
+  @Test
+  void leavesNoShardStillRunningWhenAShardFails() {
+    // The caller searches under a read lock that keeps writers off the shards, so a shard still
+    // reading after the search has thrown would be reading a structure nothing is protecting. The
+    // shard that fails does so at once while the others take their time, so a search that returned
+    // on the failure would return while they were still reading.
+    int numShards = 16;
+    AtomicInteger numShardsRunning = new AtomicInteger();
+
+    assertThrows(
+        IllegalStateException.class,
+        () ->
+            ShardFanOut.search(
+                numShards,
+                8,
+                ROWS_PER_SHARD,
+                shard -> {
+                  if (shard == 1) {
+                    throw new IllegalStateException("the first handed-off shard failed");
+                  }
+                  numShardsRunning.incrementAndGet();
+                  try {
+                    Thread.sleep(SLOW_SHARD_MILLIS);
+                  } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                  }
+                  numShardsRunning.decrementAndGet();
+                  return rowsOfShard(shard, numShards);
+                }));
+
+    assertEquals(0, numShardsRunning.get(), "every shard finished before the search returned");
   }
 
   /** Rows of one shard, scored so that no two shards hold a row scoring the same. */

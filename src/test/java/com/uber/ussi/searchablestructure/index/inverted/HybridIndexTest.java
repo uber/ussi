@@ -191,12 +191,12 @@ class HybridIndexTest {
     assertArrayEquals(
         new long[] {1},
         index.getExactDiscardedTermsForTests(),
-        "the exact half discards the term popular among the rows it holds");
+        "the term child discards the term popular among the rows it holds");
     assertArrayEquals(
         new long[0],
         index.getSignatureDiscardedTermsForTests(),
-        "the signature half discards nothing, since a signature list holds one entry per row"
-            + " whatever its terms");
+        "the signature child discards nothing, since a signature list holds one entry per row"
+            + " whatever that row's terms are");
   }
 
   @Test

@@ -77,7 +77,7 @@ public final class ShardedInvertedIndex extends Index {
     List<Index> builtShards = new ArrayList<>(numShards);
     for (int shard = 0; shard < numShards; shard++) {
       // Every shard is handed the metadata of every row and keeps that of the rows it was given,
-      // exactly as the hybrid index hands the same metadata to both of its halves.
+      // exactly as the hybrid index hands the same metadata to both of its children.
       builtShards.add(shardBuilder.build(rowsByShard.get(shard), rowNumToMetaMap, discardedTerms));
     }
     this.shards = List.copyOf(builtShards);

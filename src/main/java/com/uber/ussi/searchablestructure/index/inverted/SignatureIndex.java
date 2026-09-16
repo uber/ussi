@@ -15,11 +15,11 @@ import javax.annotation.Nullable;
  * they were generated from, so sharing a key says nothing about the values behind it and every
  * candidate's similarity has to be verified through the comparator.
  *
- * <p>Popular terms are discarded while they are still terms: the signatures of a row are generated
- * from the row the discarded terms have already been removed from, so a discard moves a row's
- * signatures rather than removing any. No signature is discarded for appearing in many rows, since
- * signatures collide at a rate tracking the similarity of the records behind them and a frequent
- * signature therefore reports a similarity worth keeping.
+ * <p>Popular terms are discarded while they are still terms. A row's signatures are generated from
+ * the row those terms have already been removed from, so a discard moves a row's signatures rather
+ * than removing any of them. No signature is discarded for appearing in many rows: signatures
+ * collide at a rate tracking the similarity of the records behind them, so a frequent signature
+ * reports a similarity worth keeping.
  */
 public final class SignatureIndex extends BaseInvertedIndex {
 

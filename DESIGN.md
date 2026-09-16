@@ -267,6 +267,15 @@ The dense scorer tries OpenBLAS on supported Linux and macOS platforms and
 falls back to the Java scorer when OpenBLAS cannot be loaded.
 `NearestNeighborSearchIndex.close()` releases any native dense-matrix memory.
 
+Scoring several waiting queries in one matrix-matrix multiply was benchmarked on
+x86-64 and ARM64 and not adopted. The appeal is that a batch reads the matrix
+once for all of its queries rather than once for each, but the library first
+copies the matrix into packed buffers, a cost set by the size of the matrix
+rather than the size of the batch, so a small batch pays it for almost no reuse.
+Batches large enough to amortize that copy are bound by arithmetic rather than by
+memory, so the remaining gain is throughput taken out of tail latency, and it
+only appears at loads well past the core count.
+
 ### Term Index
 
 `TermIndex` is delete-only and keys its inverted lists by canonicalized terms,

@@ -99,6 +99,54 @@ class QueryAdmissionTest {
     assertEquals(arrivalOrder, List.copyOf(admissionOrder));
   }
 
+  @Test
+  void reportsThePeakInFlightAndThenForgetsIt() {
+    QueryAdmission admission = new QueryAdmission(4);
+    admission.acquire();
+    admission.acquire();
+    admission.acquire();
+
+    // Dropping to one and rising again to two must not lower the peak: it is the high-water mark of
+    // the interval, not the latest reading.
+    admission.release();
+    admission.release();
+    admission.acquire();
+    admission.release();
+    admission.release();
+
+    assertEquals(3, admission.takePeakInFlight());
+    assertEquals(0, admission.takePeakInFlight(), "the peak covers one interval only");
+  }
+
+  @Test
+  void runsExclusivelyOnlyWithNoSearchInFlight() throws Exception {
+    QueryAdmission admission = new QueryAdmission(2);
+    admission.acquire();
+
+    ConcurrentLinkedQueue<String> events = new ConcurrentLinkedQueue<>();
+    CountDownLatch ran = new CountDownLatch(1);
+    Thread exclusive =
+        new Thread(
+            () -> {
+              admission.runExclusively(() -> events.add("ran with inFlight=" + admission.inFlight()));
+              ran.countDown();
+            });
+    exclusive.setDaemon(true);
+    exclusive.start();
+    try {
+      awaitWaiting(admission, 1, () -> ran.getCount() == 0);
+
+      assertEquals(1, ran.getCount(), "exclusive work must wait for the search in flight");
+
+      admission.release();
+      ran.await();
+
+      assertEquals(List.of("ran with inFlight=2"), List.copyOf(events));
+    } finally {
+      exclusive.join();
+    }
+  }
+
   /**
    * A search arriving while another is already waiting must not overtake it. This is distinct from
    * the ordering above: waiting searches are woken in turn regardless, and it is only a newly

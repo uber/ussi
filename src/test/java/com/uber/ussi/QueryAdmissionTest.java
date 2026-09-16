@@ -135,7 +135,9 @@ class QueryAdmissionTest {
     admission.release();
     admission.release();
 
-    assertEquals(0, admission.takePeakInFlight(), "once finished they stop counting");
+    // They were running when this interval opened, so its peak is still three.
+    assertEquals(3, admission.takePeakInFlight(), "the interval they finished in still sees them");
+    assertEquals(0, admission.takePeakInFlight(), "the interval after they finish sees none");
   }
 
   @Test

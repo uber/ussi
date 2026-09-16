@@ -4,11 +4,13 @@ package com.uber.ussi.searchablestructure.index.matrix;
 import static org.bytedeco.openblas.global.openblas.CblasNoTrans;
 import static org.bytedeco.openblas.global.openblas.CblasRowMajor;
 
+import com.uber.ussi.searchablestructure.ParallelismBudget;
 import com.uber.ussi.utils.Utils;
 import java.util.function.BooleanSupplier;
 import java.util.function.IntConsumer;
 import org.bytedeco.javacpp.FloatPointer;
 import org.bytedeco.openblas.global.openblas;
+import org.bytedeco.openblas.presets.CachedBlasThreadCountSetter;
 import org.bytedeco.openblas.presets.openblas_nolapack;
 
 /** JNI-backed OpenBLAS dense matrix-vector dot-product scorer. */
@@ -19,7 +21,7 @@ final class OpenBlasMatrixDotProductScorer implements MatrixDotProductScorer {
   static FloatPointerArrayReader floatPointerArrayReader = FloatPointer::get;
   static SgemvOperation sgemvOperation = openblas::cblas_sgemv;
   static Runnable blasNativeLoadProbe = openblas_nolapack::blas_get_num_threads;
-  static IntConsumer blasThreadCountSetter = openblas_nolapack::blas_set_num_threads;
+  static IntConsumer blasThreadCountSetter = CachedBlasThreadCountSetter::setNumThreads;
 
   // One entry per native binary carried as a runtime dependency; isAvailable still probes the load.
   private static final boolean IS_SUPPORTED_PLATFORM =
@@ -27,8 +29,6 @@ final class OpenBlasMatrixDotProductScorer implements MatrixDotProductScorer {
           || (Utils.isRunningOnLinux() && Utils.isRunningOnX86())
           || (Utils.isRunningOnMacOs() && Utils.isRunningOnArm())
           || (Utils.isRunningOnMacOs() && Utils.isRunningOnX86());
-  private static final int GEMV_NUM_THREADS =
-      Math.max(1, Runtime.getRuntime().availableProcessors());
 
   private final FloatPointer nativeMatrix;
   private final int numRows;
@@ -41,9 +41,10 @@ final class OpenBlasMatrixDotProductScorer implements MatrixDotProductScorer {
     if (!availabilitySupplier.getAsBoolean()) {
       throw new IllegalStateException("OpenBLAS is not available on this platform.");
     }
-    // The count is process-global to OpenBLAS and rebuilds its thread pool, so it is set here
-    // rather than per score, where it would cost orders of magnitude more than the gemv itself.
-    blasThreadCountSetter.accept(GEMV_NUM_THREADS);
+    // The count is process-global to OpenBLAS and rebuilds its thread pool, so it cannot be chosen
+    // per score, where it would cost orders of magnitude more than the gemv itself. The budget
+    // applies it instead, whenever the search concurrency changes.
+    ParallelismBudget.shared().onChange(blasThreadCountSetter::accept);
     this.nativeMatrix = floatArrayPointerFactory.create(rowMajorValues);
     this.numRows = numRows;
     this.dimension = dimension;

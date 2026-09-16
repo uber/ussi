@@ -1,7 +1,9 @@
 /* AUTHOR: Ahmed Metwally (ametwally@uber.com) */
 package com.uber.ussi;
 
+import com.uber.ussi.searchablestructure.ParallelismBudget;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Bounds how many searches run at once and admits waiting searches in the order they arrived.
@@ -14,6 +16,12 @@ import java.util.concurrent.Semaphore;
  * later. Ordering is per search rather than per scored structure, so a search covering several
  * structures keeps its place for all of them.
  *
+ * <p>Holding the permits also measures the concurrency that {@link ParallelismBudget} divides the
+ * cores by, and draining them provides the quiet moment a process-global thread count needs in order
+ * to change. The peak of an interval is used rather than the mean, because too much parallelism
+ * costs far more than too little, and because it is stable enough that steady load does not keep
+ * changing a setting that is expensive to change.
+ *
  * <p>{@link #shared()} is process-wide rather than per index, because the resources it protects are
  * the machine's cores and a process-global native library, neither of which is divided between
  * indexes.
@@ -25,6 +33,11 @@ final class QueryAdmission {
 
   private final int maxConcurrentSearches;
   private final Semaphore permits;
+  private final AtomicInteger peakInFlight = new AtomicInteger();
+
+  static {
+    ParallelismBudget.shared().attach(SHARED::takePeakInFlight, SHARED::runExclusively);
+  }
 
   QueryAdmission(int maxConcurrentSearches) {
     if (maxConcurrentSearches < 1) {
@@ -46,6 +59,7 @@ final class QueryAdmission {
       Thread.currentThread().interrupt();
       throw new IllegalStateException("Interrupted while waiting to run a search.", e);
     }
+    peakInFlight.accumulateAndGet(inFlight(), Math::max);
   }
 
   void release() {
@@ -64,5 +78,20 @@ final class QueryAdmission {
   /** Searches waiting for a turn. An estimate, used to observe that the bound is holding. */
   int waiting() {
     return permits.getQueueLength();
+  }
+
+  /** The most searches in flight at once since this was last called. */
+  int takePeakInFlight() {
+    return peakInFlight.getAndSet(0);
+  }
+
+  /** Runs the task with no search in flight. Admission is fair, so this is not starved. */
+  void runExclusively(Runnable task) {
+    permits.acquireUninterruptibly(maxConcurrentSearches);
+    try {
+      task.run();
+    } finally {
+      permits.release(maxConcurrentSearches);
+    }
   }
 }

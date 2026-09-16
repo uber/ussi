@@ -80,9 +80,14 @@ final class QueryAdmission {
     return permits.getQueueLength();
   }
 
-  /** The most searches in flight at once since this was last called. */
+  /**
+   * The most searches in flight at once since this was last called.
+   *
+   * <p>Counts both the searches that started during the interval and those still running at the end
+   * of it, since a search outlasting the interval arrives in one and occupies every later one.
+   */
   int takePeakInFlight() {
-    return peakInFlight.getAndSet(0);
+    return Math.max(peakInFlight.getAndSet(0), inFlight());
   }
 
   /** Runs the task with no search in flight. Admission is fair, so this is not starved. */

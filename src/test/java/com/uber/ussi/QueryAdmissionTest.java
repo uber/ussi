@@ -119,6 +119,26 @@ class QueryAdmissionTest {
   }
 
   @Test
+  void countsASearchStillRunningFromAnEarlierInterval() {
+    QueryAdmission admission = new QueryAdmission(8);
+    admission.acquire();
+    admission.acquire();
+    admission.acquire();
+
+    assertEquals(3, admission.takePeakInFlight(), "the interval they started in sees them");
+
+    // A search can outlast the interval it arrived in, so later intervals must still count it
+    // rather than concluding the engine is idle and handing out every core.
+    assertEquals(3, admission.takePeakInFlight(), "later intervals still see them");
+
+    admission.release();
+    admission.release();
+    admission.release();
+
+    assertEquals(0, admission.takePeakInFlight(), "once finished they stop counting");
+  }
+
+  @Test
   void runsExclusivelyOnlyWithNoSearchInFlight() throws Exception {
     QueryAdmission admission = new QueryAdmission(2);
     admission.acquire();

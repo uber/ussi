@@ -177,12 +177,12 @@ abstract class BaseInvertedIndex extends Index {
 
   @Override
   public final List<RowNumAndSimilarity> getNearestNeighborRowNums(
-      int k, LongTermsAndValues record, MetaFilter metadataFilter) {
+      int k, LongTermsAndValues record, MetaFilter metadataFilter, float minSimilarity) {
     if (k <= 0) {
       throw new IllegalArgumentException("k must be greater than 0.");
     }
     int numResults = Math.min(k, namespaceConfig.getMaxNumSimilarities());
-    return search(record, metadataFilter, /* minSimilarity */ 0.0f, numResults);
+    return search(record, metadataFilter, minSimilarity, numResults);
   }
 
   @Override

@@ -79,6 +79,47 @@ results, accumulated in a `BoundedSizeMaxHeap`. A threshold search is
 therefore a **capped range query**, returning the best `maxNumSimilarities`
 rows meeting the threshold rather than every row that meets it.
 
+### Searching Several Structures
+
+A query visits the active cache, the graduating caches, and the indexes, and
+merges what they return. Each is told the weakest score the answer already
+holds enough of, and may decline to score any row beneath it: once the merge
+holds its full complement of results, a weaker row cannot reach the answer, so
+scoring it is wasted work. That floor starts at whatever the caller asked for,
+rises as structures return results, and never falls, which is what lets a
+structure treat it as a bound rather than a hint. It sits one step below the
+weakest result held, so a row scoring exactly as well still qualifies. Passing
+it costs nothing to add, because every structure already prunes on a floor to
+answer a threshold search; a nearest-neighbour search used to pass zero.
+
+Order therefore matters, and the structures are visited oldest first. Caches
+graduate at one size and older indexes are consolidated into larger ones, so the
+oldest structure holds the most rows and is the likeliest to hold the answer's
+best; raising the floor there is what every structure after it spends. The active
+cache holds the newest rows, which have no reason to be the best matches, so it
+is searched last. Ordering this way is free rather than a trade: an update
+deletes a row before re-inserting it, so one structure holds any given row and no
+order can change the version a search finds. Deletes still scan newest first,
+where the first structure holding a row must be the current one.
+
+How much this saves depends on how many structures there are, since a floor needs
+somewhere to be spent. Measured over an inverted index with several structures, it
+cuts the candidates scored by about half and the inverted lists visited by rather
+more. With only the active cache and one index it saves nothing.
+
+The hybrid index already searched its own two children this way, and now takes a
+floor from its caller as well as raising one between them.
+
+The structures are visited one after another rather than at the same time.
+Their sizes differ by orders of magnitude, since an active cache is bounded by
+`maxCacheSize` while a consolidated index holds everything that has graduated,
+so the largest search decides the latency whether or not the others run beside
+it, and threads spent on the small ones would buy nearly nothing. Visiting them
+in turn buys something the other arrangement cannot: searches running at the
+same time cannot narrow one another, because neither has results yet. Splitting
+a single structure's own search is a separate question, answered in [Threads
+Within One Search](#threads-within-one-search).
+
 The top-level index uses a single read/write lock. Searches run under the read
 lock and mutations under the write lock. Background builds snapshot under the
 read lock, build outside the lock, and take the write lock only for the final

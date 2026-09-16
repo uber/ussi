@@ -53,7 +53,7 @@ public final class HybridIndex extends Index {
 
   @Override
   public List<RowNumAndSimilarity> getNearestNeighborRowNums(
-      int k, LongTermsAndValues record, MetaFilter metadataFilter) {
+      int k, LongTermsAndValues record, MetaFilter metadataFilter, float minSimilarity) {
     if (k <= 0) {
       throw new IllegalArgumentException("k must be greater than 0.");
     }
@@ -66,15 +66,23 @@ public final class HybridIndex extends Index {
     List<RowNumAndSimilarity> firstResults =
         firstIndex.size() == 0
             ? List.of()
-            : firstIndex.getNearestNeighborRowNums(maxResults, record, metadataFilter);
+            : firstIndex.getNearestNeighborRowNums(
+                maxResults, record, metadataFilter, minSimilarity);
     List<RowNumAndSimilarity> secondResults = List.of();
     if (secondIndex.size() > 0) {
       if (firstResults.size() < maxResults) {
-        secondResults = secondIndex.getNearestNeighborRowNums(maxResults, record, metadataFilter);
+        secondResults =
+            secondIndex.getNearestNeighborRowNums(
+                maxResults, record, metadataFilter, minSimilarity);
       } else {
-        float minSimilarity = getConservativeMinSimilarity(firstResults);
-        if (maySearchIndex(secondIndexIsExact, record, minSimilarity)) {
-          secondResults = secondIndex.getSimilarRowNums(minSimilarity, record, metadataFilter);
+        // The second index need not score a row the first index already beats k times over. Asked
+        // for its own best few above that floor, it also raises a floor of its own as it goes.
+        float secondFloor =
+            Math.max(minSimilarity, getConservativeMinSimilarity(firstResults));
+        if (maySearchIndex(secondIndexIsExact, record, secondFloor)) {
+          secondResults =
+              secondIndex.getNearestNeighborRowNums(
+                  maxResults, record, metadataFilter, secondFloor);
         }
       }
     }

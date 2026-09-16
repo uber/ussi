@@ -103,7 +103,7 @@ public abstract class Index implements SearchableStructure, AutoCloseable {
 
   @Override
   public abstract List<RowNumAndSimilarity> getNearestNeighborRowNums(
-      int k, LongTermsAndValues record, MetaFilter metadataFilter);
+      int k, LongTermsAndValues record, MetaFilter metadataFilter, float minSimilarity);
 
   @Override
   public abstract List<RowNumAndSimilarity> getSimilarRowNums(

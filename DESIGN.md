@@ -203,14 +203,16 @@ The inverted index scores its candidates that way, so no part of one inverted
 search is divided between threads. How much pruning that would cost depends on
 the data rather than on the machine, so no measurement would settle it.
 
-An inverted index takes its threads a different way, by holding its rows in
-shards and searching several of them at once, each a search complete in itself
-with its own heap and its own pruning. That the shards prune independently is
-the same weakening described above, and it is paid for rather than avoided: a
-shard's lists are shorter than the whole index's in proportion to the rows it
-holds, so the shards together score fewer candidates than one undivided search
-would, which is a saving no division of a single search can offer. See Sharded
-Inverted Index.
+An inverted index takes its threads another way. It is built as several smaller
+inverted indexes, called shards, each holding a disjoint share of its rows. A
+search searches several shards at the same time, and each shard search is
+complete in itself, with its own heap and its own pruning.
+
+Shards prune independently, which is the weakening described above. Here it is
+paid for rather than avoided. A shard's inverted lists are shorter than an
+undivided index's, in proportion to the rows the shard holds, so the shards
+together score fewer candidates than one undivided search would. Dividing a
+single search offers no such saving. See Sharded Inverted Index.
 
 Whether to split at all is worth deciding, because a scan can be short enough
 that handing its parts out costs more than the scan. How finely to split is not,
@@ -527,47 +529,56 @@ rules out `l2` and any other comparator left without one.
 
 ### Sharded Inverted Index
 
-An inverted index holds its rows in shards, one per core, each an inverted index
-of its own over a share of the rows. `ShardedInvertedIndex` is the structure the
-engine sees, and it searches every shard and keeps the best rows across all of
-them, as many shards at a time as `ParallelismBudget` allows. Rows are divided by
-row number modulo the shard count, which divides them evenly because row numbers
-are handed out in turn, and evenly is what makes the shards cost the same to
-search.
+A **shard** is one of several smaller inverted indexes an inverted index is built
+as, each holding a disjoint share of the rows. `ShardedInvertedIndex` is the
+structure the engine sees. It searches every shard and keeps the nearest rows
+across all of them, searching as many shards at a time as `ParallelismBudget`
+allows.
 
-Shards divide the whole of a search rather than a phase of one, which is what
-makes them the axis worth dividing along. Dividing verification alone reaches
-only the part of a search that scores candidates, and dividing the query's keys
-between threads makes a row appearing under several of them be visited once per
-thread, where consolidating a row's keys into one visit is what the merge
-frontier exists for.
+Rows are divided between shards by row number modulo the shard count. Row numbers
+are handed out in turn, so this divides the rows evenly, and an even division is
+what makes the shards cost the same to search as each other.
+
+Shards divide the whole of a search rather than one phase of it, and that is what
+makes them worth dividing along. Dividing verification reaches only the phase
+that scores candidates. Dividing the query's keys between threads makes a row
+appearing under several of those keys be visited once per thread, whereas
+consolidating a row's keys into one visit is what the merge frontier exists for.
 
 A shard also makes a search cheaper before any thread is involved. An inverted
 list grows with the rows in its index, and a search walks the lists of the
-query's keys, so a shard holding a fraction of the rows has lists shorter by
-that fraction and the shards together do less work than the whole would. A
-sharded index is therefore faster than an unsharded one even given a single
-thread, which matters because the shard count is fixed when the index is built
-while the budget is not: a search under load searches the same shards on fewer
-threads, in waves, and cannot rebuild them.
+query's keys. A shard holding a share of the rows therefore has lists shorter by
+that share, and the shards together walk less of them than an undivided index
+would. A sharded index is faster than an unsharded one even when searched by a
+single thread.
 
-Against that, every shard costs a search a heap, a walk of the query's keys and
-a seek into each of their lists, whatever threads the search has. That cost is
-per shard and does not shrink with the shard, so it bounds the shard count from
-above: an index takes one shard per core only once every shard has a minimum
-number of rows to hold, and fewer shards while they have not. That minimum sizes
-the count rather than switching sharding on and off, and an index is built once
-from the rows it is given and never grows, so the count is settled at build time
-and no index is converted from unsharded to sharded while it is being searched.
+That last property is what makes a fixed shard count workable. The count is
+settled when the index is built, whereas the budget varies with the load, so a
+search under load searches the same shards with fewer threads and cannot rebuild
+them to suit.
 
-Only the inverted indexes are sharded. A scan index divides the rows of one
-search between threads already, and a matrix index divides one search inside its
-native scorer, both off the same budget, so a shard on top of either would divide
-rows already being divided and spend threads the budget has already promised.
+Against all of this, every shard costs a search a heap, a walk of the query's
+keys, and a seek into each of their lists. A search pays that cost per shard
+whatever threads it has, and the cost does not shrink as the shard does. It is
+therefore what bounds the shard count: an index takes one shard per core only
+once every shard would have a minimum number of rows to hold, and fewer shards
+until then. That minimum sizes the shard count of a small index; it does not
+switch sharding on and off. An index is built once from the rows it is given and
+never grows, so no index is ever converted from unsharded to sharded while it is
+being searched.
 
-The rows a sharded index returns are the rows its caller inserted. A shard holds
-a subset of the rows and never a renumbering of them, so no caller can tell the
-shards are there.
+Only the inverted indexes are sharded. A scan index already divides the rows of
+one search between threads, and a matrix index scored by OpenBLAS divides one
+search inside that scorer, both drawing on the same budget, so a shard on top of
+either would divide rows already divided and spend threads the budget has already
+promised elsewhere. A matrix index scored by the pure-Java scorer is the
+exception: it divides nothing and draws nothing from the budget, so sharding it is
+unexplored rather than ruled out.
+
+Sharding is invisible to callers. A row keeps the row number it was inserted
+under, because a shard holds a share of the index's rows rather than a
+renumbering of them. A search returns those same row numbers, whichever shard
+found the rows.
 
 ## Discarding Popular Terms
 
@@ -580,13 +591,12 @@ A shard left to measure for itself would find a term's share of its own rows
 rather than of the index's, and would discard terms the index keeps, so sharding
 an index would change what it finds.
 
-Inside a hybrid index only the term-keyed half discards, and its popular terms
-are counted over the rows that half holds. Discarding shortens the lists a
-popular term would otherwise generate most of the index as candidates from, which
-is a saving only the term-keyed half can make: a signature list holds one entry
-per row whatever that row's terms are, so discarding buys the signature half no
-shorter lists and only moves the signatures its rows are keyed by. What a discard
-means is
+Inside a hybrid index, only the term child discards, and its popular terms are
+counted over the rows that child holds. What discarding buys is shorter inverted
+lists, and only the term child can collect it. A signature list holds one entry
+per row whatever that row's terms are, so discarding leaves the signature child's
+lists exactly as long and only moves the signatures its rows are keyed by. What a
+discard means is
 `popular_term_discard_scope`, and the two settings differ in which half of the
 answer stays exact rather than in how aggressive they are.
 

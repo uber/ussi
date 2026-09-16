@@ -9,44 +9,47 @@ import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
-import com.uber.ussi.searchablestructure.SearchFanOut;
+import com.uber.ussi.searchablestructure.ShardFanOut;
 import com.uber.ussi.searchablestructure.index.Index;
+import com.uber.ussi.searchablestructure.index.IndexType;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
 /**
- * An inverted index holding its rows in shards, each with inverted lists of its own.
+ * An inverted index holding its rows in shards, each an inverted index over a share of them.
  *
- * <p>A search searches every shard and keeps the best rows across all of them, on as many threads
- * as the search may use. Shards divide the whole of a search, generation and verification alike,
- * which is why they are the one axis worth dividing a search along: dividing verification alone
- * reaches only the part of a search that scores candidates, and dividing the query's keys makes a
- * row appearing under several of them be visited once per part.
+ * <p>A search searches every shard and keeps the best rows across all of them, as many shards at a
+ * time as the thread budget allows. Rows are divided by row number modulo the shard count, which
+ * divides them evenly because row numbers are handed out in turn, and evenly is what makes the
+ * shards cost the same to search.
  *
- * <p>Shards also make a search cheaper before any thread is involved, because an inverted list
- * grows with the rows in its index and a search walks the lists of the query's keys. A shard
- * holding a fraction of the rows has lists shorter by that fraction, so the shards together do less
- * work than the whole would, and a search wins from sharding even given a single thread.
+ * <p>Shards divide the whole of a search rather than a phase of one, which is what makes them worth
+ * dividing along. They also make a search cheaper before any thread is involved: an inverted list
+ * grows with the rows in its index, so a shard holding a share of the rows has lists shorter by
+ * that share, and the shards together score fewer candidates than the whole would. A sharded index
+ * is therefore faster than an unsharded one even given a single thread.
  *
- * <p>Against that, every shard carries a cost a search pays whatever its threads: a heap, a walk of
- * the query's keys, and a seek into each of their lists. That cost is per shard and does not shrink
- * with the shard, so it is what bounds the shard count from above and what {@link
- * #MIN_ROWS_PER_SHARD} keeps a small index away from.
+ * <p>Against that, every shard costs a search a heap, a walk of the query's keys and a seek into
+ * each of their lists, whatever threads the search has. That cost is per shard and does not shrink
+ * with the shard, which is what bounds the shard count.
  *
- * <p>Rows keep the row numbers they were inserted under. A shard holds a subset of the rows, never
- * a renumbering of them, so the rows this index returns are the ones its caller inserted and no
- * caller can tell the shards are there.
+ * <p>Rows keep the row numbers they were inserted under. A shard holds a share of the rows and
+ * never a renumbering of them, so no caller can tell the shards are there.
  */
 public final class ShardedInvertedIndex extends Index {
 
   /**
-   * Rows a shard must hold to be worth having. Below it the per-shard cost is a large share of what
-   * searching the shard costs at all, and a search divided that finely spends more on its shards
-   * than it saves on their lists.
+   * Rows a shard holds once an index is divided as finely as it will be. It sizes the shard count
+   * of a small index rather than deciding whether to shard one, so an index too small for a shard
+   * per core takes as many shards as it has rows for and one when it has rows for one.
+   *
+   * <p>An index is built once from the rows it is given and never grows, so the count is settled at
+   * build time and no index is ever converted from unsharded to sharded.
    */
-  public static final int MIN_ROWS_PER_SHARD = 50_000;
+  public static final int MIN_NUM_ROWS_PER_SHARD = 50_000;
 
-  private final Index[] shards;
+  private final List<Index> shards;
 
   /** Builds one shard over the rows it holds, discarding the terms the index found popular. */
   public interface ShardBuilder {
@@ -61,40 +64,49 @@ public final class ShardedInvertedIndex extends Index {
       LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
       LongObjectHashMap<LongMeta> rowNumToMetaMap,
       int numShards,
+      IndexType indexType,
       ShardBuilder shardBuilder) {
     super(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);
     if (numShards <= 1) {
       throw new IllegalArgumentException("numShards must be greater than 1.");
     }
     Objects.requireNonNull(shardBuilder, "shardBuilder");
-    LongObjectHashMap<LongTermsAndValues>[] rowsByShard = partitionRows(numShards);
-    // Popularity is a property of the index, not of a shard: a term in a tenth of the index is in a
-    // tenth of every shard, and a shard measuring it against its own rows would find the same
-    // fraction of a tenth as many rows and discard nothing the index discards. Found once over all
-    // the rows, the shards discard exactly what an unsharded index would, so sharding an index
-    // cannot change what it finds.
     LongHashSet discardedTerms =
-        BaseInvertedIndex.discardedTermsOf(namespaceConfig, rowNumToTermsAndValuesMap);
-    this.shards = new Index[numShards];
+        discardedTermsOf(namespaceConfig, indexType, rowNumToTermsAndValuesMap);
+    List<LongObjectHashMap<LongTermsAndValues>> rowsByShard = partitionRows(numShards);
+    List<Index> builtShards = new ArrayList<>(numShards);
     for (int shard = 0; shard < numShards; shard++) {
-      // The metadata of every row is handed to each shard, which keeps the metadata of the rows it
-      // was given, exactly as the hybrid index hands the same metadata to both of its halves.
-      this.shards[shard] = shardBuilder.build(rowsByShard[shard], rowNumToMetaMap, discardedTerms);
+      // Every shard is handed the metadata of every row and keeps that of the rows it was given,
+      // exactly as the hybrid index hands the same metadata to both of its halves.
+      builtShards.add(shardBuilder.build(rowsByShard.get(shard), rowNumToMetaMap, discardedTerms));
     }
+    this.shards = List.copyOf(builtShards);
   }
 
   /**
-   * Shards to hold {@code numRows} in: one per core once every shard can hold {@link
-   * #MIN_ROWS_PER_SHARD} rows, and fewer while they cannot.
+   * Shards to hold {@code numNumRows} in: one per core once every shard has {@link
+   * #MIN_NUM_ROWS_PER_SHARD} rows to hold, and fewer while they have not.
    *
-   * <p>One per core is what lets a search with the cores to itself use all of them. A search
-   * sharing the cores searches the same shards on fewer threads, which is why the count is not
-   * taken from the load: the shards are fixed when the index is built, and a search under load
-   * cannot rebuild them.
+   * <p>One per core is what lets a search with the cores to itself use all of them. The count does
+   * not follow the load, because the shards are fixed when the index is built and a search under
+   * load searches the same shards on fewer threads.
    */
   public static int numShardsFor(int numRows) {
-    int cores = Math.max(1, Runtime.getRuntime().availableProcessors());
-    return Math.max(1, Math.min(cores, numRows / MIN_ROWS_PER_SHARD));
+    int numCores = Math.max(1, Runtime.getRuntime().availableProcessors());
+    return Math.max(1, Math.min(numCores, numRows / MIN_NUM_ROWS_PER_SHARD));
+  }
+
+  /**
+   * The terms an inverted structure of {@code indexType} discards as popular, counted over all its
+   * rows so that dividing the structure cannot change them.
+   */
+  static LongHashSet discardedTermsOf(
+      NamespaceConfig namespaceConfig,
+      IndexType indexType,
+      LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap) {
+    return indexType == IndexType.INVERTED_HYBRID
+        ? HybridIndex.discardedTermsOf(namespaceConfig, rowNumToTermsAndValuesMap)
+        : BaseInvertedIndex.discardedTermsOf(namespaceConfig, rowNumToTermsAndValuesMap);
   }
 
   @Override
@@ -104,15 +116,16 @@ public final class ShardedInvertedIndex extends Index {
       throw new IllegalArgumentException("k must be greater than 0.");
     }
     int maxResults = Math.min(k, namespaceConfig.getMaxNumSimilarities());
-    return SearchFanOut.inWaves(
-        shards.length,
-        shardsAtOnce(),
+    return ShardFanOut.search(
+        shards.size(),
+        numShardsAtOnce(),
         maxResults,
-        shard ->
-            shards[shard].size() == 0
-                ? List.of()
-                : shards[shard].getNearestNeighborRowNums(
-                    maxResults, record, metadataFilter, minSimilarity));
+        shard -> {
+          Index index = shards.get(shard);
+          return index.size() == 0
+              ? List.of()
+              : index.getNearestNeighborRowNums(maxResults, record, metadataFilter, minSimilarity);
+        });
   }
 
   @Override
@@ -121,19 +134,21 @@ public final class ShardedInvertedIndex extends Index {
     if (minSimilarity < 0.0f || minSimilarity > 1.0f) {
       throw new IllegalArgumentException("minSimilarity must be in the range [0.0, 1.0].");
     }
-    return SearchFanOut.inWaves(
-        shards.length,
-        shardsAtOnce(),
+    return ShardFanOut.search(
+        shards.size(),
+        numShardsAtOnce(),
         namespaceConfig.getMaxNumSimilarities(),
-        shard ->
-            shards[shard].size() == 0
-                ? List.of()
-                : shards[shard].getSimilarRowNums(minSimilarity, record, metadataFilter));
+        shard -> {
+          Index index = shards.get(shard);
+          return index.size() == 0
+              ? List.of()
+              : index.getSimilarRowNums(minSimilarity, record, metadataFilter);
+        });
   }
 
   @Override
   protected void onRowDeleted(long rowNum) {
-    shards[shardOf(rowNum, shards.length)].delete(rowNum);
+    shards.get(shardOf(rowNum, shards.size())).delete(rowNum);
   }
 
   @Override
@@ -144,32 +159,29 @@ public final class ShardedInvertedIndex extends Index {
   }
 
   int getNumShardsForTests() {
-    return shards.length;
+    return shards.size();
   }
 
   int getNumRowsInShardForTests(int shard) {
-    return shards[shard].size();
+    return shards.get(shard).size();
   }
 
   /** The shard a row belongs to, which is where the row was put when the index was built. */
   private static int shardOf(long rowNum, int numShards) {
-    return (int) Math.floorMod(rowNum, numShards);
+    return Math.floorMod(rowNum, numShards);
   }
 
-  private int shardsAtOnce() {
-    return Math.max(1, Math.min(shards.length, searchParallelism()));
+  private int numShardsAtOnce() {
+    return Math.max(1, Math.min(shards.size(), searchParallelism()));
   }
 
-  @SuppressWarnings("unchecked")
-  private LongObjectHashMap<LongTermsAndValues>[] partitionRows(int numShards) {
-    LongObjectHashMap<LongTermsAndValues>[] rowsByShard = new LongObjectHashMap[numShards];
+  private List<LongObjectHashMap<LongTermsAndValues>> partitionRows(int numShards) {
+    List<LongObjectHashMap<LongTermsAndValues>> rowsByShard = new ArrayList<>(numShards);
     for (int shard = 0; shard < numShards; shard++) {
-      rowsByShard[shard] = new LongObjectHashMap<>();
+      rowsByShard.add(new LongObjectHashMap<>());
     }
-    // Row numbers are handed out in turn, so taking them modulo the shard count divides the rows
-    // evenly however many there are, which is what makes the shards cost the same to search.
     for (LongObjectCursor<LongTermsAndValues> entry : rowNumToTermsAndValuesMap) {
-      rowsByShard[shardOf(entry.key, numShards)].put(entry.key, entry.value);
+      rowsByShard.get(shardOf(entry.key, numShards)).put(entry.key, entry.value);
     }
     return rowsByShard;
   }

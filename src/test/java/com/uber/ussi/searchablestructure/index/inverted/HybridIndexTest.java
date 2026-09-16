@@ -1,6 +1,7 @@
 package com.uber.ussi.searchablestructure.index.inverted;
 
 import static com.uber.ussi.TestLongObjectMaps.longObjectMap;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -163,6 +164,39 @@ class HybridIndexTest {
 
     assertEquals(
         List.of(1L), rowNumsNearestFirst(index.getSimilarRowNums(1.0f, query, MetaFilter.empty())));
+  }
+
+  @Test
+  void discardsPopularTermsInTheExactHalfOnlyAndCountsThemOverItsRows() {
+    // Term 1 is in three of the four term-keyed rows, which is over half of them, and in none of
+    // the signature-keyed rows. Counted over the term-keyed rows it is popular; counted over all
+    // six it is not, so what the exact half discards also shows which rows it counted.
+    LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
+    rows.put(1, jaccard(new long[] {1, 10}));
+    rows.put(2, jaccard(new long[] {1, 11}));
+    rows.put(3, jaccard(new long[] {1, 12}));
+    rows.put(4, jaccard(new long[] {20, 21}));
+    rows.put(5, jaccard(sequentialTerms(271, 1000)));
+    rows.put(6, jaccard(sequentialTerms(271, 1000)));
+
+    HybridIndex index =
+        new HybridIndex(
+            config(
+                "jaccard", "minhash", 0, 1000, Map.of(ConfigKeys.MAX_FRACTION_IDS_PER_TERM, "0.5")),
+            rows,
+            longObjectMap());
+
+    assertEquals(4, index.getNumExactRowsForTests());
+    assertEquals(2, index.getNumSignatureRowsForTests());
+    assertArrayEquals(
+        new long[] {1},
+        index.getExactDiscardedTermsForTests(),
+        "the exact half discards the term popular among the rows it holds");
+    assertArrayEquals(
+        new long[0],
+        index.getSignatureDiscardedTermsForTests(),
+        "the signature half discards nothing, since a signature list holds one entry per row"
+            + " whatever its terms");
   }
 
   @Test

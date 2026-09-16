@@ -129,6 +129,56 @@ concurrent dense searches abort the process rather than merely slowing it down.
 The supply the shipped binaries are built with is above the core count on the
 machines tested, so a bound of the cores keeps them inside it.
 
+### Threads Within One Search
+
+`ParallelismBudget` divides the cores among the searches in flight, so a search
+splitting its own work stays within what the machine has left once the other
+searches are counted. The budget is the whole machine while one search runs
+alone and falls to a single thread once the searches in flight already fill the
+cores, which is what turns splitting off under load rather than letting
+concurrent searches multiply their own fan-out against each other.
+
+A scan is the search that splits most readily, since rows score independently
+and only the best few survive: `ScanSplit` gives each part of the row space its
+own heap and merges the heaps, a merge whose size is the part count rather than
+the row count. The hash table holding the rows has no index, so a part is a
+range of its slots, with the empty ones skipped.
+
+A scan of the candidate rows a metadata filter produced splits the same way,
+which covers pre-filtering in the scan index and the direct scan the inverted
+term cache falls back to. Candidates arrive as a set rather than a map, and a
+set cannot be divided into slot ranges: it holds no values to mark an empty slot
+with, and it keeps the zero key outside its slots without exposing whether that
+key is present, so a slot range cannot tell row zero from an empty slot. The
+candidates are copied out instead, which gives parts something to index and
+costs one pass. A candidate scan not worth splitting is scanned where it lies,
+so it pays for no copy.
+
+Only a scan whose rows all score against the same threshold is split. A scan
+that raises its threshold as its heap fills prunes using what it has already
+scored, and parts each raising a threshold from their own heap would prune less
+than the whole scan does, so such a scan keeps its single heap and its pruning.
+The inverted index scores its candidates that way and is left alone. How much
+pruning splitting would cost there depends on the data rather than on the
+machine, so no measurement would settle it.
+
+Whether to split at all is worth deciding, because a scan can be short enough
+that handing its parts out costs more than the scan. How finely to split is not,
+because that cost does not grow with the number of parts enough to matter: a scan
+barely past the minimum still gains from as many parts as there are cores, so
+holding parts back to keep each one large loses more than it protects. A scan
+below a minimum amount of work therefore stays on the calling thread, and one
+above it uses every thread it may. The minimum is expressed in work rather than in
+rows so that it holds for records an order of magnitude apart in length, since a
+scan of few long records costs as much as one of many short ones.
+
+The minimum earns its place at high query rates rather than on an idle machine.
+The budget is derived from the searches observed in flight, and searches short
+enough to leave the cores idle between them read as lower concurrency than they
+impose, so the budget can sit above one thread while a small cache serves hundreds
+of thousands of searches a second. Handing out parts for each of those costs far
+more than splitting saves.
+
 ## Configuration Validation
 
 A namespace validates its whole configuration before building any layer, so

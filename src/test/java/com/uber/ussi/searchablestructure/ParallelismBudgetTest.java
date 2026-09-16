@@ -64,6 +64,29 @@ class ParallelismBudgetTest {
     assertEquals(CORES, new ParallelismBudget(CORES).budget());
   }
 
+  /** A structure can be built while other searches run, so registering must also be exclusive. */
+  @Test
+  void registeringAppliesTheBudgetExclusively() {
+    ParallelismBudget budget = new ParallelismBudget(CORES);
+    List<String> exclusiveCalls = new ArrayList<>();
+    attachThen(
+        budget,
+        task -> {
+          exclusiveCalls.add("entered");
+          task.run();
+        });
+
+    budget.onChange(threads -> exclusiveCalls.add("applied " + threads));
+
+    assertEquals(List.of("entered", "applied " + CORES), exclusiveCalls);
+  }
+
+  /** Attaches to install the runner, then stops the interval work so the test drives update itself. */
+  private static void attachThen(ParallelismBudget budget, java.util.function.Consumer<Runnable> exclusively) {
+    budget.attach(() -> 0, exclusively);
+    budget.detach();
+  }
+
   @Test
   void registeringAppliesTheCurrentBudgetImmediately() {
     ParallelismBudget budget = new ParallelismBudget(CORES);
@@ -77,18 +100,20 @@ class ParallelismBudgetTest {
   @Test
   void updateAppliesANewBudgetExclusively() {
     ParallelismBudget budget = new ParallelismBudget(CORES);
-    List<Integer> applied = new ArrayList<>();
-    budget.onChange(applied::add);
-    applied.clear();
     List<String> exclusiveCalls = new ArrayList<>();
-
-    budget.update(
-        CORES,
+    attachThen(
+        budget,
         task -> {
           exclusiveCalls.add("entered");
           task.run();
           exclusiveCalls.add("left");
         });
+    List<Integer> applied = new ArrayList<>();
+    budget.onChange(applied::add);
+    applied.clear();
+    exclusiveCalls.clear();
+
+    budget.update(CORES);
 
     assertEquals(List.of(1), applied);
     assertEquals(1, budget.budget());
@@ -105,9 +130,10 @@ class ParallelismBudgetTest {
     budget.onChange(applied::add);
     applied.clear();
     List<String> exclusiveCalls = new ArrayList<>();
+    attachThen(budget, task -> exclusiveCalls.add("entered"));
 
     // One search in flight wants the full bound, which is where the budget already is.
-    budget.update(1, task -> exclusiveCalls.add("entered"));
+    budget.update(1);
 
     assertEquals(List.of(), applied);
     assertEquals(List.of(), exclusiveCalls, "an unchanged budget must not quiesce the engine");
@@ -163,9 +189,9 @@ class ParallelismBudgetTest {
     budget.onChange(applied::add);
     applied.clear();
 
-    budget.update(CORES, Runnable::run);
-    budget.update(4, Runnable::run);
-    budget.update(1, Runnable::run);
+    budget.update(CORES);
+    budget.update(4);
+    budget.update(1);
 
     assertEquals(List.of(1, CORES / 4, CORES), applied);
   }

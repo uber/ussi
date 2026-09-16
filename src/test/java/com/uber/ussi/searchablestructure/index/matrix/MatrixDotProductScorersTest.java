@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import com.uber.ussi.searchablestructure.ParallelismBudget;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -137,7 +138,7 @@ class MatrixDotProductScorersTest {
   }
 
   @Test
-  void openBlasScorerSetsThreadCountAtConstructionAndLeavesItAloneWhileScoring() {
+  void openBlasScorerTakesTheCurrentBudgetAtConstructionAndLeavesItAloneWhileScoring() {
     FakeOpenBlas fakeOpenBlas = new FakeOpenBlas();
 
     withFakeOpenBlas(
@@ -155,9 +156,10 @@ class MatrixDotProductScorersTest {
           }
         });
 
+    // The budget, not the core count: it tracks the search concurrency, so the value at
+    // construction depends on what else is running.
     assertEquals(
-        List.of(Math.max(1, Runtime.getRuntime().availableProcessors())),
-        fakeOpenBlas.threadCountUpdates);
+        List.of(ParallelismBudget.shared().budget()), fakeOpenBlas.threadCountUpdates);
   }
 
   @Test

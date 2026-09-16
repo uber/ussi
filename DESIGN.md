@@ -613,18 +613,20 @@ inverted lists, since that conjunction can only report the similarity that
 excludes the discarded terms, so `spars_merge` verifies each candidate through
 the comparator under this scope.
 
-Popularity is counted over terms, never over the keys the lists end up under,
-and discarding runs before signature generation rather than after. A
-signature-keyed structure that discards therefore draws its signatures from a
-record the popular terms are already gone from, so a discard changes which
-signatures a record has rather than removing signatures it already had. That is
-why the signature half of a hybrid discards nothing: moving a row's signatures
-buys the shorter lists a term-keyed half gets from a discard. Nothing discards a
-signature that ends up in most rows, which is deliberate: a term that popular
-carries no signal, while signatures collide at a rate tracking the multiset
-similarity of the records behind them, so a popular signature is a similarity
-worth keeping. Where one does appear it comes of a term dominating the
-multisets, which is what the term-level discard removes.
+Discarding is something done to terms, and it is done while they are still
+terms: popularity is counted over the terms of a record, and the popular ones are
+removed from the record before the structure derives the keys its lists are under.
+A signature-keyed structure that discards therefore generates its signatures from
+a record the popular terms are already gone from, so a discard changes which
+signatures a row has rather than removing signatures the row already had.
+
+Frequency is never counted over those keys, so no structure discards a signature
+for appearing in most rows. That is deliberate rather than an omission. A term in
+most rows carries no signal, which is what makes discarding it a saving, whereas
+signatures collide at a rate tracking the multiset similarity of the records
+behind them, so a signature in most rows reports a similarity worth keeping.
+Where such a signature does appear it comes of a term dominating the multisets,
+and that term is what the term-level discard removes.
 
 ## Candidate Generation
 

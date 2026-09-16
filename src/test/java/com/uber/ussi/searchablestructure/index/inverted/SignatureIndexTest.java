@@ -103,6 +103,25 @@ class SignatureIndexTest {
     assertTrue(index.getNearestNeighborRowNums(2, record, MetaFilter.empty()).isEmpty());
   }
 
+  @Test
+  void keepsSignaturesAppearingInEveryRowBecauseFrequencyIsCountedOverTermsAlone() {
+    // Two rows with the same terms have the same signatures, so every signature here is in every
+    // row. None of their terms is popular, so nothing is discarded, and the lists survive: a
+    // frequency rule counted over the keys rather than over the terms would have emptied them.
+    LongTermsAndValues record = jaccard(new long[] {11, 12, 13}, 1f, 1f, 1f);
+    SignatureIndex index =
+        new SignatureIndex(
+            config("jaccard", "minhash", Map.of(ConfigKeys.MAX_FRACTION_IDS_PER_TERM, "1.0")),
+            longObjectMap(1, record, 2, record),
+            longObjectMap());
+
+    assertArrayEquals(new long[0], index.getDiscardedTermsForTests());
+    assertTrue(index.getNumIndexedKeysForTests() > 0, "the shared signatures are still keys");
+    assertEquals(
+        List.of(1L, 2L),
+        rowNumsNearestFirst(index.getNearestNeighborRowNums(2, record, MetaFilter.empty())));
+  }
+
   /**
    * No signature generator leaves nothing to key the lists by, a property of the config rather than
    * the rows. One that could generate them names the missing param; one that could not does not.

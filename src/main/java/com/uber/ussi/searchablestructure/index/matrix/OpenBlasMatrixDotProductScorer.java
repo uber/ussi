@@ -30,14 +30,12 @@ final class OpenBlasMatrixDotProductScorer implements MatrixDotProductScorer {
           || (Utils.isRunningOnMacOs() && Utils.isRunningOnArm())
           || (Utils.isRunningOnMacOs() && Utils.isRunningOnX86());
 
-  private final FloatPointer nativeMatrix;
-  private final int numRows;
-  private final int dimension;
+  // One native copy per chunk, in the same order, so a chunk can be multiplied where it lies.
+  private final FloatPointer[] nativeChunks;
+  private final DenseMatrix matrix;
   private boolean closed;
 
-  OpenBlasMatrixDotProductScorer(
-      float[] rowMajorValues, int numRows, int dimension, BooleanSupplier availabilitySupplier) {
-    MatrixDotProductScorers.validateMatrix(rowMajorValues, numRows, dimension);
+  OpenBlasMatrixDotProductScorer(DenseMatrix matrix, BooleanSupplier availabilitySupplier) {
     if (!availabilitySupplier.getAsBoolean()) {
       throw new IllegalStateException("OpenBLAS is not available on this platform.");
     }
@@ -45,9 +43,11 @@ final class OpenBlasMatrixDotProductScorer implements MatrixDotProductScorer {
     // per score, where it would cost orders of magnitude more than the gemv itself. The budget
     // applies it instead, whenever the search concurrency changes.
     ParallelismBudget.shared().onChange(blasThreadCountSetter::accept);
-    this.nativeMatrix = floatArrayPointerFactory.create(rowMajorValues);
-    this.numRows = numRows;
-    this.dimension = dimension;
+    this.matrix = matrix;
+    this.nativeChunks = new FloatPointer[matrix.numChunks()];
+    for (int chunk = 0; chunk < nativeChunks.length; ++chunk) {
+      nativeChunks[chunk] = floatArrayPointerFactory.create(matrix.chunk(chunk));
+    }
     this.closed = false;
   }
 
@@ -80,30 +80,38 @@ final class OpenBlasMatrixDotProductScorer implements MatrixDotProductScorer {
     if (closed) {
       throw new IllegalStateException("OpenBLAS scorer is already closed.");
     }
-    MatrixDotProductScorers.validateScoreInputs(null, numRows, dimension, queryValues, dotProducts);
-    try (FloatPointer nativeQuery = floatArrayPointerFactory.create(queryValues);
-        FloatPointer nativeDotProducts = floatSizePointerFactory.create(numRows)) {
-      sgemvOperation.run(
-          /* Order */ CblasRowMajor,
-          /* transA */ CblasNoTrans,
-          /* numRowsA */ numRows,
-          /* numColsA */ dimension,
-          /* alpha */ 1.0f,
-          /* A */ nativeMatrix,
-          /* lda */ dimension,
-          /* X */ nativeQuery,
-          /* incX */ 1,
-          /* beta */ 0.0f,
-          /* Y */ nativeDotProducts,
-          /* incY */ 1);
-      floatPointerArrayReader.read(nativeDotProducts, dotProducts);
+    MatrixDotProductScorers.validateScoreInputs(matrix, queryValues, dotProducts);
+    int dimension = matrix.dimension();
+    try (FloatPointer nativeQuery = floatArrayPointerFactory.create(queryValues)) {
+      for (int chunk = 0; chunk < nativeChunks.length; ++chunk) {
+        int rowsInChunk = matrix.numRowsInChunk(chunk);
+        try (FloatPointer nativeDotProducts = floatSizePointerFactory.create(rowsInChunk)) {
+          sgemvOperation.run(
+              /* Order */ CblasRowMajor,
+              /* transA */ CblasNoTrans,
+              /* numRowsA */ rowsInChunk,
+              /* numColsA */ dimension,
+              /* alpha */ 1.0f,
+              /* A */ nativeChunks[chunk],
+              /* lda */ dimension,
+              /* X */ nativeQuery,
+              /* incX */ 1,
+              /* beta */ 0.0f,
+              /* Y */ nativeDotProducts,
+              /* incY */ 1);
+          floatPointerArrayReader.read(
+              nativeDotProducts, dotProducts, matrix.firstRowInChunk(chunk), rowsInChunk);
+        }
+      }
     }
   }
 
   @Override
   public void close() {
     if (!closed) {
-      floatPointerDeallocator.deallocate(nativeMatrix);
+      for (FloatPointer nativeChunk : nativeChunks) {
+        floatPointerDeallocator.deallocate(nativeChunk);
+      }
       closed = true;
     }
   }
@@ -121,7 +129,7 @@ final class OpenBlasMatrixDotProductScorer implements MatrixDotProductScorer {
   }
 
   interface FloatPointerArrayReader {
-    void read(FloatPointer pointer, float[] values);
+    void read(FloatPointer pointer, float[] values, int offset, int length);
   }
 
   interface SgemvOperation {

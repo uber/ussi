@@ -356,18 +356,6 @@ class MatrixIndexTest {
   }
 
   @Test
-  void validateMatrixCellCountRejectsHugeMatrix() {
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> MatrixIndex.validateMatrixCellCountForTests(46_342, 46_342));
-  }
-
-  @Test
-  void validateMatrixCellCountReturnsSafeCellCount() {
-    assertEquals(6L, MatrixIndex.validateMatrixCellCountForTests(2, 3));
-  }
-
-  @Test
   void constructorRejectsAComparatorThatCannotReadDenseRecords() {
     NamespaceConfig config = configWithComparatorType("jaccard");
 
@@ -378,6 +366,58 @@ class MatrixIndexTest {
 
   private static NamespaceConfig config() {
     return configWithIndexParams(Map.of());
+  }
+
+  /**
+   * A namespace holding more values than one array can is scored chunk by chunk. The chunk size is
+   * injected because a matrix that large cannot be built in a test.
+   */
+  @Test
+  void searchesAMatrixSplitAcrossChunksExactlyAsOneChunk() {
+    // Two values per row, so three rows need two chunks at three values each.
+    MatrixIndex chunked = new MatrixIndex(config(), rows(), metadata(), /* maxChunkValues */ 3);
+    MatrixIndex single = new MatrixIndex(config(), rows(), metadata());
+
+    for (float[] query : new float[][] {{1f, 0f}, {0f, 1f}, {1f, 1f}, {0.25f, 0.75f}}) {
+      List<RowNumAndSimilarity> fromChunked =
+          chunked.getNearestNeighborRowNums(3, denseVector(query), MetaFilter.empty());
+      List<RowNumAndSimilarity> fromSingle =
+          single.getNearestNeighborRowNums(3, denseVector(query), MetaFilter.empty());
+
+      assertEquals(sortedRowNums(fromSingle), sortedRowNums(fromChunked));
+      assertEquals(fromSingle.size(), fromChunked.size());
+      for (int i = 0; i < fromSingle.size(); ++i) {
+        assertEquals(
+            similarityOf(fromSingle, fromSingle.get(i).getRowNum()),
+            similarityOf(fromChunked, fromSingle.get(i).getRowNum()),
+            DELTA,
+            "row " + fromSingle.get(i).getRowNum());
+      }
+    }
+  }
+
+  /** The filtered path scores one row at a time, so it indexes into the chunks separately. */
+  @Test
+  void scoresASingleRowFromAChunkedMatrix() {
+    MatrixIndex chunked =
+        new MatrixIndex(config(), rows(), allSfMetadata(), /* maxChunkValues */ 3);
+    MatrixIndex single = new MatrixIndex(config(), rows(), allSfMetadata());
+    MetaFilter onlySf = new MetaFilter(Map.of("city", List.of("sf")));
+
+    List<RowNumAndSimilarity> fromChunked =
+        chunked.getNearestNeighborRowNums(3, denseVector(1f, 1f), onlySf);
+    List<RowNumAndSimilarity> fromSingle =
+        single.getNearestNeighborRowNums(3, denseVector(1f, 1f), onlySf);
+
+    assertEquals(sortedRowNums(fromSingle), sortedRowNums(fromChunked));
+  }
+
+  private static float similarityOf(List<RowNumAndSimilarity> results, long rowNum) {
+    return results.stream()
+        .filter(result -> result.getRowNum() == rowNum)
+        .findFirst()
+        .orElseThrow()
+        .getSimilarity();
   }
 
   private static NamespaceConfig configWithComparatorType(String comparatorType) {

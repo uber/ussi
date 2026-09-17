@@ -14,6 +14,7 @@ import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.TermsAndValues;
 import com.uber.ussi.searchablestructure.ParallelismBudget;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
+import com.uber.ussi.searchablestructure.SearchThreads;
 import com.uber.ussi.searchablestructure.cache.Cache;
 import com.uber.ussi.searchablestructure.cache.CacheConfigValidator;
 import com.uber.ussi.searchablestructure.cache.CacheFactory;
@@ -172,8 +173,19 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
       lock.readLock().lock();
       try {
         int maxResults = Math.min(k, namespaceConfig.getMaxNumSimilarities());
-        return mergeSearchResultsLocked(
-            /* topK */ true, record, metadataFilter, /* minSimilarity */ 0.0f, maxResults);
+        // One ticket for the whole traversal, so every structure this query visits is served at
+        // the query's arrival rather than at the arrival of each structure's own search.
+        SearchResults[] results = new SearchResults[1];
+        SearchThreads.underOneTicket(
+            () ->
+                results[0] =
+                    mergeSearchResultsLocked(
+                        /* topK */ true,
+                        record,
+                        metadataFilter,
+                        /* minSimilarity */ 0.0f,
+                        maxResults));
+        return results[0];
       } finally {
         lock.readLock().unlock();
       }
@@ -191,12 +203,17 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
     try {
       lock.readLock().lock();
       try {
-        return mergeSearchResultsLocked(
-            /* topK */ false,
-            record,
-            metadataFilter,
-            minSimilarity,
-            namespaceConfig.getMaxNumSimilarities());
+        SearchResults[] results = new SearchResults[1];
+        SearchThreads.underOneTicket(
+            () ->
+                results[0] =
+                    mergeSearchResultsLocked(
+                        /* topK */ false,
+                        record,
+                        metadataFilter,
+                        minSimilarity,
+                        namespaceConfig.getMaxNumSimilarities()));
+        return results[0];
       } finally {
         lock.readLock().unlock();
       }

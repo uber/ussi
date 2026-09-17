@@ -98,11 +98,12 @@ abstract class BaseInvertedIndex extends Index {
   }
 
   /**
-   * An index over a part of a structure's rows, discarding the terms the structure found popular.
+   * An index over some of a structure's rows, discarding the terms the structure found popular.
    *
-   * <p>A structure holding its rows in parts must hand each part the same terms to discard, since
-   * popularity is a property of the whole. A part left to observe popularity for itself would find
-   * its own share of a term to be its whole share, and would discard terms the structure keeps.
+   * <p>A structure built from several indexes must give each the same terms to discard, since
+   * popularity is a property of the whole. An index left to measure popularity over its own rows
+   * would take its share of a term for the whole of it, and would discard terms the structure
+   * keeps.
    */
   protected BaseInvertedIndex(
       NamespaceConfig namespaceConfig,

@@ -84,7 +84,7 @@ public final class ParallelRowScan {
       int maxResults,
       RowScorer scorer) {
     return inRanges(
-        rangeCount(rowNumToTermsAndValuesMap.size(), rowVisitCost(record), parallelism),
+        numRangesFor(rowNumToTermsAndValuesMap.size(), rowVisitCost(record), parallelism),
         rowNumToTermsAndValuesMap.keys.length,
         maxResults,
         (fromSlot, toSlot) ->
@@ -102,7 +102,7 @@ public final class ParallelRowScan {
       int parallelism,
       int maxResults,
       CandidateScorer scorer) {
-    int numRanges = rangeCount(candidateRowNums.size(), rowVisitCost(record), parallelism);
+    int numRanges = numRangesFor(candidateRowNums.size(), rowVisitCost(record), parallelism);
     if (numRanges == 1) {
       // Scanned where they lie, so a scan not worth splitting does not pay to copy them out.
       BoundedSizeMaxHeap<RowNumAndSimilarity> rows = newTopResultsHeap(maxResults);
@@ -127,7 +127,7 @@ public final class ParallelRowScan {
    * Ranges to scan {@code numRows} in: every thread this search may use once the scan is worth
    * splitting, and one before that. No range is without a row in it.
    */
-  static int rangeCount(int numRows, int rowVisitCost, int parallelism) {
+  static int numRangesFor(int numRows, int rowVisitCost, int parallelism) {
     if ((long) numRows * rowVisitCost < MIN_ROW_VISITS_TO_SPLIT) {
       return 1;
     }

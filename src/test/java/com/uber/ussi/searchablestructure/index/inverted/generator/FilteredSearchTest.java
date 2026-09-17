@@ -13,10 +13,12 @@ import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.inverted.KeyAndPrefixFilteringData;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.function.DoubleUnaryOperator;
+import java.util.function.LongConsumer;
 import org.junit.jupiter.api.Test;
 
 class FilteredSearchTest {
@@ -151,6 +153,43 @@ class FilteredSearchTest {
     assertFalse(iterator.hasNext());
   }
 
+  /**
+   * A minimum similarity another search has proved bounds the prefix, so the keys it puts out of
+   * reach are never read. Without this a search sharing a proof reads every key of the query.
+   */
+  @Test
+  void searchReadsNoKeyThePublishedMinSimilarityPutsOutOfReach() {
+    LongTermsAndValues query = jaccard(new long[] {10, 20}, 1, 1);
+    List<Long> keysRead = new ArrayList<>();
+    // A budget of one key's worth of prefix mass once a minimum similarity has been proved, and an
+    // unbounded one until then.
+    FilteredSearch.Context context =
+        stubContext(
+            Map.of(10L, new long[] {1}, 20L, new long[] {3}),
+            Map.of(1L, 1.0, 3L, 1.0),
+            minSimilarity -> minSimilarity > 0.0 ? 0.5 : Double.POSITIVE_INFINITY,
+            keysRead::add);
+    KeyAndPrefixFilteringData[] queryKeys = {
+      new KeyAndPrefixFilteringData(10, 1, 1.0), new KeyAndPrefixFilteringData(20, 1, 1.0)
+    };
+    SharedMinSimilarity proved = new SharedMinSimilarity(0.5f);
+
+    FilteredSearch.search(
+        COMPARATOR,
+        query,
+        query,
+        null,
+        0.0f,
+        5,
+        queryKeys,
+        context,
+        (rowNum, metadataFilter) -> true,
+        rowNum -> jaccard(new long[] {10, 20}, 1, 1),
+        proved);
+
+    assertEquals(List.of(10L), keysRead);
+  }
+
   @Test
   void validateUniValueSearchRejectsInvalidComparatorUniValue() {
     assertThrows(
@@ -179,6 +218,15 @@ class FilteredSearchTest {
       Map<Long, long[]> rowNumsByKey,
       Map<Long, Double> uniValuesByRowNum,
       DoubleUnaryOperator minPrefixSum) {
+    return stubContext(rowNumsByKey, uniValuesByRowNum, minPrefixSum, key -> {});
+  }
+
+  /** Reports each key whose inverted list is read, so a test can assert which ones were. */
+  private static FilteredSearch.Context stubContext(
+      Map<Long, long[]> rowNumsByKey,
+      Map<Long, Double> uniValuesByRowNum,
+      DoubleUnaryOperator minPrefixSum,
+      LongConsumer keyReadListener) {
     return new FilteredSearch.Context() {
       @Override
       public double getMaxPrefixSum(
@@ -188,6 +236,7 @@ class FilteredSearchTest {
 
       @Override
       public long[] getRowNums(long key) {
+        keyReadListener.accept(key);
         return rowNumsByKey.getOrDefault(key, new long[0]);
       }
 

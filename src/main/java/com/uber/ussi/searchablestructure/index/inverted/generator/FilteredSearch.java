@@ -52,11 +52,15 @@ public final class FilteredSearch {
       RowFilter rowFilter,
       LongFunction<LongTermsAndValues> verificationRowLookup,
       SharedMinSimilarity sharedMinSimilarity) {
-    CandidateIterator candidates =
-        new CandidateIterator(
-            comparator, context, queryKeys, indexedQuery.getUniValue(), minSimilarity);
     BoundedSizeMaxHeap<RowNumAndSimilarity> rows = TopResults.newTopResultsHeap(maxResults);
     double currentMinSimilarity = Math.max(minSimilarity, sharedMinSimilarity.get());
+    // The prefix is chosen for the minimum similarity already proved rather than the one the
+    // caller asked for. A prefix chosen for a lower one covers keys that no row reaching the
+    // answer can be found under, and the keys a search would then read grow with the number of
+    // searches sharing the proof.
+    CandidateIterator candidates =
+        new CandidateIterator(
+            comparator, context, queryKeys, indexedQuery.getUniValue(), currentMinSimilarity);
     while (candidates.hasNext()) {
       long rowNum = candidates.next();
       // Another shard may have proved a higher minimum similarity since this one last looked.

@@ -39,4 +39,17 @@ public final class TopResults {
     }
     return Math.max(minSimilarity, (float) getConservativeMinSimilarity(rows));
   }
+
+  /**
+   * The same, over a minimum similarity shared with the other divisions of one search. What this
+   * division has proved is published for them, and what any of them has proved is taken here.
+   */
+  public static float tightenedMinSimilarity(
+      BoundedSizeMaxHeap<RowNumAndSimilarity> rows,
+      float minSimilarity,
+      SharedMinSimilarity sharedMinSimilarity) {
+    float proved = tightenedMinSimilarity(rows, minSimilarity);
+    sharedMinSimilarity.raiseTo(proved);
+    return Math.max(proved, sharedMinSimilarity.get());
+  }
 }

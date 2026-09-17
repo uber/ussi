@@ -2,7 +2,6 @@
 package com.uber.ussi.searchablestructure;
 
 import java.util.List;
-import java.util.function.IntFunction;
 
 /**
  * One complete search per shard of a structure, run at the same time, keeping the nearest rows
@@ -25,9 +24,12 @@ public final class ParallelShardSearch {
 
   private ParallelShardSearch() {}
 
-  /** The nearest {@code maxResults} rows across {@code numShards} shards. */
+  /**
+   * The nearest {@code maxResults} rows across {@code numShards} shards, each searched against a
+   * minimum similarity the shards share and seeded at {@code minSimilarity}.
+   */
   public static List<RowNumAndSimilarity> search(
-      int numShards, int maxResults, IntFunction<List<RowNumAndSimilarity>> searchShard) {
-    return ParallelSearch.inParallel(numShards, maxResults, searchShard);
+      int numShards, int maxResults, float minSimilarity, ParallelSearch.DivisionSearch searchShard) {
+    return ParallelSearch.inParallel(numShards, maxResults, minSimilarity, searchShard);
   }
 }

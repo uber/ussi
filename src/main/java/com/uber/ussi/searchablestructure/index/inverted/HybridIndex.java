@@ -35,7 +35,7 @@ public final class HybridIndex extends Index {
       NamespaceConfig namespaceConfig,
       LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
       LongObjectHashMap<LongMeta> rowNumToMetaMap) {
-    super(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);
+    super(namespaceConfig);
     LongObjectHashMap<LongTermsAndValues> exactRows = new LongObjectHashMap<>();
     LongObjectHashMap<LongTermsAndValues> signatureRows = new LongObjectHashMap<>();
     for (LongObjectCursor<LongTermsAndValues> entry : rowNumToTermsAndValuesMap) {
@@ -114,10 +114,37 @@ public final class HybridIndex extends Index {
   }
 
   @Override
-  protected void onRowDeleted(long rowNum) {
-    if (!termIndex.delete(rowNum)) {
-      signatureIndex.delete(rowNum);
-    }
+  public boolean delete(long rowNum) {
+    // A row is held by whichever index keys rows of its length, and a delete carries no record to
+    // tell which that is, so the term index is asked first and the signature index only if it did
+    // not hold the row.
+    return termIndex.delete(rowNum) || signatureIndex.delete(rowNum);
+  }
+
+  @Override
+  public LongObjectHashMap<LongTermsAndValues> getAll() {
+    LongObjectHashMap<LongTermsAndValues> rows = new LongObjectHashMap<>(size());
+    rows.putAll(termIndex.getAll());
+    rows.putAll(signatureIndex.getAll());
+    return rows;
+  }
+
+  @Override
+  public LongObjectHashMap<LongMeta> getAllMetadata() {
+    LongObjectHashMap<LongMeta> metadata = new LongObjectHashMap<>(size());
+    metadata.putAll(termIndex.getAllMetadata());
+    metadata.putAll(signatureIndex.getAllMetadata());
+    return metadata;
+  }
+
+  @Override
+  public int size() {
+    return termIndex.size() + signatureIndex.size();
+  }
+
+  @Override
+  public boolean isEmpty() {
+    return termIndex.isEmpty() && signatureIndex.isEmpty();
   }
 
   @Override

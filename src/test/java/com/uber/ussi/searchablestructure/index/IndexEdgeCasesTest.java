@@ -89,7 +89,7 @@ class IndexEdgeCasesTest {
     return new LongMeta(Map.of(key, value), /* requireLongKeysAndValues */ false);
   }
 
-  private static final class TestIndex extends Index {
+  private static final class TestIndex extends RowStoringIndex {
 
     private TestIndex(
         NamespaceConfig namespaceConfig,

@@ -9,7 +9,7 @@ import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.ParallelRowScan;
-import com.uber.ussi.searchablestructure.index.Index;
+import com.uber.ussi.searchablestructure.index.RowStoringIndex;
 import com.uber.ussi.searchablestructure.index.MetadataFilteredSearchExecutor;
 import com.uber.ussi.searchablestructure.metadata.MetadataFilteringStrategy;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
@@ -19,7 +19,7 @@ import java.util.Objects;
 import javax.annotation.Nullable;
 
 /** Generic delete-only index implemented with a full scan search. */
-public final class ScanIndex extends Index {
+public final class ScanIndex extends RowStoringIndex {
   private final MetadataFilteredSearchExecutor metadataFilteredSearchExecutor;
 
   public ScanIndex(

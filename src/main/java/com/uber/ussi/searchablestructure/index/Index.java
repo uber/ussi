@@ -1,9 +1,7 @@
 /* AUTHOR: Shijie Lu (shijie@uber.com), Shalini Kedlaya (skedlaya@uber.com), Ahmed Metwally (ametwally@uber.com) */
 package com.uber.ussi.searchablestructure.index;
 
-import com.carrotsearch.hppc.LongHashSet;
 import com.carrotsearch.hppc.LongObjectHashMap;
-import com.carrotsearch.hppc.cursors.LongObjectCursor;
 import com.uber.ussi.comparator.Comparator;
 import com.uber.ussi.comparator.ComparatorConfigValidator;
 import com.uber.ussi.comparator.ComparatorFactory;
@@ -14,17 +12,20 @@ import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.SearchableStructure;
-import com.uber.ussi.searchablestructure.metadata.MetadataFilteringModule;
 import com.uber.ussi.searchablestructure.metadata.MetadataFilteringStrategy;
-import com.uber.ussi.searchablestructure.metadata.PreFilteringResult;
 import java.util.List;
 import java.util.Objects;
 
 /**
  * Delete-only searchable structure built from rows graduated out of a cache.
  *
- * <p>Deletions are soft: the row joins a tombstone set and scoring skips it through {@link
- * #isDeleted}. Tombstoned rows are dropped only when the index is rebuilt from {@link #getAll}.
+ * <p>Deletions are soft: the row joins a tombstone set and scoring skips it. Tombstoned rows are
+ * dropped only when the index is rebuilt from {@link #getAll}.
+ *
+ * <p>What holds the rows is left to the index. {@link RowStoringIndex} holds its own and answers
+ * for them, which is what all but one index does. An index built from other indexes holds none and
+ * answers from the indexes it is built from, so that its rows are counted and returned once rather
+ * than kept twice.
  */
 public abstract class Index implements SearchableStructure, AutoCloseable {
   public static final String MAX_PRE_FILTERING_ROWS_RATIO = "max_pre_filtering_rows_ratio";
@@ -33,70 +34,34 @@ public abstract class Index implements SearchableStructure, AutoCloseable {
 
   protected final NamespaceConfig namespaceConfig;
   protected final Comparator comparator;
-  protected final LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap;
-  protected final MetadataFilteringModule metadataFilteringModule;
   protected final double maxPreFilteringRowsRatio;
   protected final MetadataFilteringStrategy metadataFilteringStrategy;
-  private final LongHashSet deletedRowNums;
 
-  protected Index(
-      NamespaceConfig namespaceConfig,
-      LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
-      LongObjectHashMap<LongMeta> rowNumToMetaMap) {
+  protected Index(NamespaceConfig namespaceConfig) {
     this.namespaceConfig = Objects.requireNonNull(namespaceConfig, "namespaceConfig");
     this.namespaceConfig.validate(
         IndexConfigValidator.getInstance(), ComparatorConfigValidator.getInstance());
     this.comparator = ComparatorFactory.createComparator(namespaceConfig);
     this.maxPreFilteringRowsRatio = parseMaxPreFilteringRowsRatio(namespaceConfig);
     this.metadataFilteringStrategy = parseMetadataFilteringStrategy(namespaceConfig);
-    this.rowNumToTermsAndValuesMap =
-        new LongObjectHashMap<>(Objects.requireNonNull(rowNumToTermsAndValuesMap, "rows"));
-    this.deletedRowNums = new LongHashSet();
-    this.metadataFilteringModule = new MetadataFilteringModule();
-    LongObjectHashMap<LongMeta> metadataByRow =
-        rowNumToMetaMap == null ? new LongObjectHashMap<>() : rowNumToMetaMap;
-    for (LongObjectCursor<LongTermsAndValues> entry : this.rowNumToTermsAndValuesMap) {
-      LongMeta metadata = metadataByRow.getOrDefault(entry.key, LongMeta.empty());
-      metadataFilteringModule.put(entry.key, metadata);
-    }
   }
 
+  /** Marks {@code rowNum} deleted, and reports whether this index held it undeleted. */
   @Override
-  public final boolean delete(long rowNum) {
-    if (!rowNumToTermsAndValuesMap.containsKey(rowNum) || deletedRowNums.contains(rowNum)) {
-      return false;
-    }
-    deletedRowNums.add(rowNum);
-    metadataFilteringModule.delete(rowNum);
-    onRowDeleted(rowNum);
-    return true;
-  }
+  public abstract boolean delete(long rowNum);
 
-  /** Hook invoked after a row is marked deleted, so an index built of others can update them. */
-  protected void onRowDeleted(long rowNum) {}
-
+  /** The rows still held, which is what a rebuild of this index is given. */
   @Override
-  public final LongObjectHashMap<LongTermsAndValues> getAll() {
-    LongObjectHashMap<LongTermsAndValues> rows = new LongObjectHashMap<>();
-    for (LongObjectCursor<LongTermsAndValues> entry : rowNumToTermsAndValuesMap) {
-      if (!isDeleted(entry.key)) {
-        rows.put(entry.key, entry.value);
-      }
-    }
-    return rows;
-  }
+  public abstract LongObjectHashMap<LongTermsAndValues> getAll();
 
-  public final LongObjectHashMap<LongMeta> getAllMetadata() {
-    return metadataFilteringModule.getAllMetadata();
-  }
+  /** The metadata of the rows still held. */
+  public abstract LongObjectHashMap<LongMeta> getAllMetadata();
 
-  public final int size() {
-    return rowNumToTermsAndValuesMap.size() - deletedRowNums.size();
-  }
+  /** Rows held and not deleted. */
+  public abstract int size();
 
-  public final boolean isEmpty() {
-    return rowNumToTermsAndValuesMap.isEmpty();
-  }
+  /** Whether this index was built with no rows at all, deleted or otherwise. */
+  public abstract boolean isEmpty();
 
   @Override
   public void close() {}
@@ -109,44 +74,8 @@ public abstract class Index implements SearchableStructure, AutoCloseable {
   public abstract List<RowNumAndSimilarity> getSimilarRowNums(
       float minSimilarity, LongTermsAndValues record, MetaFilter metadataFilter);
 
-  protected final boolean matchesMetaFilter(long rowNum, MetaFilter metadataFilter) {
-    return metadataFilteringModule.doesMatch(rowNum, metadataFilter);
-  }
-
   protected final boolean hasMetadataFilter(MetaFilter metadataFilter) {
     return metadataFilter != null && !metadataFilter.isEmpty();
-  }
-
-  protected final PreFilteringResult getMatchingRowNumsIfUnderPreFilteringLimit(
-      MetaFilter metadataFilter) {
-    return metadataFilteringModule.getMatchingRowNumsIfUnderLimit(
-        metadataFilter, getMaxPreFilteringNumRows());
-  }
-
-  /**
-   * Expands the unfiltered candidate pool so post-filtering still reaches the matching rows that
-   * sit just below the unexpanded top-k boundary.
-   */
-  protected final int getPostFilteringMaxResults(int maxResults, MetaFilter metadataFilter) {
-    if (!hasMetadataFilter(metadataFilter)) {
-      return maxResults;
-    }
-    int numRowsMatching = metadataFilteringModule.getNumRowsMatching(metadataFilter);
-    if (numRowsMatching == 0) {
-      return 0;
-    }
-    double expansionRatio = (double) size() / numRowsMatching;
-    int expandedMaxResults = (int) Math.ceil(maxResults * expansionRatio);
-    return Math.min(
-        namespaceConfig.getMaxNumSimilarities(), Math.max(maxResults, expandedMaxResults));
-  }
-
-  protected final boolean isDeleted(long rowNum) {
-    return deletedRowNums.contains(rowNum);
-  }
-
-  private int getMaxPreFilteringNumRows() {
-    return (int) Math.floor(size() * maxPreFilteringRowsRatio);
   }
 
   private static double parseMaxPreFilteringRowsRatio(NamespaceConfig namespaceConfig) {

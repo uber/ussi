@@ -47,11 +47,11 @@ public class L2Comparator extends Comparator
       double uni2,
       double maxSquaredL2Distance) {
     validatePartialUniValues(partialUni1, uni1, partialUni2, uni2);
-    double innerProductThreshold = (uni1 + uni2 - maxSquaredL2Distance) / 2.0;
-    if (partialConj >= innerProductThreshold) {
+    double minInnerProduct = (uni1 + uni2 - maxSquaredL2Distance) / 2.0;
+    if (partialConj >= minInnerProduct) {
       return true;
     }
-    double remainingInnerProductGap = innerProductThreshold - partialConj;
+    double remainingInnerProductGap = minInnerProduct - partialConj;
     double remainingSquaredNorm1 = Math.max(0.0, uni1 - partialUni1);
     double remainingSquaredNorm2 = Math.max(0.0, uni2 - partialUni2);
     return remainingSquaredNorm1 * remainingSquaredNorm2

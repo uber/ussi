@@ -32,7 +32,8 @@ public final class ParallelismBudget {
   private final int maxThreadsPerSearch;
   private volatile int budget;
   private volatile IntConsumer onChange = threads -> {};
-  // Until an engine attaches there are no searches, so running a change inline is already exclusive.
+  // Until an engine attaches there are no searches, so running a change inline is already
+  // exclusive.
   private volatile Consumer<Runnable> exclusively = Runnable::run;
   private int attachments;
   @Nullable private ScheduledExecutorService rebudgeter;
@@ -59,8 +60,8 @@ public final class ParallelismBudget {
    * last registration wins.
    *
    * <p>Applied with no search in flight, because registration happens whenever a structure is built
-   * and a structure can be built while other searches are running. Such a setting is shared by every
-   * search in flight, so changing it underneath one is not safe.
+   * and a structure can be built while other searches are running. Such a setting is shared by
+   * every search in flight, so changing it underneath one is not safe.
    */
   public void onChange(IntConsumer applier) {
     exclusively.accept(

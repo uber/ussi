@@ -121,7 +121,7 @@ class SequenceDistanceTest {
         "budget of 2");
   }
 
-  /** A similarity threshold of zero produces a Long.MAX_VALUE budget, which must not overflow. */
+  /** A minimum similarity of zero produces a Long.MAX_VALUE budget, which must not overflow. */
   @Test
   void anUnboundedBudgetAdmitsEveryDistance() {
     for (SequenceDistanceType type : SequenceDistanceType.values()) {

@@ -1,4 +1,5 @@
-<!-- AUTHOR: Shijie Lu (shijie@uber.com), Shalini Kedlaya (skedlaya@uber.com), Ahmed Metwally (ametwally@uber.com) -->
+<!-- AUTHOR: Shijie Lu (shijie@uber.com), Shalini Kedlaya (skedlaya@uber.com),
+Ahmed Metwally (ametwally@uber.com) -->
 
 # Uber Similarity Search Index
 
@@ -157,7 +158,7 @@ versions. Keep your own mapping from your document IDs to these values.
 
 `getNearestNeighborRowNums` is a kNN query and `getSimilarRowNums` a capped
 range query, returning the best `maxNumSimilarities` rows meeting the
-threshold rather than every row that meets it.
+minimum similarity rather than every row that meets it.
 
 Both searches return `SearchResults`, an ordered container with parallel
 `rowNums` and `similarities` arrays, ordered by descending similarity with the
@@ -311,9 +312,9 @@ after lowercasing, and an empty `MetaFilter` matches every non-deleted row.
 
 ## What To Expect From Results
 
-Most of the time results are exact, meaning every row within the threshold is
-found and the scores are the comparator's. The cases below are where that
-changes, and each is something you opt into.
+Most of the time results are exact, meaning every row at or above the minimum
+similarity is found and the scores are the comparator's. The cases below are
+where that changes, and each is something you opt into.
 
 **Signature indexes are approximate.** `inverted_signature`, and
 `inverted_hybrid` above 270 terms, find candidates by signature collision. The
@@ -342,7 +343,8 @@ differ in which half of the answer stays exact:
 
 `candidates_and_verification`, the default, removes a discarded term from the
 lists and from the records being scored. Similarities are then reported between
-the records with the popular terms removed, and every row within the threshold
+the records with the popular terms removed, and every row at or above the
+minimum similarity
 by that measure is found. Choose this when the popular terms carry no signal
 worth reporting.
 
@@ -365,8 +367,10 @@ surviving candidate. It works with every inverted index type and every
 comparator.
 
 `spars_merge` advances all of the query's keys together, letting it abandon a
-row as soon as no completion of it can reach the current threshold. It pays off
-when queries have many keys and the threshold rejects most rows early. It is
+row as soon as no completion of it can reach the current minimum similarity. It
+pays off
+when queries have many keys and the minimum similarity rejects most rows early.
+It is
 available for `l2`, `jaccard`, and `ruzicka`, and not for the sequence
 comparators.
 

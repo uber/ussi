@@ -119,9 +119,12 @@ class FilteredSearchTest {
     assertThrows(IllegalStateException.class, iterator::hasNext);
   }
 
-  /** Raising the threshold mid-traversal can put the spent prefix cost over the new budget. */
+  /**
+   * Raising the minimum similarity mid-traversal can put the spent prefix cost over the new
+   * budget.
+   */
   @Test
-  void candidateIteratorAbandonsTheCurrentKeyWhenTheTighterThresholdOutlawsItsPrefixCost() {
+  void candidateIteratorAbandonsTheCurrentKeyWhenTheTighterMinSimilarityOutlawsItsPrefixCost() {
     // Every row shares the query's uni value, so only the prefix budget can end the traversal.
     FilteredSearch.Context context =
         stubContext(

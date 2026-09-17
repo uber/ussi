@@ -88,11 +88,11 @@ class SequenceComparatorTest {
   }
 
   /**
-   * Early exit only has to report a similarity below the threshold, so each case is checked just
+   * Early exit only has to report a similarity below the tightened, so each case is checked just
    * above and just below its own.
    */
   @Test
-  void similarityCasesRespectTheThresholdTheyAreGiven() {
+  void similarityCasesRespectTheMinSimilarityTheyAreGiven() {
     for (SimilarityCase testCase : SIMILARITY_CASES) {
       Comparator comparator =
           createComparator(
@@ -101,19 +101,19 @@ class SequenceComparatorTest {
       LongTermsAndValues sequence2 = sequence(comparator, testCase.sequence2);
 
       if (testCase.expectedSimilarity > 0.0) {
-        double reachableThreshold = testCase.expectedSimilarity - EPSILON_9;
+        double reachableMinSimilarity = testCase.expectedSimilarity - EPSILON_9;
         assertEquals(
             testCase.expectedSimilarity,
-            comparator.getSimilarity(sequence1, sequence2, reachableThreshold),
+            comparator.getSimilarity(sequence1, sequence2, reachableMinSimilarity),
             EPSILON_9,
-            testCase.label() + " at a threshold it reaches");
+            testCase.label() + " at a minimum similarity it reaches");
       }
       if (testCase.expectedSimilarity < 1.0) {
-        double unreachableThreshold = testCase.expectedSimilarity + 1e-3;
+        double unreachableMinSimilarity = testCase.expectedSimilarity + 1e-3;
         assertTrue(
-            comparator.getSimilarity(sequence1, sequence2, unreachableThreshold)
-                < unreachableThreshold,
-            testCase.label() + " at a threshold it misses");
+            comparator.getSimilarity(sequence1, sequence2, unreachableMinSimilarity)
+                < unreachableMinSimilarity,
+            testCase.label() + " at a minimum similarity it misses");
       }
     }
   }
@@ -132,9 +132,11 @@ class SequenceComparatorTest {
     }
   }
 
-  /** Length filtering may only reject pairs the comparator would score below the threshold. */
+  /**
+   * Length filtering may only reject pairs the comparator would score below the minimum similarity.
+   */
   @Test
-  void lengthFilteringOnlyRejectsPairsBelowTheThreshold() {
+  void lengthFilteringOnlyRejectsPairsBelowTheMinSimilarity() {
     String alphabet = "abc";
     Random random = new Random(7_314L);
     for (String comparatorType : List.of("gld", "ngld")) {
@@ -236,7 +238,7 @@ class SequenceComparatorTest {
     assertEquals(7.0 / 11.0, ngld.getMinSharedKeyFraction(6.0, 0.2), EPSILON_9);
 
     // An LCS edit moves one term rather than two, so the bound collapses to 1 - the budget,
-    // the same shape Ruzicka's threshold already has.
+    // the same shape Ruzicka's minimum similarity already has.
     BaseSequenceComparator lcs =
         (BaseSequenceComparator) createComparator("ngld", "complement", "lcs");
     assertEquals(0.8, lcs.getMinSharedKeyFraction(6.0, 0.2), EPSILON_9);
@@ -303,7 +305,7 @@ class SequenceComparatorTest {
 
   /** The budget must be the exact inverse of the normalization, so no genuine match is rejected. */
   @Test
-  void maxDistanceAdmitsExactlyTheDistancesThatNormalizeWithinTheThreshold() {
+  void maxDistanceAdmitsExactlyTheDistancesThatNormalizeWithinTheMinSimilarity() {
     for (int length1 = 0; length1 <= 12; ++length1) {
       for (int length2 = 0; length2 <= 12; ++length2) {
         for (double maxNormalizedDistance : new double[] {0.0, 0.1, 0.25, 1.0 / 3.0, 0.5, 0.8}) {

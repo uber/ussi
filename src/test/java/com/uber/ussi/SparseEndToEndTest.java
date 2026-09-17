@@ -65,7 +65,7 @@ class SparseEndToEndTest {
   }
 
   @Test
-  void portedSimilarityThresholdMatrixPassesThroughHybridIndex() {
+  void portedSimilarityMinSimilarityMatrixPassesThroughHybridIndex() {
     for (double maxFraction : List.of(1.0, 0.5)) {
       for (String metadataStrategy : List.of("in_filtering", "pre_filtering", "auto")) {
         try (NearestNeighborSearchIndex index =

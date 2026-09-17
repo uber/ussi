@@ -18,7 +18,7 @@ public final class TopResults {
 
   /**
    * Returns the similarity a row must beat once the heap is full. The weakest kept similarity still
-   * qualifies, so the threshold sits one step below it.
+   * qualifies, so the minimum similarity sits one step below it.
    */
   public static double getConservativeMinSimilarity(BoundedSizeMaxHeap<RowNumAndSimilarity> rows) {
     return Math.nextDown(rows.peek().getSimilarity());

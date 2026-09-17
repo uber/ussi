@@ -83,7 +83,7 @@ class SparseComparatorTest {
   }
 
   @Test
-  void lengthAndPositionFilteringPreserveThresholdSemantics() {
+  void lengthAndPositionFilteringPreserveMinSimilaritySemantics() {
     Comparator comparator = comparator("ruzicka");
     LongTermsAndValues first = sparse(comparator, new long[] {1L, 2L}, 1f, 1f);
     LongTermsAndValues second = sparse(comparator, new long[] {2L, 3L}, 1f, 1f);
@@ -119,7 +119,7 @@ class SparseComparatorTest {
   }
 
   @Test
-  void numTermsFilteringValidatesArgumentsAndComparatorThresholds() {
+  void numTermsFilteringValidatesArgumentsAndComparatorMinSimilaritys() {
     Comparator jaccard = comparator("jaccard");
     LongTermsAndValues query = sparse(jaccard, new long[] {1}, 1.0f);
 
@@ -159,10 +159,10 @@ class SparseComparatorTest {
 
   /**
    * These measures are themselves the multiset similarity the signatures collide at, so the
-   * threshold needs no conversion and the record's own Uni value says nothing extra.
+   * minimum similarity needs no conversion and the record's own Uni value says nothing extra.
    */
   @Test
-  void theSharedSignatureBoundIsTheThresholdItself() {
+  void theSharedSignatureBoundIsTheMinSimilarityItself() {
     BaseRuzickaComparator comparator = (BaseRuzickaComparator) comparator("jaccard");
 
     assertEquals(0.5, comparator.getMinSharedKeyFraction(8.0, 0.5), 0.0);
@@ -202,7 +202,7 @@ class SparseComparatorTest {
   }
 
   @Test
-  void theSharedSignatureBoundRejectsANegativeThreshold() {
+  void theSharedSignatureBoundRejectsANegativeMinSimilarity() {
     BaseRuzickaComparator comparator = (BaseRuzickaComparator) comparator("ruzicka");
 
     assertThrows(
@@ -254,9 +254,9 @@ class SparseComparatorTest {
         double expected = mapBasedSimilarity(comparator, first, second);
 
         assertEquals(expected, comparator.getSimilarity(first, second, 0.0), EPSILON_9);
-        double threshold = Math.min(1.0, expected + 0.01);
-        double thresholded = comparator.getSimilarity(first, second, threshold);
-        assertEquals(expected >= threshold ? expected : 0.0, thresholded, EPSILON_9);
+        double minSimilarity = Math.min(1.0, expected + 0.01);
+        double scored = comparator.getSimilarity(first, second, minSimilarity);
+        assertEquals(expected >= minSimilarity ? expected : 0.0, scored, EPSILON_9);
       }
     }
   }

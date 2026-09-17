@@ -32,7 +32,7 @@ class SignatureIndexOnSequencesTest {
   private static final int BASE_LENGTH = 300;
 
   /**
-   * Thresholds that admit a handful of edits over sequences this long. GLD scores an edit count
+   * MinSimilaritys that admit a handful of edits over sequences this long. GLD scores an edit count
    * through the reciprocal normalizer, so 0.25 admits three edits and 0.1 admits nine; NGLD
    * divides by the lengths, so the same counts land near the top of its range.
    */
@@ -43,8 +43,8 @@ class SignatureIndexOnSequencesTest {
 
   /**
    * Verification reads the sequences rather than the signatures, so a row the lists surface is
-   * scored exactly. Nothing that fails the threshold survives, and nothing that passes is scored
-   * as anything other than what a scan would report.
+   * scored exactly. Nothing that fails the minimum similarity survives, and nothing that passes is
+   * scored as anything other than what a scan would report.
    */
   @Test
   void everySequenceTheSignatureListsSurfaceIsScoredExactly() {
@@ -76,9 +76,9 @@ class SignatureIndexOnSequencesTest {
   }
 
   /**
-   * The prefix bound turns the threshold into the share of signatures a qualifying candidate has
-   * to collide on, widened by the generator's margin. Recall is therefore high rather than exact,
-   * and a bound derived in the wrong direction would show up here as a collapse.
+   * The prefix bound turns the minimum similarity into the share of signatures a qualifying
+   * candidate has to collide on, widened by the generator's margin. Recall is therefore high rather
+   * than exact, and a bound derived in the wrong direction would show up here as a collapse.
    */
   @Test
   void theSignatureListsRecallNearlyEverySequenceAScanFinds() {

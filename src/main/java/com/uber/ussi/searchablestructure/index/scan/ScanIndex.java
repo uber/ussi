@@ -135,10 +135,10 @@ public final class ScanIndex extends RowStoringIndex {
     if (metadataFilter != null && !matchesMetaFilter(rowNum, metadataFilter)) {
       return;
     }
-    float threshold = TopResults.tightenedMinSimilarity(rows, minSimilarity);
+    float tightened = TopResults.tightenedMinSimilarity(rows, minSimilarity);
     float similarity =
-        (float) comparator.getSimilarity(requestTermsAndValues, termsAndValues, threshold);
-    if (similarity >= threshold) {
+        (float) comparator.getSimilarity(requestTermsAndValues, termsAndValues, tightened);
+    if (similarity >= tightened) {
       rows.add(new RowNumAndSimilarity(rowNum, similarity));
     }
   }

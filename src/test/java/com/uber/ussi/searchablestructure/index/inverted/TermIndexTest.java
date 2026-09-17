@@ -210,7 +210,7 @@ class TermIndexTest {
   }
 
   @Test
-  void nearestNeighborsTightenThresholdAndBreakTiesByLowestRowNum() {
+  void nearestNeighborsTightenMinSimilarityAndBreakTiesByLowestRowNum() {
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
     rows.put(20, jaccard(new long[] {1, 2}, 1, 1));
     rows.put(19, jaccard(new long[] {1, 2}, 1, 1));
@@ -559,7 +559,7 @@ class TermIndexTest {
             termIndex.getNearestNeighborRowNums(k, query, MetaFilter.empty()));
         assertEquivalent(
             comparatorType
-                + " threshold queryIndex="
+                + " minimum similarity queryIndex="
                 + queryIndex
                 + " minSimilarity="
                 + minSimilarity
@@ -596,7 +596,7 @@ class TermIndexTest {
             mergeIndex.getNearestNeighborRowNums(k, query, MetaFilter.empty()));
         assertEquivalent(
             comparatorType
-                + " merge threshold queryIndex="
+                + " merge minimum similarity queryIndex="
                 + queryIndex
                 + " minSimilarity="
                 + minSimilarity,
@@ -645,7 +645,11 @@ class TermIndexTest {
               filteredScanIndex.getNearestNeighborRowNums(k, query, sf),
               mergeIndex.getNearestNeighborRowNums(k, query, sf));
           assertEquivalent(
-              comparatorType + " " + strategy + " merge threshold queryIndex=" + queryIndex,
+              comparatorType
+                  + " "
+                  + strategy
+                  + " merge minimum similarity queryIndex="
+                  + queryIndex,
               filteredScanIndex.getSimilarRowNums(0.2f, query, sf),
               mergeIndex.getSimilarRowNums(0.2f, query, sf));
         }
@@ -686,7 +690,7 @@ class TermIndexTest {
           filteredScanIndex.getNearestNeighborRowNums(k, query, sf),
           mergeIndex.getNearestNeighborRowNums(k, query, sf));
       assertEquivalent(
-          "merge threshold queryIndex=" + queryIndex,
+          "merge minimum similarity queryIndex=" + queryIndex,
           filteredScanIndex.getSimilarRowNums(0.2f, query, sf),
           mergeIndex.getSimilarRowNums(0.2f, query, sf));
     }

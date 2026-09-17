@@ -434,7 +434,7 @@ class InvertedTermCacheTest {
   }
 
   @Test
-  void invertedListSearchStopsCurrentInvertedListAfterThresholdTightening()
+  void invertedListSearchStopsCurrentInvertedListAfterMinSimilarityTightening()
       throws ReflectiveOperationException {
     InvertedTermCache cache = new InvertedTermCache(config("jaccard"));
     long rowNum = cache.insert(jaccard(new long[] {1}, 1), Map.of());
@@ -489,7 +489,7 @@ class InvertedTermCacheTest {
             sparseCache.getNearestNeighborRowNums(k, query, MetaFilter.empty()));
         assertEquivalent(
             comparatorType
-                + " threshold queryIndex="
+                + " minimum similarity queryIndex="
                 + queryIndex
                 + " minSimilarity="
                 + minSimilarity

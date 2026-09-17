@@ -38,8 +38,8 @@ public interface SearchableStructure {
    * oversubscribes the machine once the other searches in flight are counted, which costs more in
    * tail latency than the split saves.
    *
-   * <p>A structure whose thread count is a process-global setting cannot read this per search, since
-   * the setting is shared by every search in flight; it registers with {@link
+   * <p>A structure whose thread count is a process-global setting cannot read this per search,
+   * since the setting is shared by every search in flight; it registers with {@link
    * ParallelismBudget#onChange} instead.
    */
   default int searchParallelism() {

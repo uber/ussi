@@ -80,7 +80,7 @@ class NearestNeighborSearchIndexTest {
   }
 
   @Test
-  void readinessForGraduationUsesCacheThreshold() {
+  void readinessForGraduationUsesCacheMinSimilarity() {
     NearestNeighborSearchIndex index = NearestNeighborSearchIndex.create(configWithMaxCacheSize(1));
 
     assertFalse(index.isReadyForGraduation());

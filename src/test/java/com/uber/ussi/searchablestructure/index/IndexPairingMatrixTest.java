@@ -250,7 +250,7 @@ class IndexPairingMatrixTest {
    * <p>The scan index scores every row through the same comparator, so it is the oracle for what a
    * pair is worth. A cell may return a subset of what scan finds, since candidate generation prunes
    * and the signature-keyed cells are approximate, but every row it does return has to carry scan's
-   * similarity, respect the threshold or the result limit, and arrive once.
+   * similarity, respect the minimum similarity or the result limit, and arrive once.
    *
    * <p>Order is deliberately not asserted. A structure returns results unordered because
    * {@code NearestNeighborSearchIndex} merges every structure's results with the cache's and sorts
@@ -308,7 +308,12 @@ class IndexPairingMatrixTest {
       }
       if (result.getSimilarity() < minSimilarity) {
         problems.add(
-            where + ": rowNum " + rowNum + " scored " + result.getSimilarity() + " below threshold");
+            where
+                + ": rowNum "
+                + rowNum
+                + " scored "
+                + result.getSimilarity()
+                + " below the minimum similarity");
       }
       if (Math.abs(similarityOf(exact, rowNum) - result.getSimilarity()) > SIMILARITY_EPSILON) {
         problems.add(

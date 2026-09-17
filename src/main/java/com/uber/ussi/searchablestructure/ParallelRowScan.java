@@ -148,7 +148,9 @@ public final class ParallelRowScan {
     return Math.max(1, Math.min(parallelism, numRows));
   }
 
-  /** Scans {@code numIndexes} worth of rows in {@code numRanges} ranges, merging what each keeps. */
+  /**
+   * Scans {@code numIndexes} worth of rows in {@code numRanges} ranges, merging what each keeps.
+   */
   private static List<RowNumAndSimilarity> inRanges(
       int numRanges,
       int numIndexes,

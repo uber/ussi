@@ -206,15 +206,11 @@ The inverted index scores its candidates that way, so no part of one inverted
 search is divided between threads. How much pruning that would cost depends on
 the data rather than on the machine, so no measurement would settle it.
 
-An inverted index takes its threads another way. It is built as several smaller
-inverted indexes, called shards, each holding a disjoint share of its rows. A
-search searches several shards at the same time, and each shard search is
-complete in itself, with its own heap and its own pruning.
-
-Shards prune independently, which is the weakening described above, and here it
-is accepted rather than avoided. A sharded search does more total work than an
-undivided one; what it gains is that the work runs at once. See Sharded Inverted
-Index.
+An inverted index multi-threads differently: it shards its inverted lists and
+searches several shards at once, each shard search complete in itself with its
+own heap and its own pruning. That weakens pruning, as above, and here the
+weakening is accepted rather than avoided: a sharded search does more total work
+and returns concurrency for it. See Sharded Inverted Index.
 
 Whether to split at all is worth deciding, because a scan can be short enough
 that handing its parts out costs more than the scan. How finely to split is not,
@@ -531,70 +527,54 @@ rules out `l2` and any other comparator left without one.
 
 ### Sharded Inverted Index
 
-A **shard** is one of several sets of inverted lists that an inverted index
-builds, each holding the lists of a disjoint share of its rows. A search searches
+An inverted index **shards** its inverted lists, building one set of lists per
+shard, each holding the lists of a disjoint share of its rows. A search searches
 every shard and keeps the nearest rows across all of them.
 
-Only the inverted lists are divided. The forward index, the uni value of every
-row, the metadata, and the tombstones of deleted rows are all keyed by row
-number, belong to the index, and are read by the search of every shard. An index
-of one shard is the same index by a different arrangement of its lists, so there
-is no unsharded form to convert to or from.
+Only the lists are sharded. The forward index, each row's uni value, the metadata
+and the tombstones are keyed by row number, belong to the index, and are read by
+every shard's search. An index of one shard therefore differs from an unsharded
+index in arrangement alone, and no index is converted between the two.
 
-A row's lists go to the shard its row number falls in, modulo the shard count.
-Row numbers are handed out in turn, so this divides the rows evenly, and an even
-division is what makes the shards cost the same to search as each other.
+A row's lists belong to the shard given by its row number modulo the shard count.
+Row numbers are issued in sequence, so the shards receive equal shares and cost
+the same to search.
 
-A search hands off all of its shards at once. Searches are served in the order
-they arrive, and handing off in instalments would forfeit that, because the pool
-takes shards in the order they were submitted: a search returning for a second
-instalment would queue behind a search that had arrived later. Handing off
-together also leaves the thread count to the pool, which is sized to the cores
-and so imposes the bound `ParallelismBudget` would have imposed.
+A search submits all of its shards together. The pool serves shards in submission
+order, so submitting in instalments would let a later search overtake an earlier
+one. Submitting together also delegates the thread count to the pool, which is
+sized to the cores and so imposes the bound `ParallelismBudget` would impose.
 
-Shards multi-thread a search entire, which is what distinguishes them from the
-alternatives. Multi-threading verification reaches only the phase that scores
-candidates. Multi-threading over the query's keys visits a row once per thread
-holding one of its keys, whereas a single thread walking every key visits that
-row once.
+Sharding multi-threads a search entire, which the alternatives do not.
+Multi-threading verification reaches only the phase that scores candidates.
+Multi-threading the query's keys visits a row once per thread holding one of its
+keys, where one thread walking every key visits it once.
 
-The downside is that a shard prunes only from what it has seen. An inverted list
-is sorted by uni value, and both length filtering and the rising `minSimilarity`
-of a filling heap prune against that order. A shard covering a share of the rows
-therefore prunes against a weaker threshold, and over a narrower range, than the
-whole index would. Each shard also repeats the walk of the query's keys and the
-seek into each of their lists. Sharding consequently increases the total work of
-a search, and what it buys is that the work runs at once. Where no spare thread
-exists to run the shards concurrently, sharding costs rather than pays.
+The cost is weaker pruning. Inverted lists are sorted by uni value, and both
+length filtering and the rising `minSimilarity` of a filling heap prune against
+that order, so a shard prunes against a weaker threshold over a narrower range
+than the whole index does. Each shard also repeats the walk of the query's keys
+and the seek into each list. Sharding therefore raises the total work of a search
+and returns concurrency for it; without a spare thread it is a loss.
 
-That cost is what bounds the shard count. An index takes one shard per core only
-once every shard would hold a minimum number of rows, and fewer shards until
-then. The minimum sizes the shard count of a small index; it does not switch
-sharding on and off. An index is built once from the rows it is given and never
-grows, so the count is settled when the index is built.
+That cost bounds the shard count. An index takes one shard per core only once
+every shard would hold a minimum number of rows, and fewer shards until then. The
+minimum is 50,000 rows, chosen conservatively rather than measured: sharding was
+measured to pay at about 60,000 rows per shard and to lose at about 15,000.
 
-The minimum is set at 50,000 rows, which is a conservative choice rather than a
-measured one. Sharding was measured to pay at about 60,000 rows per shard, and to
-cost more than it returned at about 15,000, so the value sits at the safe end of
-a range whose crossover has not been located.
+Only inverted indexes are sharded. A scan index already multi-threads one search
+across its rows, and a matrix index scored by OpenBLAS multi-threads inside that
+scorer, both from the same budget. A matrix index scored by the pure-Java scorer
+draws nothing from the budget, so sharding it remains unexplored.
 
-Only the inverted indexes are sharded. A scan index already divides the rows of
-one search between threads, and a matrix index scored by OpenBLAS divides one
-search inside that scorer, both drawing on the same budget, so a shard on top of
-either would divide rows already divided. A matrix index scored by the pure-Java
-scorer is the exception, since it draws nothing from the budget, so sharding it
-is unexplored rather than ruled out.
+The inverted term cache is not sharded. It is bounded by `max_cache_size` and so
+holds fewer rows than one shard requires, and it is the one inverted structure
+that changes: it revises its popular-term decisions as rows are inserted, deleted
+and updated, and every shard would need those revisions as they occurred. It
+multi-threads through `ScanSplit` instead.
 
-The inverted term cache is not sharded either, for two reasons. It is bounded by
-`max_cache_size`, so it holds far fewer rows than the minimum a shard must hold.
-It is also the one inverted structure that changes: it accepts inserts, deletes
-and updates, and it revises its popular-term decisions as its rows change. A
-shard must discard whatever its structure discards, so shards of a cache would
-each need those revisions applied as they happened. The cache takes its threads
-from `ScanSplit` instead, which divides the candidate scan it falls back to.
-
-Sharding is invisible to callers, which never see a shard and address rows only
-by the row numbers they inserted them under.
+Sharding is invisible to callers, which address rows only by the row numbers they
+inserted them under.
 
 ## Discarding Popular Terms
 
@@ -640,20 +620,19 @@ inverted lists, since that conjunction can only report the similarity that
 excludes the discarded terms, so `spars_merge` verifies each candidate through
 the comparator under this scope.
 
-Discarding is something done to terms, and it is done while they are still
-terms: popularity is counted over the terms of a record, and the popular ones are
-removed from the record before the structure derives the keys its lists are under.
-A signature-keyed structure that discards therefore generates its signatures from
-a record the popular terms are already gone from, so a discard changes which
-signatures a row has rather than removing signatures the row already had.
+Discarding removes terms, and removes them while they are still terms.
+Popularity is counted over a record's terms, and the popular ones are removed
+before the structure derives the keys its lists are under. A signature-keyed
+structure that discards therefore generates signatures from an already stripped
+record, so a discard changes which signatures a row has rather than removing
+signatures it had.
 
-Frequency is never counted over those keys, so no structure discards a signature
-for appearing in most rows. That is deliberate rather than an omission. A term in
-most rows carries no signal, which is what makes discarding it a saving, whereas
-signatures collide at a rate tracking the multiset similarity of the records
-behind them, so a signature in most rows reports a similarity worth keeping.
-Where such a signature does appear it comes of a term dominating the multisets,
-and that term is what the term-level discard removes.
+No structure discards a key for being frequent, which for signatures is
+deliberate. A term in most rows carries no signal, whereas signatures collide at
+a rate tracking the multiset similarity of the records behind them, so a
+signature in most rows reports a similarity worth keeping. Such a signature
+arises from a term dominating the multisets, and the term-level discard removes
+that term.
 
 ## Candidate Generation
 

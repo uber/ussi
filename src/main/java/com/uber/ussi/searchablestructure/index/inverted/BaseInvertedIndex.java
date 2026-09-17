@@ -386,7 +386,13 @@ abstract class BaseInvertedIndex extends Index {
         maxResults,
         shard ->
             searchShard(
-                shard, query, indexedQuery, metadataFilter, minSimilarity, maxResults, sharedFloor));
+                shard,
+                query,
+                indexedQuery,
+                metadataFilter,
+                minSimilarity,
+                maxResults,
+                sharedFloor));
   }
 
   private List<RowNumAndSimilarity> searchShard(

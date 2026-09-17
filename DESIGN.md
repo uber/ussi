@@ -102,16 +102,17 @@ deletes a row before re-inserting it, so one structure holds any given row and n
 order can change the version a search finds. Deletes still scan newest first,
 where the first structure holding a row must be the current one.
 
-How much this saves depends on how many structures there are, since a floor needs
-somewhere to be spent. Measured over an inverted index with several structures, it
-cuts by about half the rows a search scores, and by rather more the per-key row
-lists it walks to find them. Those lists are the index's **inverted lists**, and
-a row it proposes for scoring is a **candidate**; Indexes and Candidate
-Generation describe both. With only the active cache and one index it saves
+The saving depends on the number of structures, because a floor must have
+somewhere to be spent. An inverted index holds, for each key, a list of the rows
+carrying that key; these are its **inverted lists**, and a row drawn from them to
+be scored is a **candidate**. Indexes and Candidate Generation describe both.
+Measured across several structures, the floor cuts candidates by about half, and
+the inverted lists walked by more. With one active cache and one index it saves
 nothing.
 
-The hybrid index already searched its own term index and signature index this
-way, and now takes a floor from its caller as well as raising one between them.
+The hybrid index already searched its term index and signature index in this
+order. It now also accepts a floor from its caller, in addition to raising one
+between the two.
 
 The structures are visited one after another rather than at the same time.
 Their sizes differ by orders of magnitude, since an active cache is bounded by
@@ -202,15 +203,15 @@ Only a scan whose rows all score against the same threshold is split. A scan
 that raises its threshold as its heap fills prunes using what it has already
 scored, and parts each raising a threshold from their own heap would prune less
 than the whole scan does, so such a scan keeps its single heap and its pruning.
-The inverted index scores its candidates that way, so no part of one inverted
-search is divided between threads. How much pruning that would cost depends on
-the data rather than on the machine, so no measurement would settle it.
+An inverted index scores its candidates against a rising threshold, so no phase
+of a single inverted search is multi-threaded. The pruning that would forfeit
+depends on the data rather than the machine, so no measurement settles it.
 
-An inverted index multi-threads differently: it shards its inverted lists and
-searches several shards at once, each shard search complete in itself with its
-own heap and its own pruning. That weakens pruning, as above, and here the
-weakening is accepted rather than avoided: a sharded search does more total work
-and returns concurrency for it. See Sharded Inverted Index.
+An inverted index multi-threads by sharding instead. It searches several shards
+at once, and each shard search is complete in itself, with its own heap and its
+own threshold. This forfeits the same pruning, and here the loss is accepted: a
+sharded search does more total work and receives concurrency in return. See
+Sharded Inverted Index.
 
 Whether to split at all is worth deciding, because a scan can be short enough
 that handing its parts out costs more than the scan. How finely to split is not,
@@ -515,12 +516,11 @@ rows with at most 270 terms go to its term index and longer rows to its
 signature index. The configured length range may
 fall entirely below, entirely above, or across this internal boundary.
 
-Queries search whichever of the two matches the query length first. Jaccard's
-cardinality bounds can skip the other when no row on that side can reach the
-search's current `minSimilarity`. Ruzicka and popularity-filtered searches
-conservatively search both, because term count alone cannot prove one side
-irrelevant. Results from the ones searched are merged and limited by
-`maxNumSimilarities`.
+Queries search the index matching the query length first. Jaccard's cardinality
+bounds can skip the other when no row on that side can reach the search's current
+`minSimilarity`. Ruzicka and popularity-filtered searches conservatively search
+both, because term count alone cannot prove one side irrelevant. Results from the
+indexes searched are merged and limited by `maxNumSimilarities`.
 
 The hybrid requires a comparator with a configured signature generator, which
 rules out `l2` and any other comparator left without one.
@@ -531,19 +531,21 @@ An inverted index **shards** its inverted lists, building one set of lists per
 shard, each holding the lists of a disjoint share of its rows. A search searches
 every shard and keeps the nearest rows across all of them.
 
-Only the lists are sharded. The forward index, each row's uni value, the metadata
-and the tombstones are keyed by row number, belong to the index, and are read by
-every shard's search. An index of one shard therefore differs from an unsharded
-index in arrangement alone, and no index is converted between the two.
+Only the lists are sharded. The forward index, each row's uni value, the
+metadata and the tombstones are keyed by row number, belong to the index, and are
+read by every shard's search. An index of one shard is the general case with one
+shard rather than a separate form, so no index is converted between sharded and
+unsharded.
 
 A row's lists belong to the shard given by its row number modulo the shard count.
 Row numbers are issued in sequence, so the shards receive equal shares and cost
 the same to search.
 
 A search submits all of its shards together. The pool serves shards in submission
-order, so submitting in instalments would let a later search overtake an earlier
-one. Submitting together also delegates the thread count to the pool, which is
-sized to the cores and so imposes the bound `ParallelismBudget` would impose.
+order, so a search submitting some shards and returning for the rest would let a
+later search overtake it. Submitting together also delegates the thread count to
+the pool, which is sized to the cores and so imposes the bound
+`ParallelismBudget` would impose.
 
 Sharding multi-threads a search entire, which the alternatives do not.
 Multi-threading verification reaches only the phase that scores candidates.
@@ -581,21 +583,19 @@ inserted them under.
 A term occurring in most rows generates most of the index as candidates without
 narrowing anything down, so both the inverted cache and the inverted indexes
 can discard terms above a configured popularity. Popularity is measured over the
-whole structure and never over a part of one: an index divided into shards finds
-the popular terms once over all its rows and hands the same terms to every shard.
-A shard left to measure for itself would find a term's share of its own rows
-rather than of the index's, and would discard terms the index keeps, so sharding
-an index would change what it finds.
+whole structure, never over part of one. A sharded index finds its popular terms
+once over all its rows and gives the same terms to every shard. A shard measuring
+for itself would count a term's share of its own rows rather than of the index's,
+and would discard terms the index keeps.
 
-Inside a hybrid index, only its term index discards, and its popular terms are
-counted over the rows that term index holds. What discarding buys is shorter
-inverted lists, and only a term index can collect it. A signature list holds one
-entry per row whatever that row's terms are, so discarding leaves a signature
-index's lists exactly as long and only moves the signatures its rows are keyed
-by. What a
-discard means is
-`popular_term_discard_scope`, and the two settings differ in which half of the
-answer stays exact rather than in how aggressive they are.
+In a hybrid index, only the term index discards, and its popular terms are
+counted over the rows that term index holds. Discarding shortens inverted lists,
+which only a term index gains: a signature list holds one entry per row whatever
+that row's terms are, so discarding leaves a signature index's lists the same
+length and merely moves the signatures its rows are keyed by.
+
+`popular_term_discard_scope` decides what a discard means. The two settings
+differ in which side of the answer stays exact, not in how aggressive they are.
 
 Under the default `candidates_and_verification`, a discarded term is absent
 from the inverted lists and from the records the comparator scores. A search

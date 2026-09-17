@@ -25,7 +25,7 @@ import com.uber.ussi.searchablestructure.index.inverted.generator.FilteredSearch
 import com.uber.ussi.searchablestructure.index.inverted.generator.InvertedList;
 import com.uber.ussi.searchablestructure.index.inverted.generator.MergeSearch;
 import com.uber.ussi.searchablestructure.index.inverted.generator.SharedMinSimilarity;
-import com.uber.ussi.searchablestructure.index.inverted.generator.TopResults;
+import com.uber.ussi.searchablestructure.TopResults;
 import com.uber.ussi.searchablestructure.inverted.KeyAndPrefixFilteringData;
 import com.uber.ussi.searchablestructure.metadata.MetadataFilteringStrategy;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;

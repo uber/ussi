@@ -6,6 +6,7 @@ import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.ParallelRowScan;
+import com.uber.ussi.searchablestructure.TopResults;
 import java.util.Collections;
 import java.util.List;
 
@@ -49,9 +50,9 @@ public final class ScanCache extends Cache {
           if (!matchesMetaFilter(rowNum, metadataFilter)) {
             return;
           }
-          float similarity =
-              (float) comparator.getSimilarity(record, termsAndValues, minSimilarity);
-          if (similarity >= minSimilarity) {
+          float threshold = TopResults.tightenedMinSimilarity(rows, minSimilarity);
+          float similarity = (float) comparator.getSimilarity(record, termsAndValues, threshold);
+          if (similarity >= threshold) {
             rows.add(new RowNumAndSimilarity(rowNum, similarity));
           }
         });

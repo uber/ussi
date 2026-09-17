@@ -8,6 +8,7 @@ import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
+import com.uber.ussi.searchablestructure.TopResults;
 import com.uber.ussi.searchablestructure.ParallelRowScan;
 import com.uber.ussi.searchablestructure.index.RowStoringIndex;
 import com.uber.ussi.searchablestructure.index.MetadataFilteredSearchExecutor;
@@ -134,9 +135,10 @@ public final class ScanIndex extends RowStoringIndex {
     if (metadataFilter != null && !matchesMetaFilter(rowNum, metadataFilter)) {
       return;
     }
+    float threshold = TopResults.tightenedMinSimilarity(rows, minSimilarity);
     float similarity =
-        (float) comparator.getSimilarity(requestTermsAndValues, termsAndValues, minSimilarity);
-    if (similarity >= minSimilarity) {
+        (float) comparator.getSimilarity(requestTermsAndValues, termsAndValues, threshold);
+    if (similarity >= threshold) {
       rows.add(new RowNumAndSimilarity(rowNum, similarity));
     }
   }

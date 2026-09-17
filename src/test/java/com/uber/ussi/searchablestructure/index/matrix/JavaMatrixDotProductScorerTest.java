@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 class JavaMatrixDotProductScorerTest {
 
   @Test
-  void dividedRowsScoreWhatUndividedRowsScore() {
+  void rowRangesScoreWhatTheWholeMatrixScores() {
     // Chunks are sized so that some shapes hold their rows in one chunk and others across several,
     // since a range of rows handed to a thread need not lie in the chunk the next range does.
     int[][] rowsAndDimensions = {
@@ -27,24 +27,24 @@ class JavaMatrixDotProductScorerTest {
         float[] dotProducts = new float[numRows];
         new JavaMatrixDotProductScorer(matrix).score(queryValues, dotProducts);
 
-        assertArrayEquals(undividedDotProducts(matrix, queryValues), dotProducts, 0.0f, message);
+        assertArrayEquals(wholeMatrixDotProducts(matrix, queryValues), dotProducts, 0.0f, message);
       }
     }
   }
 
   @Test
-  void dividesRowsBetweenEveryThreadOnlyOnceTheMultiplyIsWorthIt() {
-    assertEquals(1, JavaMatrixDotProductScorer.partCount(1, 1, 8), "one multiply-add");
-    assertEquals(1, JavaMatrixDotProductScorer.partCount(64, 63, 8), "just under the minimum");
-    assertEquals(8, JavaMatrixDotProductScorer.partCount(64, 64, 8), "at the minimum");
+  void takesOneRangePerThreadOnlyOnceTheMultiplyIsWorthIt() {
+    assertEquals(1, JavaMatrixDotProductScorer.rangeCount(1, 1, 8), "one multiply-add");
+    assertEquals(1, JavaMatrixDotProductScorer.rangeCount(64, 63, 8), "just under the minimum");
+    assertEquals(8, JavaMatrixDotProductScorer.rangeCount(64, 64, 8), "at the minimum");
     assertEquals(
-        4, JavaMatrixDotProductScorer.partCount(4, 4_096, 8), "no part is without a row in it");
+        4, JavaMatrixDotProductScorer.rangeCount(4, 4_096, 8), "no range is without a row in it");
     assertEquals(
-        1, JavaMatrixDotProductScorer.partCount(10_000, 1_000, 1), "a search with one thread");
+        1, JavaMatrixDotProductScorer.rangeCount(10_000, 1_000, 1), "a search with one thread");
   }
 
-  /** The dot products a single thread over the whole matrix produces, computed row by row. */
-  private static float[] undividedDotProducts(DenseMatrix matrix, float[] queryValues) {
+  /** The dot products one thread over the whole matrix produces, computed row by row. */
+  private static float[] wholeMatrixDotProducts(DenseMatrix matrix, float[] queryValues) {
     float[] dotProducts = new float[matrix.numRows()];
     int dimension = matrix.dimension();
     for (int chunk = 0; chunk < matrix.numChunks(); ++chunk) {

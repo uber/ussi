@@ -17,6 +17,7 @@ import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.RecordType;
 import com.uber.ussi.error.IndexCreationError;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
+import com.uber.ussi.searchablestructure.ShardFanOut;
 import com.uber.ussi.searchablestructure.index.Index;
 import com.uber.ussi.searchablestructure.index.IndexType;
 import com.uber.ussi.searchablestructure.index.MetadataFilteredSearchExecutor;
@@ -60,6 +61,20 @@ abstract class BaseInvertedIndex extends Index {
   private static final long[] EMPTY_ROW_NUMS = new long[0];
   private static final float[] EMPTY_VALUES = new float[0];
 
+  /**
+   * Rows a shard holds once an index is divided as finely as it will be. It sizes the shard count
+   * of a small index rather than deciding whether to shard one, so an index too small for a shard
+   * per core takes as many shards as it has rows for.
+   *
+   * <p>An index is built once from the rows it is given and never grows, so the count is settled at
+   * build time and no index is ever converted from unsharded to sharded.
+   *
+   * <p>The value is conservative rather than measured. Sharding was measured to pay at about 60,000
+   * rows per shard and to cost more than it returned at about 15,000, so this sits at the safe end
+   * of a range whose crossover has not been located.
+   */
+  static final int MIN_NUM_ROWS_PER_SHARD = 50_000;
+
   @Nullable private final SignatureKeyingStrategy signatureKeyingStrategy;
   private final RecordIndexingStrategy recordIndexingStrategy;
   private final CandidateGeneratorType candidateGeneratorType;
@@ -70,9 +85,9 @@ abstract class BaseInvertedIndex extends Index {
   private final LongObjectHashMap<LongTermsAndValues> verificationRowNumToTermsAndValuesMap;
   private final LongObjectHashMap<LongTermsAndValues> indexedRowNumToTermsAndValuesMap;
   private final LongDoubleHashMap rowNumToUniValue;
-  private final LongObjectHashMap<InvertedList> keyToInvertedList;
+  private final List<LongObjectHashMap<InvertedList>> keyToInvertedListByShard;
   private final MetadataFilteredSearchExecutor metadataFilteredSearchExecutor;
-  private final SharedSearchContext searchContext = new SharedSearchContext();
+  private final List<SharedSearchContext> searchContextByShard;
 
   protected BaseInvertedIndex(
       NamespaceConfig namespaceConfig,
@@ -95,6 +110,21 @@ abstract class BaseInvertedIndex extends Index {
       LongObjectHashMap<LongMeta> rowNumToMetaMap,
       IndexType indexType,
       @Nullable LongHashSet structureDiscardedTerms) {
+    this(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap, indexType,
+        structureDiscardedTerms, numShardsFor(rowNumToTermsAndValuesMap.size()));
+  }
+
+  /**
+   * An index over a fixed number of shards, which only a test has reason to choose: the shard count
+   * follows from the rows an index holds.
+   */
+  BaseInvertedIndex(
+      NamespaceConfig namespaceConfig,
+      LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
+      LongObjectHashMap<LongMeta> rowNumToMetaMap,
+      IndexType indexType,
+      @Nullable LongHashSet structureDiscardedTerms,
+      int numShards) {
     super(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);
     // Null exactly when the structure keys by terms, which is a property of the index type and
     // not of what the comparator happens to support. Created here because the constructor derives
@@ -131,7 +161,13 @@ abstract class BaseInvertedIndex extends Index {
     // than dropping signatures it has generated. Nothing here counts the frequency of a key.
     this.indexedRowNumToTermsAndValuesMap = buildIndexedRows(discardedTermFreeRows);
     this.rowNumToUniValue = buildRowNumToUniValue(indexedRowNumToTermsAndValuesMap);
-    this.keyToInvertedList = buildInvertedLists(indexedRowNumToTermsAndValuesMap);
+    this.keyToInvertedListByShard =
+        buildInvertedLists(indexedRowNumToTermsAndValuesMap, Math.max(1, numShards));
+    List<SharedSearchContext> searchContexts = new ArrayList<>(keyToInvertedListByShard.size());
+    for (LongObjectHashMap<InvertedList> keyToInvertedList : keyToInvertedListByShard) {
+      searchContexts.add(new SharedSearchContext(keyToInvertedList));
+    }
+    this.searchContextByShard = List.copyOf(searchContexts);
     this.metadataFilteredSearchExecutor =
         new MetadataFilteredSearchExecutor(
             metadataFilteringStrategy,
@@ -222,8 +258,12 @@ abstract class BaseInvertedIndex extends Index {
     return metadataFilteredSearchExecutor.getResolvedMetadataFilteringStrategyForLastSearch();
   }
 
-  final int getNumIndexedKeysForTests() {
-    return keyToInvertedList.size();
+  final int getNumShardsForTests() {
+    return keyToInvertedListByShard.size();
+  }
+
+  final int getNumIndexedKeysForTests(int shard) {
+    return keyToInvertedListByShard.get(shard).size();
   }
 
   final long[] getDiscardedTermsForTests() {
@@ -236,8 +276,9 @@ abstract class BaseInvertedIndex extends Index {
     return maxFractionIdsPerTerm < 1.0;
   }
 
-  final long[] getRowNumsForKeyForTests(long key) {
-    return getRawRowNums(key).clone();
+  final long[] getRowNumsForKeyForTests(int shard, long key) {
+    InvertedList invertedList = keyToInvertedListByShard.get(shard).get(key);
+    return invertedList == null ? EMPTY_ROW_NUMS : invertedList.getRowNums().clone();
   }
 
   /**
@@ -261,7 +302,7 @@ abstract class BaseInvertedIndex extends Index {
       int searchToIndex) {
     return FilteredSearch.getFirstMatchingUniValue(
         comparator,
-        searchContext,
+        searchContextByShard.get(0),
         rowNums,
         comparatorUniValue,
         minSimilarity,
@@ -278,7 +319,7 @@ abstract class BaseInvertedIndex extends Index {
       int searchToIndex) {
     return FilteredSearch.getLastMatchingUniValue(
         comparator,
-        searchContext,
+        searchContextByShard.get(0),
         rowNums,
         comparatorUniValue,
         minSimilarity,
@@ -321,13 +362,34 @@ abstract class BaseInvertedIndex extends Index {
                 resolvedMaxResults));
   }
 
-  /** Generates candidates from the inverted lists and scores them. */
+  /**
+   * Generates candidates from the inverted lists and scores them, searching every shard and keeping
+   * the nearest rows across all of them.
+   *
+   * <p>Each shard is a generation and a verification of its own, over its own lists and into its
+   * own heap, so each prunes from the rows it has seen rather than from the answer as a whole.
+   */
   private List<RowNumAndSimilarity> invertedListSearch(
       LongTermsAndValues query,
       LongTermsAndValues indexedQuery,
       @Nullable MetaFilter metadataFilter,
       float minSimilarity,
       int maxResults) {
+    return ShardFanOut.search(
+        searchContextByShard.size(),
+        maxResults,
+        shard ->
+            searchShard(shard, query, indexedQuery, metadataFilter, minSimilarity, maxResults));
+  }
+
+  private List<RowNumAndSimilarity> searchShard(
+      int shard,
+      LongTermsAndValues query,
+      LongTermsAndValues indexedQuery,
+      @Nullable MetaFilter metadataFilter,
+      float minSimilarity,
+      int maxResults) {
+    SharedSearchContext searchContext = searchContextByShard.get(shard);
     if (candidateGeneratorType == CandidateGeneratorType.SPARS_MERGE) {
       return MergeSearch.search(
           comparator,
@@ -336,7 +398,7 @@ abstract class BaseInvertedIndex extends Index {
           metadataFilter,
           minSimilarity,
           maxResults,
-          collectMergeSearchQueryKeys(indexedQuery),
+          collectMergeSearchQueryKeys(indexedQuery, shard),
           searchContext,
           this::canScoreRow,
           scoresFromConjunction,
@@ -349,7 +411,7 @@ abstract class BaseInvertedIndex extends Index {
         metadataFilter,
         minSimilarity,
         maxResults,
-        collectFilteredSearchQueryKeys(indexedQuery),
+        collectFilteredSearchQueryKeys(indexedQuery, shard),
         searchContext,
         this::canScoreRow,
         this::getVerificationRow);
@@ -360,12 +422,13 @@ abstract class BaseInvertedIndex extends Index {
    * on the selective keys before paying for the popular ones.
    */
   private MergeSearch.QueryKey[] collectMergeSearchQueryKeys(
-      LongTermsAndValues indexedQuery) {
+      LongTermsAndValues indexedQuery, int shard) {
+    LongObjectHashMap<InvertedList> keyToInvertedList = keyToInvertedListByShard.get(shard);
     KeyAndUniTransformedValue[] keys = getKeysAndUniTransformedValues(indexedQuery);
     ArrayList<MergeSearch.QueryKey> queryKeys = new ArrayList<>(keys.length);
     for (KeyAndUniTransformedValue key : keys) {
       InvertedList invertedList = keyToInvertedList.get(key.getKey());
-      // A key this index has no rows under contributes nothing, so it gets no frontier entry.
+      // A key this shard has no rows under contributes nothing, so it gets no frontier entry.
       if (invertedList != null && invertedList.size() != 0) {
         queryKeys.add(
             new MergeSearch.QueryKey(
@@ -444,7 +507,8 @@ abstract class BaseInvertedIndex extends Index {
   }
 
   private KeyAndPrefixFilteringData[] collectFilteredSearchQueryKeys(
-      LongTermsAndValues indexedQuery) {
+      LongTermsAndValues indexedQuery, int shard) {
+    LongObjectHashMap<InvertedList> keyToInvertedList = keyToInvertedListByShard.get(shard);
     KeyAndUniTransformedValue[] keys = getKeysAndUniTransformedValues(indexedQuery);
     KeyAndPrefixFilteringData[] keyData = new KeyAndPrefixFilteringData[keys.length];
     for (int i = 0; i < keys.length; ++i) {
@@ -459,7 +523,7 @@ abstract class BaseInvertedIndex extends Index {
       keyData[i] =
           new KeyAndPrefixFilteringData(
               key.getKey(),
-              getRawRowNums(key.getKey()).length,
+              numRowsUnderKey(keyToInvertedList, key.getKey()),
               key.getUniTransformedValue());
     }
     return keyData;
@@ -559,13 +623,23 @@ abstract class BaseInvertedIndex extends Index {
   }
 
   /**
-   * Builds the uni-sorted inverted list of every key. Values are materialized only when the merge
-   * generator will score from them.
+   * Builds the uni-sorted inverted list of every key, one set of lists per shard. Values are
+   * materialized only when the merge generator will score from them.
+   *
+   * <p>A row's lists go to the shard its row number falls in. Row numbers are handed out in turn,
+   * so this divides the rows evenly, and an even division is what makes the shards cost the same
+   * to search as each other.
    */
-  private LongObjectHashMap<InvertedList> buildInvertedLists(
-      LongObjectHashMap<LongTermsAndValues> indexedRows) {
-    LongObjectHashMap<ArrayList<RowNumAndUniValue>> entriesByKey = new LongObjectHashMap<>();
+  private List<LongObjectHashMap<InvertedList>> buildInvertedLists(
+      LongObjectHashMap<LongTermsAndValues> indexedRows, int numShards) {
+    List<LongObjectHashMap<ArrayList<RowNumAndUniValue>>> entriesByKeyByShard =
+        new ArrayList<>(numShards);
+    for (int shard = 0; shard < numShards; shard++) {
+      entriesByKeyByShard.add(new LongObjectHashMap<>());
+    }
     for (LongObjectCursor<LongTermsAndValues> row : indexedRows) {
+      LongObjectHashMap<ArrayList<RowNumAndUniValue>> entriesByKey =
+          entriesByKeyByShard.get(shardOf(row.key, numShards));
       LongTermsAndValues termsAndValues = row.value;
       double uniValue = rowNumToUniValue.get(row.key);
       for (long key : getKeys(termsAndValues)) {
@@ -579,8 +653,16 @@ abstract class BaseInvertedIndex extends Index {
       }
     }
 
-    LongObjectHashMap<InvertedList> invertedLists =
-        new LongObjectHashMap<>(entriesByKey.size());
+    List<LongObjectHashMap<InvertedList>> invertedListsByShard = new ArrayList<>(numShards);
+    for (LongObjectHashMap<ArrayList<RowNumAndUniValue>> entriesByKey : entriesByKeyByShard) {
+      invertedListsByShard.add(materializeInvertedLists(entriesByKey));
+    }
+    return List.copyOf(invertedListsByShard);
+  }
+
+  private LongObjectHashMap<InvertedList> materializeInvertedLists(
+      LongObjectHashMap<ArrayList<RowNumAndUniValue>> entriesByKey) {
+    LongObjectHashMap<InvertedList> invertedLists = new LongObjectHashMap<>(entriesByKey.size());
     for (LongObjectCursor<ArrayList<RowNumAndUniValue>> entry : entriesByKey) {
       List<RowNumAndUniValue> entries = entry.value;
       Collections.sort(entries);
@@ -597,6 +679,30 @@ abstract class BaseInvertedIndex extends Index {
     return invertedLists;
   }
 
+  private static int numRowsUnderKey(
+      LongObjectHashMap<InvertedList> keyToInvertedList, long key) {
+    InvertedList invertedList = keyToInvertedList.get(key);
+    return invertedList == null ? 0 : invertedList.size();
+  }
+
+  /** The shard a row's inverted list entries belong to, fixed when the index is built. */
+  private static int shardOf(long rowNum, int numShards) {
+    return Math.floorMod(rowNum, numShards);
+  }
+
+  /**
+   * Shards to build {@code numRows} into: one per core once every shard would hold {@link
+   * #MIN_NUM_ROWS_PER_SHARD} rows, and fewer until then.
+   *
+   * <p>One per core is what lets a search with the cores to itself use all of them. The count does
+   * not follow the load, because the shards are fixed when the index is built and a search under
+   * load searches the same shards with fewer threads.
+   */
+  static int numShardsFor(int numRows) {
+    int numCores = Math.max(1, Runtime.getRuntime().availableProcessors());
+    return Math.max(1, Math.min(numCores, numRows / MIN_NUM_ROWS_PER_SHARD));
+  }
+
   private void validateRows() {
     for (LongObjectCursor<LongTermsAndValues> entry : rowNumToTermsAndValuesMap) {
       if (entry.value == null) {
@@ -611,11 +717,6 @@ abstract class BaseInvertedIndex extends Index {
             message == null ? String.format("row %s is invalid.", entry.key) : message);
       }
     }
-  }
-
-  private long[] getRawRowNums(long key) {
-    InvertedList invertedList = keyToInvertedList.get(key);
-    return invertedList == null ? EMPTY_ROW_NUMS : invertedList.getRowNums();
   }
 
   private static double parseMaxFractionIdsPerTerm(NamespaceConfig namespaceConfig) {
@@ -641,8 +742,18 @@ abstract class BaseInvertedIndex extends Index {
     return recordTypes.iterator().next();
   }
 
-  /** The index state both candidate generators traverse, shared so it is allocated once. */
+  /**
+   * The index state both candidate generators traverse over one shard, allocated once per shard.
+   *
+   * <p>Only the inverted lists belong to a shard. Uni values, and everything else a search reads by
+   * row number, belong to the index and are read by every shard's search.
+   */
   final class SharedSearchContext implements FilteredSearch.Context, MergeSearch.Context {
+    private final LongObjectHashMap<InvertedList> keyToInvertedList;
+
+    SharedSearchContext(LongObjectHashMap<InvertedList> keyToInvertedList) {
+      this.keyToInvertedList = keyToInvertedList;
+    }
     /**
      * Length filtering calls this for every row of every list it narrows, so the row is resolved to
      * a slot once rather than hashed twice.
@@ -666,7 +777,8 @@ abstract class BaseInvertedIndex extends Index {
 
     @Override
     public long[] getRowNums(long key) {
-      return getRawRowNums(key);
+      InvertedList invertedList = keyToInvertedList.get(key);
+      return invertedList == null ? EMPTY_ROW_NUMS : invertedList.getRowNums();
     }
 
     @Override

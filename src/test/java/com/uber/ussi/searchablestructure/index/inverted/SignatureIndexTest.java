@@ -25,6 +25,9 @@ import java.util.TreeMap;
 import org.junit.jupiter.api.Test;
 
 class SignatureIndexTest {
+  /** Test indexes hold far fewer rows than a shard's minimum, so they have one shard. */
+  private static final int ONLY_SHARD = 0;
+
   private static final float DELTA = 1e-6f;
 
   @Test
@@ -35,13 +38,13 @@ class SignatureIndexTest {
             longObjectMap(7, jaccard(new long[] {11}, 1f)),
             longObjectMap());
 
-    assertEquals(1, index.getNumIndexedKeysForTests());
+    assertEquals(1, index.getNumIndexedKeysForTests(ONLY_SHARD));
     assertEquals(
         1, index.getKeysAndUniTransformedValues(jaccard(new long[] {11}, 1f)).length);
     // A single-term record hashes to one signature every time, and getKeys owes distinct keys.
     long[] signatures = index.getKeys(jaccard(new long[] {11}, 1f));
     assertEquals(1, signatures.length);
-    assertArrayEquals(new long[] {7}, index.getRowNumsForKeyForTests(signatures[0]));
+    assertArrayEquals(new long[] {7}, index.getRowNumsForKeyForTests(ONLY_SHARD, signatures[0]));
   }
 
   @Test
@@ -98,7 +101,7 @@ class SignatureIndexTest {
             longObjectMap());
 
     assertArrayEquals(new long[] {11}, index.getDiscardedTermsForTests());
-    assertEquals(0, index.getNumIndexedKeysForTests());
+    assertEquals(0, index.getNumIndexedKeysForTests(ONLY_SHARD));
     assertEquals(2, index.size());
     assertTrue(index.getNearestNeighborRowNums(2, record, MetaFilter.empty()).isEmpty());
   }
@@ -116,7 +119,8 @@ class SignatureIndexTest {
             longObjectMap());
 
     assertArrayEquals(new long[0], index.getDiscardedTermsForTests());
-    assertTrue(index.getNumIndexedKeysForTests() > 0, "the shared signatures are still keys");
+    assertTrue(
+        index.getNumIndexedKeysForTests(ONLY_SHARD) > 0, "the shared signatures are still keys");
     assertEquals(
         List.of(1L, 2L),
         rowNumsNearestFirst(index.getNearestNeighborRowNums(2, record, MetaFilter.empty())));
@@ -224,10 +228,11 @@ class SignatureIndexTest {
   @SuppressWarnings("unchecked")
   private static boolean hasInvertedListValues(BaseInvertedIndex index)
       throws ReflectiveOperationException {
-    Field field = BaseInvertedIndex.class.getDeclaredField("keyToInvertedList");
+    Field field = BaseInvertedIndex.class.getDeclaredField("keyToInvertedListByShard");
     field.setAccessible(true);
-    LongObjectHashMap<InvertedList> invertedLists =
-        (LongObjectHashMap<InvertedList>) field.get(index);
+    List<LongObjectHashMap<InvertedList>> invertedListsByShard =
+        (List<LongObjectHashMap<InvertedList>>) field.get(index);
+    LongObjectHashMap<InvertedList> invertedLists = invertedListsByShard.get(ONLY_SHARD);
     assertFalse(invertedLists.isEmpty(), "the index should have at least one sparse key");
     for (LongObjectCursor<InvertedList> entry : invertedLists) {
       if (entry.value.getValues().length != entry.value.size()) {

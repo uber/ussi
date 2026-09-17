@@ -12,7 +12,6 @@ import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.index.Index;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
 import java.util.List;
-import javax.annotation.Nullable;
 
 /** Hybrid inverted index using exact keys for short rows and signatures for long rows. */
 public final class HybridIndex extends Index {
@@ -36,19 +35,6 @@ public final class HybridIndex extends Index {
       NamespaceConfig namespaceConfig,
       LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
       LongObjectHashMap<LongMeta> rowNumToMetaMap) {
-    this(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap, null);
-  }
-
-  /**
-   * A hybrid index over part of a structure's rows, discarding the terms the structure found
-   * popular in its term-keyed rows. Given none, it finds them over its own term-keyed rows, which
-   * are then the structure's.
-   */
-  public HybridIndex(
-      NamespaceConfig namespaceConfig,
-      LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
-      LongObjectHashMap<LongMeta> rowNumToMetaMap,
-      @Nullable LongHashSet structureDiscardedTerms) {
     super(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);
     LongObjectHashMap<LongTermsAndValues> exactRows = new LongObjectHashMap<>();
     LongObjectHashMap<LongTermsAndValues> signatureRows = new LongObjectHashMap<>();
@@ -63,10 +49,7 @@ public final class HybridIndex extends Index {
     // term index can collect it: a signature list holds one entry per row whatever that row's
     // terms are, so discarding leaves a signature index's lists exactly as long and only moves the
     // signatures its rows are keyed by.
-    LongHashSet discardedTerms =
-        structureDiscardedTerms == null
-            ? BaseInvertedIndex.discardedTermsOf(namespaceConfig, exactRows)
-            : structureDiscardedTerms;
+    LongHashSet discardedTerms = BaseInvertedIndex.discardedTermsOf(namespaceConfig, exactRows);
     // The signature index is built first so a comparator without a generator is rejected before
     // the term index is populated.
     this.signatureIndex =
@@ -128,22 +111,6 @@ public final class HybridIndex extends Index {
             ? signatureIndex.getSimilarRowNums(minSimilarity, record, metadataFilter)
             : List.of();
     return mergeResults(exactResults, signatureResults, namespaceConfig.getMaxNumSimilarities());
-  }
-
-  /**
-   * The terms a hybrid index over these rows discards as popular, which are counted over its
-   * term-keyed rows because those are the only rows it discards from.
-   */
-  static LongHashSet discardedTermsOf(
-      NamespaceConfig namespaceConfig,
-      LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap) {
-    LongObjectHashMap<LongTermsAndValues> exactRows = new LongObjectHashMap<>();
-    for (LongObjectCursor<LongTermsAndValues> entry : rowNumToTermsAndValuesMap) {
-      if (entry.value.termsLength() <= TERM_KEYING_CUTOFF) {
-        exactRows.put(entry.key, entry.value);
-      }
-    }
-    return BaseInvertedIndex.discardedTermsOf(namespaceConfig, exactRows);
   }
 
   @Override

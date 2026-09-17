@@ -34,13 +34,13 @@ class JavaMatrixDotProductScorerTest {
 
   @Test
   void takesOneRangePerThreadOnlyOnceTheMultiplyIsWorthIt() {
-    assertEquals(1, JavaMatrixDotProductScorer.rangeCount(1, 1, 8), "one multiply-add");
-    assertEquals(1, JavaMatrixDotProductScorer.rangeCount(64, 63, 8), "just under the minimum");
-    assertEquals(8, JavaMatrixDotProductScorer.rangeCount(64, 64, 8), "at the minimum");
+    assertEquals(1, JavaMatrixDotProductScorer.numRangesFor(1, 1, 8), "one multiply-add");
+    assertEquals(1, JavaMatrixDotProductScorer.numRangesFor(64, 63, 8), "just under the minimum");
+    assertEquals(8, JavaMatrixDotProductScorer.numRangesFor(64, 64, 8), "at the minimum");
     assertEquals(
-        4, JavaMatrixDotProductScorer.rangeCount(4, 4_096, 8), "no range is without a row in it");
+        4, JavaMatrixDotProductScorer.numRangesFor(4, 4_096, 8), "no range is without a row in it");
     assertEquals(
-        1, JavaMatrixDotProductScorer.rangeCount(10_000, 1_000, 1), "a search with one thread");
+        1, JavaMatrixDotProductScorer.numRangesFor(10_000, 1_000, 1), "a search with one thread");
   }
 
   /** The dot products one thread over the whole matrix produces, computed row by row. */

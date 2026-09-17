@@ -47,7 +47,7 @@ final class JavaMatrixDotProductScorer implements MatrixDotProductScorer {
   public void score(float[] queryValues, float[] dotProducts) {
     MatrixDotProductScorers.validateScoreInputs(matrix, queryValues, dotProducts);
     int numRows = matrix.numRows();
-    int numRanges = rangeCount(numRows, matrix.dimension(), ParallelismBudget.shared().budget());
+    int numRanges = numRangesFor(numRows, matrix.dimension(), ParallelismBudget.shared().budget());
     if (numRanges == 1) {
       scoreRows(0, numRows, queryValues, dotProducts);
       return;
@@ -73,7 +73,7 @@ final class JavaMatrixDotProductScorer implements MatrixDotProductScorer {
    * Ranges to divide {@code numRows} into: one per thread this search may use once the multiply is
    * worth multi-threading, and one range before that. No range is without a row in it.
    */
-  static int rangeCount(int numRows, int dimension, int parallelism) {
+  static int numRangesFor(int numRows, int dimension, int parallelism) {
     if ((long) numRows * dimension < MIN_MULTIPLY_ADDS_TO_SPLIT) {
       return 1;
     }

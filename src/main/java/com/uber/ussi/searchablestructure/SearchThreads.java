@@ -37,10 +37,14 @@ public final class SearchThreads {
 
   private static final ThreadPoolExecutor SEARCHERS = createThreadPool();
 
-  /** Taken once per query, so that every work unit of one query is served at the query's arrival. */
+  /**
+   * Taken once per query, so that every work unit of one query is served at the query's arrival.
+   */
   private static final AtomicLong NEXT_TICKET = new AtomicLong();
 
-  /** The ticket of the query this thread is serving, while it is inside {@link #runUnderOneTicket}. */
+  /**
+   * The ticket of the query this thread is serving, while it is inside {@link #runUnderOneTicket}.
+   */
   private static final ThreadLocal<Long> CURRENT_TICKET = new ThreadLocal<>();
 
   private SearchThreads() {}
@@ -113,7 +117,9 @@ public final class SearchThreads {
     return ticketed;
   }
 
-  /** Waits for every handed-off work unit, and rethrows the first failure once all of them are done. */
+  /**
+   * Waits for every handed-off work unit, and rethrows the first failure once all of them are done.
+   */
   private static void awaitWorkUnits(List<Future<?>> handedOff) {
     RuntimeException failure = null;
     boolean interrupted = false;

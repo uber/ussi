@@ -29,7 +29,10 @@ public final class ParallelShardSearch {
    * minimum similarity the shards share and seeded at {@code minSimilarity}.
    */
   public static List<RowNumAndSimilarity> search(
-      int numShards, int maxResults, float minSimilarity, ParallelSearch.DivisionSearch searchShard) {
+      int numShards,
+      int maxResults,
+      float minSimilarity,
+      ParallelSearch.DivisionSearch searchShard) {
     return ParallelSearch.inParallel(numShards, maxResults, minSimilarity, searchShard);
   }
 }

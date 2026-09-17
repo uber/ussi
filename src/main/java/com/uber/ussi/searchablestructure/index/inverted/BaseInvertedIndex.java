@@ -18,13 +18,13 @@ import com.uber.ussi.entity.termsandvalues.RecordType;
 import com.uber.ussi.error.IndexCreationError;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.ParallelShardSearch;
+import com.uber.ussi.searchablestructure.SharedMinSimilarity;
 import com.uber.ussi.searchablestructure.index.RowStoringIndex;
 import com.uber.ussi.searchablestructure.index.IndexType;
 import com.uber.ussi.searchablestructure.index.MetadataFilteredSearchExecutor;
 import com.uber.ussi.searchablestructure.index.inverted.generator.FilteredSearch;
 import com.uber.ussi.searchablestructure.index.inverted.generator.InvertedList;
 import com.uber.ussi.searchablestructure.index.inverted.generator.MergeSearch;
-import com.uber.ussi.searchablestructure.index.inverted.generator.SharedMinSimilarity;
 import com.uber.ussi.searchablestructure.TopResults;
 import com.uber.ussi.searchablestructure.inverted.KeyAndPrefixFilteringData;
 import com.uber.ussi.searchablestructure.metadata.MetadataFilteringStrategy;
@@ -377,14 +377,11 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
       @Nullable MetaFilter metadataFilter,
       float minSimilarity,
       int maxResults) {
-    // One minimum similarity for every shard of this search. A shard that fills its heap publishes
-    // the weakest score it keeps, and the others prune with it, which recovers the pruning they
-    // lose by holding separate heaps.
-    SharedMinSimilarity sharedMinSimilarity = new SharedMinSimilarity(minSimilarity);
     return ParallelShardSearch.search(
         searchContextByShard.size(),
         maxResults,
-        shard ->
+        minSimilarity,
+        (shard, sharedMinSimilarity) ->
             searchShard(
                 shard,
                 query,

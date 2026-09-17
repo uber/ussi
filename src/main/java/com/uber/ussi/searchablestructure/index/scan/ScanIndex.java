@@ -8,6 +8,7 @@ import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
+import com.uber.ussi.searchablestructure.SharedMinSimilarity;
 import com.uber.ussi.searchablestructure.TopResults;
 import com.uber.ussi.searchablestructure.ParallelRowScan;
 import com.uber.ussi.searchablestructure.index.RowStoringIndex;
@@ -91,14 +92,16 @@ public final class ScanIndex extends RowStoringIndex {
         requestTermsAndValues,
         searchParallelism(),
         maxResults,
-        (rowNum, termsAndValues, rows) ->
+        minSimilarity,
+        (rowNum, termsAndValues, rows, sharedMinSimilarity) ->
             addMatchingRow(
                 rows,
                 rowNum,
                 termsAndValues,
                 requestTermsAndValues,
                 metadataFilter,
-                minSimilarity));
+                minSimilarity,
+                sharedMinSimilarity));
   }
 
   private List<RowNumAndSimilarity> searchRowNums(
@@ -112,14 +115,16 @@ public final class ScanIndex extends RowStoringIndex {
         requestTermsAndValues,
         searchParallelism(),
         maxResults,
-        (rowNum, rows) ->
+        minSimilarity,
+        (rowNum, rows, sharedMinSimilarity) ->
             addMatchingRow(
                 rows,
                 rowNum,
                 Objects.requireNonNull(rowNumToTermsAndValuesMap.get(rowNum)),
                 requestTermsAndValues,
                 metadataFilter,
-                minSimilarity));
+                minSimilarity,
+                sharedMinSimilarity));
   }
 
   private void addMatchingRow(
@@ -128,14 +133,16 @@ public final class ScanIndex extends RowStoringIndex {
       LongTermsAndValues termsAndValues,
       LongTermsAndValues requestTermsAndValues,
       @Nullable MetaFilter metadataFilter,
-      float minSimilarity) {
+      float minSimilarity,
+      SharedMinSimilarity sharedMinSimilarity) {
     if (isDeleted(rowNum)) {
       return;
     }
     if (metadataFilter != null && !matchesMetaFilter(rowNum, metadataFilter)) {
       return;
     }
-    float tightened = TopResults.tightenedMinSimilarity(rows, minSimilarity);
+    float tightened =
+        TopResults.tightenedMinSimilarity(rows, minSimilarity, sharedMinSimilarity);
     float similarity =
         (float) comparator.getSimilarity(requestTermsAndValues, termsAndValues, tightened);
     if (similarity >= tightened) {

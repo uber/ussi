@@ -46,11 +46,13 @@ public final class ScanCache extends Cache {
         record,
         searchParallelism(),
         maxResults,
-        (rowNum, termsAndValues, rows) -> {
+        minSimilarity,
+        (rowNum, termsAndValues, rows, sharedMinSimilarity) -> {
           if (!matchesMetaFilter(rowNum, metadataFilter)) {
             return;
           }
-          float tightened = TopResults.tightenedMinSimilarity(rows, minSimilarity);
+          float tightened =
+              TopResults.tightenedMinSimilarity(rows, minSimilarity, sharedMinSimilarity);
           float similarity = (float) comparator.getSimilarity(record, termsAndValues, tightened);
           if (similarity >= tightened) {
             rows.add(new RowNumAndSimilarity(rowNum, similarity));

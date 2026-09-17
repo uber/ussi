@@ -23,7 +23,8 @@ class ParallelShardSearchTest {
       String message = "numShards=" + numShards;
       for (int maxResults : new int[] {1, 3, 10}) {
         List<RowNumAndSimilarity> keptRowNums =
-            ParallelShardSearch.search(numShards, maxResults, shard -> rowsOfShard(shard, numShards));
+            ParallelShardSearch.search(
+                numShards, maxResults, 0.0f, (shard, min) -> rowsOfShard(shard, numShards));
 
         assertEquals(
             nearestRowNumsOfAllShards(numShards, maxResults),
@@ -41,7 +42,8 @@ class ParallelShardSearchTest {
       ParallelShardSearch.search(
           numShards,
           ROWS_PER_SHARD,
-          shard -> {
+          0.0f,
+          (shard, min) -> {
             numSearchesByShard.incrementAndGet(shard);
             return rowsOfShard(shard, numShards);
           });
@@ -55,7 +57,8 @@ class ParallelShardSearchTest {
 
   @Test
   void holdsNothingWhenThereIsNoShardToSearch() {
-    assertTrue(ParallelShardSearch.search(0, 10, shard -> rowsOfShard(shard, 1)).isEmpty());
+    assertTrue(
+        ParallelShardSearch.search(0, 10, 0.0f, (shard, min) -> rowsOfShard(shard, 1)).isEmpty());
   }
 
   @Test
@@ -67,7 +70,8 @@ class ParallelShardSearchTest {
                 ParallelShardSearch.search(
                     8,
                     ROWS_PER_SHARD,
-                    shard -> {
+                    0.0f,
+                    (shard, min) -> {
                       if (shard == 5) {
                         throw new IllegalStateException("shard five could not be searched");
                       }
@@ -92,7 +96,8 @@ class ParallelShardSearchTest {
             ParallelShardSearch.search(
                 numShards,
                 ROWS_PER_SHARD,
-                shard -> {
+                0.0f,
+                (shard, min) -> {
                   if (shard == 1) {
                     throw new IllegalStateException("the first handed-off shard failed");
                   }

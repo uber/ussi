@@ -24,6 +24,7 @@ import com.uber.ussi.searchablestructure.index.MetadataFilteredSearchExecutor;
 import com.uber.ussi.searchablestructure.index.inverted.generator.FilteredSearch;
 import com.uber.ussi.searchablestructure.index.inverted.generator.InvertedList;
 import com.uber.ussi.searchablestructure.index.inverted.generator.MergeSearch;
+import com.uber.ussi.searchablestructure.index.inverted.generator.SharedFloor;
 import com.uber.ussi.searchablestructure.index.inverted.generator.TopResults;
 import com.uber.ussi.searchablestructure.inverted.KeyAndPrefixFilteringData;
 import com.uber.ussi.searchablestructure.metadata.MetadataFilteringStrategy;
@@ -376,11 +377,16 @@ abstract class BaseInvertedIndex extends Index {
       @Nullable MetaFilter metadataFilter,
       float minSimilarity,
       int maxResults) {
+    // One floor for every shard of this search. A shard that fills its heap publishes the weakest
+    // score it keeps, and the others prune with it, which recovers the pruning they lose by holding
+    // separate heaps.
+    SharedFloor sharedFloor = new SharedFloor(minSimilarity);
     return ParallelShardSearch.search(
         searchContextByShard.size(),
         maxResults,
         shard ->
-            searchShard(shard, query, indexedQuery, metadataFilter, minSimilarity, maxResults));
+            searchShard(
+                shard, query, indexedQuery, metadataFilter, minSimilarity, maxResults, sharedFloor));
   }
 
   private List<RowNumAndSimilarity> searchShard(
@@ -389,7 +395,8 @@ abstract class BaseInvertedIndex extends Index {
       LongTermsAndValues indexedQuery,
       @Nullable MetaFilter metadataFilter,
       float minSimilarity,
-      int maxResults) {
+      int maxResults,
+      SharedFloor sharedFloor) {
     SharedSearchContext searchContext = searchContextByShard.get(shard);
     if (candidateGeneratorType == CandidateGeneratorType.SPARS_MERGE) {
       return MergeSearch.search(
@@ -403,7 +410,8 @@ abstract class BaseInvertedIndex extends Index {
           searchContext,
           this::canScoreRow,
           scoresFromConjunction,
-          this::getVerificationRow);
+          this::getVerificationRow,
+          sharedFloor);
     }
     return FilteredSearch.search(
         comparator,
@@ -415,7 +423,8 @@ abstract class BaseInvertedIndex extends Index {
         collectFilteredSearchQueryKeys(indexedQuery, shard),
         searchContext,
         this::canScoreRow,
-        this::getVerificationRow);
+        this::getVerificationRow,
+        sharedFloor);
   }
 
   /**

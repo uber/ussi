@@ -39,7 +39,8 @@ class MergeSearchTest {
             /* scoresFromConjunction */ true,
             rowNum -> {
               throw new AssertionError("verification lookup should not run");
-            });
+            },
+            new SharedFloor(0.0f));
 
     assertEquals(List.of(1L), rowNums(results));
     assertTrue(results.get(0).getSimilarity() > 0.99f);
@@ -65,7 +66,8 @@ class MergeSearchTest {
             mergeContext(),
             (rowNum, metadataFilter) -> true,
             /* scoresFromConjunction */ false,
-            rows::get);
+            rows::get,
+            new SharedFloor(0.0f));
 
     assertEquals(List.of(1L), rowNums(results));
   }
@@ -90,7 +92,8 @@ class MergeSearchTest {
             mergeContext(),
             (rowNum, metadataFilter) -> true,
             /* scoresFromConjunction */ false,
-            rowNum -> null);
+            rowNum -> null,
+            new SharedFloor(0.0f));
 
     assertEquals(List.of(), rowNums(results));
   }
@@ -116,7 +119,8 @@ class MergeSearchTest {
             mergeContext(tiedUniValues),
             (rowNum, metadataFilter) -> true,
             /* scoresFromConjunction */ true,
-            rowNum -> jaccard(new long[] {10}, 1));
+            rowNum -> jaccard(new long[] {10}, 1),
+            new SharedFloor(0.0f));
 
     assertEquals(List.of(1L, 2L, 3L, 4L), rowNums(results).stream().sorted().toList());
   }

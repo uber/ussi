@@ -56,15 +56,16 @@ public final class MergeSearch {
     double uniValue1 = context.stableSortedUniValue(indexedQuery);
     double[] unscannedKeysUniValue =
         scoresFromConjunction ? computeUnscannedKeysUniValue(conjunctionScored, queryKeys) : null;
+    BoundedSizeMaxHeap<RowNumAndSimilarity> rows = TopResults.newTopResultsHeap(maxResults);
+    double currentMinSimilarity = Math.max(minSimilarity, sharedMinSimilarity.get());
+    // Each list is entered at the minimum similarity already proved rather than the one the caller
+    // asked for, so the rows a search walks past are the rows that could still reach the answer.
     Frontier frontier =
         new Frontier(
             queryKeys,
             context,
             getFirstIndexInEachList(
-                conjunctionScored, queryKeys, context, uniValue1, minSimilarity));
-
-    BoundedSizeMaxHeap<RowNumAndSimilarity> rows = TopResults.newTopResultsHeap(maxResults);
-    double currentMinSimilarity = Math.max(minSimilarity, sharedMinSimilarity.get());
+                conjunctionScored, queryKeys, context, uniValue1, currentMinSimilarity));
     Conjunction conjunction = new Conjunction(comparator, conjunctionScored);
     IntArrayList advancedKeyIndexes = new IntArrayList(queryKeys.length);
 

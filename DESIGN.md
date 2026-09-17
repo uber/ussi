@@ -211,11 +211,10 @@ inverted indexes, called shards, each holding a disjoint share of its rows. A
 search searches several shards at the same time, and each shard search is
 complete in itself, with its own heap and its own pruning.
 
-Shards prune independently, which is the weakening described above. Here it is
-paid for rather than avoided. A shard's inverted lists are shorter than an
-undivided index's, in proportion to the rows the shard holds, so the shards
-together score fewer candidates than one undivided search would. Dividing a
-single search offers no such saving. See Sharded Inverted Index.
+Shards prune independently, which is the weakening described above, and here it
+is accepted rather than avoided. A sharded search does more total work than an
+undivided one; what it gains is that the work runs at once. See Sharded Inverted
+Index.
 
 Whether to split at all is worth deciding, because a scan can be short enough
 that handing its parts out costs more than the scan. How finely to split is not,
@@ -532,68 +531,68 @@ rules out `l2` and any other comparator left without one.
 
 ### Sharded Inverted Index
 
-A **shard** is one of several smaller inverted indexes an inverted index is built
-as, each holding a disjoint share of the rows. `ShardedInvertedIndex` is the
-structure the engine sees. It searches every shard and keeps the nearest rows
+A **shard** is one of several smaller inverted indexes that an inverted index is
+built as, each holding a disjoint share of the rows. `ShardedInvertedIndex` is
+the structure the engine sees. It searches every shard and keeps the nearest rows
 across all of them.
-
-A search hands off all of its shards at once rather than a few at a time, which
-is what keeps searches served in the order they arrived. The pool takes shards in
-the order they were submitted, so a search that handed off some of its shards and
-came back for the rest would find a search that arrived later already queued in
-front of it. Handing them off together leaves the threads a search may use to the
-pool, which is sized to the cores and is therefore already the bound
-`ParallelismBudget` would have applied.
 
 Rows are divided between shards by row number modulo the shard count. Row numbers
 are handed out in turn, so this divides the rows evenly, and an even division is
 what makes the shards cost the same to search as each other.
 
-Shards divide the whole of a search rather than one phase of it, and that is what
-makes them worth dividing along. Dividing verification reaches only the phase
-that scores candidates. Dividing the query's keys between threads is worse than
-it appears: a row appearing under several of those keys is then visited once per
-thread that holds one of them, where a single thread walking all the keys
-together visits that row once.
+A search hands off all of its shards at once. Searches are served in the order
+they arrive, and handing off in instalments would forfeit that, because the pool
+takes shards in the order they were submitted: a search returning for a second
+instalment would queue behind a search that had arrived later. Handing off
+together also leaves the thread count to the pool, which is sized to the cores
+and so imposes the bound `ParallelismBudget` would have imposed.
 
-A shard also makes a search cheaper before any thread is involved. An inverted
-list grows with the rows in its index, and a search walks the lists of the
-query's keys. A shard holding a share of the rows therefore has lists shorter by
-that share, and the shards together walk less of them than an undivided index
-would. A sharded index is faster than an unsharded one even when searched by a
-single thread.
+Shards multi-thread a search entire, which is what distinguishes them from the
+alternatives. Multi-threading verification reaches only the phase that scores
+candidates. Multi-threading over the query's keys visits a row once per thread
+holding one of its keys, whereas a single thread walking every key visits that
+row once.
 
-That last property is what makes a fixed shard count workable. The count is
-settled when the index is built, whereas the threads available vary with the
-load, so a search under load searches the same shards with fewer threads and
-cannot rebuild them to suit.
+The downside is that a shard prunes only from what it has seen. An inverted list
+is sorted by uni value, and both length filtering and the rising `minSimilarity`
+of a filling heap prune against that order. A shard covering a share of the rows
+therefore prunes against a weaker threshold, and over a narrower range, than the
+whole index would. Each shard also repeats the work a search owes per structure:
+a heap, a walk of the query's keys, and a seek into each of their lists. Sharding
+consequently increases the total work of a search, and what it buys is that the
+work runs at once. Where no spare thread exists to run the shards concurrently,
+sharding costs rather than pays.
 
-Against all of this, every shard costs a search a heap, a walk of the query's
-keys, and a seek into each of their lists. A search pays that cost per shard
-whatever threads it has, and the cost does not shrink as the shard does. It is
-therefore what bounds the shard count: an index takes one shard per core only
-once every shard would have a minimum number of rows to hold, and fewer shards
-until then. That minimum sizes the shard count of a small index; it does not
-switch sharding on and off. An index is built once from the rows it is given and
-never grows, so no index is ever converted from unsharded to sharded while it is
-being searched.
+That cost is what bounds the shard count. An index takes one shard per core only
+once every shard would hold a minimum number of rows, and fewer shards until
+then. The minimum sizes the shard count of a small index; it does not switch
+sharding on and off. An index is built once from the rows it is given and never
+grows, so no index is converted from unsharded to sharded while it is being
+searched.
 
 The minimum is set at 50,000 rows, which is a conservative choice rather than a
-measured one. Sharding was measured to pay at around 60,000 rows per shard and to
-cost more than it returned at around 15,000, so the value sits at the safe end of
+measured one. Sharding was measured to pay at about 60,000 rows per shard, and to
+cost more than it returned at about 15,000, so the value sits at the safe end of
 a range whose crossover has not been located.
 
 Only the inverted indexes are sharded. A scan index already divides the rows of
 one search between threads, and a matrix index scored by OpenBLAS divides one
 search inside that scorer, both drawing on the same budget, so a shard on top of
-either would divide rows already divided and spend threads the budget has already
-promised elsewhere. A matrix index scored by the pure-Java scorer is the
-exception: it divides nothing and draws nothing from the budget, so sharding it is
-unexplored rather than ruled out.
+either would divide rows already divided. A matrix index scored by the pure-Java
+scorer is the exception, since it draws nothing from the budget, so sharding it
+is unexplored rather than ruled out.
+
+The inverted term cache is not sharded either, for two reasons. It is bounded by
+`max_cache_size`, so it holds far fewer rows than the minimum a shard must hold.
+It is also the one inverted structure that changes: it accepts inserts, deletes
+and updates, and it revises its popular-term decisions as its rows change. A
+shard must discard whatever its structure discards, so shards of a cache would
+each need those revisions applied as they happened. The cache takes its threads
+from `ScanSplit` instead, which divides the candidate scan it falls back to.
 
 Sharding is invisible to callers. A row keeps the row number it was inserted
 under, because a shard holds a share of the index's rows rather than a
-renumbering of them. A search returns those same row numbers, whichever shard
+renumbering of them, and a search returns those same row numbers whichever shard
 found the rows.
 
 ## Discarding Popular Terms

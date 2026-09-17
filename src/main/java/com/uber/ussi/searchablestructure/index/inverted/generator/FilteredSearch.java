@@ -57,7 +57,7 @@ public final class FilteredSearch {
     double currentMinSimilarity = Math.max(minSimilarity, sharedMinSimilarity.get());
     while (candidates.hasNext()) {
       long rowNum = candidates.next();
-      // Another shard may have proved a higher floor since this one last looked.
+      // Another shard may have proved a higher minimum similarity since this one last looked.
       float publishedFloor = sharedMinSimilarity.get();
       if (publishedFloor > currentMinSimilarity) {
         currentMinSimilarity = publishedFloor;

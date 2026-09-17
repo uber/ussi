@@ -531,14 +531,19 @@ rules out `l2` and any other comparator left without one.
 
 ### Sharded Inverted Index
 
-A **shard** is one of several smaller inverted indexes that an inverted index is
-built as, each holding a disjoint share of the rows. `ShardedInvertedIndex` is
-the structure the engine sees. It searches every shard and keeps the nearest rows
-across all of them.
+A **shard** is one of several sets of inverted lists that an inverted index
+builds, each holding the lists of a disjoint share of its rows. A search searches
+every shard and keeps the nearest rows across all of them.
 
-Rows are divided between shards by row number modulo the shard count. Row numbers
-are handed out in turn, so this divides the rows evenly, and an even division is
-what makes the shards cost the same to search as each other.
+Only the inverted lists are divided. The forward index, the uni value of every
+row, the metadata, and the tombstones of deleted rows are all keyed by row
+number, belong to the index, and are read by the search of every shard. An index
+of one shard is the same index by a different arrangement of its lists, so there
+is no unsharded form to convert to or from.
+
+A row's lists go to the shard its row number falls in, modulo the shard count.
+Row numbers are handed out in turn, so this divides the rows evenly, and an even
+division is what makes the shards cost the same to search as each other.
 
 A search hands off all of its shards at once. Searches are served in the order
 they arrive, and handing off in instalments would forfeit that, because the pool
@@ -557,18 +562,16 @@ The downside is that a shard prunes only from what it has seen. An inverted list
 is sorted by uni value, and both length filtering and the rising `minSimilarity`
 of a filling heap prune against that order. A shard covering a share of the rows
 therefore prunes against a weaker threshold, and over a narrower range, than the
-whole index would. Each shard also repeats the work a search owes per structure:
-a heap, a walk of the query's keys, and a seek into each of their lists. Sharding
-consequently increases the total work of a search, and what it buys is that the
-work runs at once. Where no spare thread exists to run the shards concurrently,
-sharding costs rather than pays.
+whole index would. Each shard also repeats the walk of the query's keys and the
+seek into each of their lists. Sharding consequently increases the total work of
+a search, and what it buys is that the work runs at once. Where no spare thread
+exists to run the shards concurrently, sharding costs rather than pays.
 
 That cost is what bounds the shard count. An index takes one shard per core only
 once every shard would hold a minimum number of rows, and fewer shards until
 then. The minimum sizes the shard count of a small index; it does not switch
 sharding on and off. An index is built once from the rows it is given and never
-grows, so no index is converted from unsharded to sharded while it is being
-searched.
+grows, so the count is settled when the index is built.
 
 The minimum is set at 50,000 rows, which is a conservative choice rather than a
 measured one. Sharding was measured to pay at about 60,000 rows per shard, and to
@@ -590,10 +593,8 @@ shard must discard whatever its structure discards, so shards of a cache would
 each need those revisions applied as they happened. The cache takes its threads
 from `ScanSplit` instead, which divides the candidate scan it falls back to.
 
-Sharding is invisible to callers. A row keeps the row number it was inserted
-under, because a shard holds a share of the index's rows rather than a
-renumbering of them, and a search returns those same row numbers whichever shard
-found the rows.
+Sharding is invisible to callers, which never see a shard and address rows only
+by the row numbers they inserted them under.
 
 ## Discarding Popular Terms
 

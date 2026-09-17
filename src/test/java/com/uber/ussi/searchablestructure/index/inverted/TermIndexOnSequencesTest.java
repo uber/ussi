@@ -27,6 +27,9 @@ import java.util.Random;
 import org.junit.jupiter.api.Test;
 
 class TermIndexOnSequencesTest {
+  /** Test indexes hold far fewer rows than a shard's minimum, so they have one shard. */
+  private static final int ONLY_SHARD = 0;
+
   private static final float DELTA = 1e-6f;
   private static final float[] NO_VALUES = new float[0];
   private static final List<String> COMPARATOR_TYPES = List.of("gld", "ngld");
@@ -42,9 +45,9 @@ class TermIndexOnSequencesTest {
     TermIndex index = new TermIndex(config("ngld"), rows, longObjectMap());
 
     assertEquals(2, index.size());
-    assertEquals(3, index.getNumIndexedKeysForTests());
-    assertArrayEquals(new long[] {7}, index.getRowNumsForKeyForTests(1));
-    assertArrayEquals(new long[] {8, 7}, index.getRowNumsForKeyForTests(2));
+    assertEquals(3, index.getNumIndexedKeysForTests(ONLY_SHARD));
+    assertArrayEquals(new long[] {7}, index.getRowNumsForKeyForTests(ONLY_SHARD, 1));
+    assertArrayEquals(new long[] {8, 7}, index.getRowNumsForKeyForTests(ONLY_SHARD, 2));
     // The indexed form is the multiset: ascending, distinct, counts as values.
     assertArrayEquals(new long[] {1, 2}, index.getIndexedRow(7).getTerms());
     assertArrayEquals(new float[] {3.0f, 1.0f}, index.getIndexedRow(7).getValues());
@@ -193,8 +196,8 @@ class TermIndexOnSequencesTest {
             rows,
             longObjectMap());
 
-    assertEquals(0, index.getRowNumsForKeyForTests(9).length);
-    long[] rowNumsForTermTwo = index.getRowNumsForKeyForTests(2).clone();
+    assertEquals(0, index.getRowNumsForKeyForTests(ONLY_SHARD, 9).length);
+    long[] rowNumsForTermTwo = index.getRowNumsForKeyForTests(ONLY_SHARD, 2).clone();
     Arrays.sort(rowNumsForTermTwo);
     assertArrayEquals(new long[] {1, 2}, rowNumsForTermTwo);
     // The term is gone from the scored sequence too, so rows 1 and 2 become identical.
@@ -231,7 +234,7 @@ class TermIndexOnSequencesTest {
             rows,
             longObjectMap());
 
-    assertEquals(0, index.getRowNumsForKeyForTests(9).length);
+    assertEquals(0, index.getRowNumsForKeyForTests(ONLY_SHARD, 9).length);
     assertEquals(2, index.getIndexedRow(1).termsLength());
     // The scored sequences keep the discarded term, so rows 1 and 2 are transpositions apart.
     assertArrayEquals(new long[] {9, 1, 2}, index.getVerificationRow(1).getTerms());

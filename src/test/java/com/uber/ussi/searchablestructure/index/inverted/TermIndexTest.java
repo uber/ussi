@@ -35,6 +35,9 @@ import java.util.TreeMap;
 import org.junit.jupiter.api.Test;
 
 class TermIndexTest {
+  /** Test indexes hold far fewer rows than a shard's minimum, so they have one shard. */
+  private static final int ONLY_SHARD = 0;
+
   private static final float DELTA = 1e-6f;
   private static final String CANDIDATES_ONLY =
       NamespaceConfig.PopularTermDiscardScope.CANDIDATES_ONLY.getParamValue();
@@ -50,9 +53,9 @@ class TermIndexTest {
     TermIndex index = new TermIndex(config("jaccard"), rows, longObjectMap());
 
     assertEquals(4, index.size());
-    assertEquals(3, index.getNumIndexedKeysForTests());
-    assertArrayEquals(new long[] {9, 10, 11, 12}, index.getRowNumsForKeyForTests(1));
-    assertArrayEquals(new long[] {11, 12}, index.getRowNumsForKeyForTests(2));
+    assertEquals(3, index.getNumIndexedKeysForTests(ONLY_SHARD));
+    assertArrayEquals(new long[] {9, 10, 11, 12}, index.getRowNumsForKeyForTests(ONLY_SHARD, 1));
+    assertArrayEquals(new long[] {11, 12}, index.getRowNumsForKeyForTests(ONLY_SHARD, 2));
     assertTrue(index.getAll().containsKey(12));
   }
 
@@ -70,7 +73,7 @@ class TermIndexTest {
             longObjectMap());
 
     assertArrayEquals(new long[] {1}, index.getDiscardedTermsForTests());
-    assertArrayEquals(new long[0], index.getRowNumsForKeyForTests(1));
+    assertArrayEquals(new long[0], index.getRowNumsForKeyForTests(ONLY_SHARD, 1));
     assertArrayEquals(new long[] {2}, index.getVerificationRow(1).getTerms());
     assertArrayEquals(new long[] {1, 2}, index.getAll().get(1).getTerms());
 
@@ -92,7 +95,7 @@ class TermIndexTest {
 
     // The scope leaves candidate generation alone and changes only scoring.
     assertArrayEquals(new long[] {1}, index.getDiscardedTermsForTests());
-    assertArrayEquals(new long[0], index.getRowNumsForKeyForTests(1));
+    assertArrayEquals(new long[0], index.getRowNumsForKeyForTests(ONLY_SHARD, 1));
     assertArrayEquals(new long[] {1, 2}, index.getVerificationRow(1).getTerms());
 
     // Row 1 is reached via term 2 and scored as supplied: two terms of three, not one of two.
@@ -228,7 +231,7 @@ class TermIndexTest {
     rows.put(20, jaccard(new long[] {1, 2}, 1, 1));
     rows.put(40, jaccard(new long[] {1, 2, 3, 4}, 1, 1, 1, 1));
     TermIndex index = new TermIndex(config("jaccard"), rows, longObjectMap());
-    long[] invertedList = index.getRowNumsForKeyForTests(1);
+    long[] invertedList = index.getRowNumsForKeyForTests(ONLY_SHARD, 1);
 
     int first =
         index.getFirstMatchingUniValueForTests(invertedList, 2.0, 0.6, 0, invertedList.length);
@@ -249,7 +252,7 @@ class TermIndexTest {
       rows.put(numTerms, jaccard(sequentialTerms(numTerms), repeatedValue(1.0f, numTerms)));
     }
     TermIndex index = new TermIndex(config("jaccard"), rows, longObjectMap());
-    long[] invertedList = index.getRowNumsForKeyForTests(1);
+    long[] invertedList = index.getRowNumsForKeyForTests(ONLY_SHARD, 1);
 
     int first =
         index.getFirstMatchingUniValueForTests(invertedList, 40.0, 0.8, 0, invertedList.length);
@@ -430,7 +433,7 @@ class TermIndexTest {
     TermIndex index =
         new TermIndex(
             config("jaccard"), longObjectMap(1, jaccard(new long[] {1}, 1)), longObjectMap());
-    long[] invertedList = index.getRowNumsForKeyForTests(1);
+    long[] invertedList = index.getRowNumsForKeyForTests(ONLY_SHARD, 1);
     assertThrows(
         IllegalArgumentException.class,
         () ->
@@ -447,7 +450,7 @@ class TermIndexTest {
     rows.put(1, jaccard(new long[] {1}, 1));
     rows.put(2, jaccard(new long[] {1, 2}, 1, 1));
     TermIndex index = new TermIndex(config("jaccard"), rows, longObjectMap());
-    long[] invertedList = index.getRowNumsForKeyForTests(1);
+    long[] invertedList = index.getRowNumsForKeyForTests(ONLY_SHARD, 1);
 
     assertEquals(
         invertedList.length,
@@ -510,7 +513,7 @@ class TermIndexTest {
     TermIndex index =
         new TermIndex(
             config("jaccard"), longObjectMap(1, jaccard(new long[] {1}, 1)), longObjectMap());
-    long[] invertedList = index.getRowNumsForKeyForTests(1);
+    long[] invertedList = index.getRowNumsForKeyForTests(ONLY_SHARD, 1);
     rowNumToUniValues(index).remove(1);
 
     assertThrows(

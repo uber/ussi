@@ -40,6 +40,21 @@ public final class TermIndex extends BaseInvertedIndex {
         structureDiscardedTerms);
   }
 
+  /** An index over a fixed number of shards, which only a test has reason to choose. */
+  TermIndex(
+      NamespaceConfig namespaceConfig,
+      LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
+      LongObjectHashMap<LongMeta> rowNumToMetaMap,
+      int numShards) {
+    super(
+        namespaceConfig,
+        rowNumToTermsAndValuesMap,
+        rowNumToMetaMap,
+        IndexType.INVERTED_TERM,
+        null,
+        numShards);
+  }
+
   @Override
   protected double getMaxPrefixSum(
       double keysUniValue, double recordUniValue, double minSimilarity) {

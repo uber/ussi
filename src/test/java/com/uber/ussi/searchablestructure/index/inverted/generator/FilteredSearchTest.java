@@ -88,7 +88,7 @@ class FilteredSearchTest {
             stubContext(),
             (rowNum, metadataFilter) -> true,
             rows::get,
-            new SharedFloor(0.0f));
+            new SharedMinSimilarity(0.0f));
 
     assertEquals(2, results.size());
     assertTrue(results.stream().anyMatch(result -> result.getRowNum() == 1));

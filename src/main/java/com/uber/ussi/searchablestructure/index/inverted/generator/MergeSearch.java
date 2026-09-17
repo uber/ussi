@@ -44,7 +44,7 @@ public final class MergeSearch {
       RowFilter rowFilter,
       boolean scoresFromConjunction,
       LongFunction<LongTermsAndValues> verificationRowLookup,
-      SharedFloor sharedFloor) {
+      SharedMinSimilarity sharedMinSimilarity) {
     if (queryKeys.length == 0) {
       return List.of();
     }
@@ -62,7 +62,7 @@ public final class MergeSearch {
                 conjunctionScored, queryKeys, context, uniValue1, minSimilarity));
 
     BoundedSizeMaxHeap<RowNumAndSimilarity> rows = TopResults.newTopResultsHeap(maxResults);
-    double currentMinSimilarity = Math.max(minSimilarity, sharedFloor.get());
+    double currentMinSimilarity = Math.max(minSimilarity, sharedMinSimilarity.get());
     Conjunction conjunction = new Conjunction(comparator, conjunctionScored);
     IntArrayList advancedKeyIndexes = new IntArrayList(queryKeys.length);
 
@@ -107,7 +107,7 @@ public final class MergeSearch {
       if (rows.isFull()) {
         currentMinSimilarity =
             Math.max(currentMinSimilarity, TopResults.getConservativeMinSimilarity(rows));
-        sharedFloor.raiseTo((float) currentMinSimilarity);
+        sharedMinSimilarity.raiseTo((float) currentMinSimilarity);
       }
     }
     return rows.toList();

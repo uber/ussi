@@ -7,33 +7,33 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import org.junit.jupiter.api.Test;
 
-class SharedFloorTest {
+class SharedMinSimilarityTest {
 
   @Test
-  void holdsTheFloorItWasGivenUntilAHigherOneIsPublished() {
-    SharedFloor floor = new SharedFloor(0.25f);
+  void holdsWhatItWasGivenUntilAHigherOneIsPublished() {
+    SharedMinSimilarity minSimilarity = new SharedMinSimilarity(0.25f);
 
-    assertEquals(0.25f, floor.get());
+    assertEquals(0.25f, minSimilarity.get());
 
-    floor.raiseTo(0.1f);
-    assertEquals(0.25f, floor.get(), "a lower floor is ignored");
+    minSimilarity.raiseTo(0.1f);
+    assertEquals(0.25f, minSimilarity.get(), "a lower one is ignored");
 
-    floor.raiseTo(0.25f);
-    assertEquals(0.25f, floor.get(), "an equal floor is ignored");
+    minSimilarity.raiseTo(0.25f);
+    assertEquals(0.25f, minSimilarity.get(), "an equal one is ignored");
 
-    floor.raiseTo(0.75f);
-    assertEquals(0.75f, floor.get(), "a higher floor is published");
+    minSimilarity.raiseTo(0.75f);
+    assertEquals(0.75f, minSimilarity.get(), "a higher one is published");
   }
 
   @Test
-  void keepsTheHighestFloorWhenEveryShardPublishesAtOnce() throws Exception {
+  void keepsTheHighestWhenEveryShardPublishesAtOnce() throws Exception {
     int numShards = 16;
-    SharedFloor floor = new SharedFloor(0.0f);
+    SharedMinSimilarity minSimilarity = new SharedMinSimilarity(0.0f);
     CountDownLatch publishTogether = new CountDownLatch(1);
     List<Thread> shards = new ArrayList<>(numShards);
     for (int shard = 0; shard < numShards; shard++) {
-      // Published lowest last, so a floor that took the last write rather than the highest would
-      // end up holding a low one.
+      // Published lowest last, so taking the last write rather than the highest would end up
+      // holding a low one.
       float published = (numShards - shard) / (float) numShards;
       shards.add(
           new Thread(
@@ -44,7 +44,7 @@ class SharedFloorTest {
                   Thread.currentThread().interrupt();
                   return;
                 }
-                floor.raiseTo(published);
+                minSimilarity.raiseTo(published);
               }));
     }
     shards.forEach(Thread::start);
@@ -54,6 +54,6 @@ class SharedFloorTest {
       shard.join();
     }
 
-    assertEquals(1.0f, floor.get());
+    assertEquals(1.0f, minSimilarity.get());
   }
 }

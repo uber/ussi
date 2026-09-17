@@ -13,9 +13,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Pure Java dense matrix-vector dot-product scorer.
  *
- * <p>The multiply is divided between the threads one search may use, each thread taking a range of
- * the matrix's rows. The ranges do not overlap, so the threads write disjoint parts of the dot
- * products and need nothing to coordinate them beyond waiting for all of them to finish.
+ * <p>The multiply is multi-threaded over the threads one search may use, each thread taking a
+ * range of the matrix's rows. The ranges do not overlap, so the threads write disjoint stretches of
+ * the dot products and need nothing to coordinate them beyond waiting for all of them to finish.
  *
  * <p>The OpenBLAS scorer is threaded by OpenBLAS itself, from the same budget. This scorer is what
  * runs where that one is unavailable, and it took no threads at all before.
@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 final class JavaMatrixDotProductScorer implements MatrixDotProductScorer {
 
   /**
-   * Multiply-adds a score must do before its rows are worth dividing between threads. Below it the
+   * Multiply-adds a score must do before its rows are worth multi-threading. Below this the
    * hand-off costs more than the multiply it shortens.
    *
    * <p>Carried over from the row-visit minimum a split scan uses, and unmeasured for this multiply.
@@ -32,8 +32,8 @@ final class JavaMatrixDotProductScorer implements MatrixDotProductScorer {
 
   /**
    * Threads the multiply hands off to. Sized to the cores, which is what the searches in flight
-   * demand together: searches are admitted up to the core count, and each divides the cores among
-   * its own rows.
+   * demand together: searches are admitted up to the core count, and each multi-threads over the
+   * cores its own rows.
    */
   private static final ExecutorService MULTIPLIERS = createMultipliers();
 
@@ -47,33 +47,33 @@ final class JavaMatrixDotProductScorer implements MatrixDotProductScorer {
   public void score(float[] queryValues, float[] dotProducts) {
     MatrixDotProductScorers.validateScoreInputs(matrix, queryValues, dotProducts);
     int numRows = matrix.numRows();
-    int numParts = partCount(numRows, matrix.dimension(), ParallelismBudget.shared().budget());
-    if (numParts == 1) {
+    int numRanges = rangeCount(numRows, matrix.dimension(), ParallelismBudget.shared().budget());
+    if (numRanges == 1) {
       scoreRows(0, numRows, queryValues, dotProducts);
       return;
     }
-    int rowsPerPart = (numRows + numParts - 1) / numParts;
-    List<Future<?>> handedOffParts = new ArrayList<>(numParts - 1);
-    for (int part = 1; part < numParts; part++) {
-      int firstRow = part * rowsPerPart;
-      int afterLastRow = Math.min(numRows, firstRow + rowsPerPart);
+    int rowsPerRange = (numRows + numRanges - 1) / numRanges;
+    List<Future<?>> handedOffRanges = new ArrayList<>(numRanges - 1);
+    for (int range = 1; range < numRanges; range++) {
+      int firstRow = range * rowsPerRange;
+      int afterLastRow = Math.min(numRows, firstRow + rowsPerRange);
       if (firstRow >= afterLastRow) {
         break;
       }
-      handedOffParts.add(
+      handedOffRanges.add(
           MULTIPLIERS.submit(() -> scoreRows(firstRow, afterLastRow, queryValues, dotProducts)));
     }
     // The calling thread takes a range rather than waiting on all of them, which both uses the
     // thread already here and keeps the multiply progressing when every pool thread is busy.
-    scoreRows(0, Math.min(numRows, rowsPerPart), queryValues, dotProducts);
-    awaitParts(handedOffParts);
+    scoreRows(0, Math.min(numRows, rowsPerRange), queryValues, dotProducts);
+    awaitRanges(handedOffRanges);
   }
 
   /**
-   * Parts to divide {@code numRows} into: every thread this search may use once the multiply is
-   * worth dividing, and one before that. No part is without a row in it.
+   * Ranges to divide {@code numRows} into: one per thread this search may use once the multiply is
+   * worth multi-threading, and one range before that. No range is without a row in it.
    */
-  static int partCount(int numRows, int dimension, int parallelism) {
+  static int rangeCount(int numRows, int dimension, int parallelism) {
     if ((long) numRows * dimension < MIN_MULTIPLY_ADDS_TO_SPLIT) {
       return 1;
     }
@@ -108,12 +108,12 @@ final class JavaMatrixDotProductScorer implements MatrixDotProductScorer {
    * Waits for every handed-off range, including once one has failed. A range left running would
    * still be writing the dot products its caller had already begun to read.
    */
-  private static void awaitParts(List<Future<?>> handedOffParts) {
+  private static void awaitRanges(List<Future<?>> handedOffRanges) {
     RuntimeException failure = null;
     boolean interrupted = false;
-    for (Future<?> part : handedOffParts) {
+    for (Future<?> range : handedOffRanges) {
       try {
-        part.get();
+        range.get();
       } catch (InterruptedException e) {
         interrupted = true;
         failure = failure != null ? failure : new IllegalStateException(MULTIPLY_FAILED, e);
@@ -134,7 +134,7 @@ final class JavaMatrixDotProductScorer implements MatrixDotProductScorer {
     }
   }
 
-  private static final String MULTIPLY_FAILED = "Failed to multiply part of the matrix.";
+  private static final String MULTIPLY_FAILED = "Failed to multiply a range of the matrix's rows.";
 
   private static ExecutorService createMultipliers() {
     AtomicInteger threadNumber = new AtomicInteger(1);

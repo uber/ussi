@@ -126,7 +126,7 @@ public abstract class Cache implements SearchableStructure {
   }
 
   /**
-   * Hook invoked after a row is added, so subclasses can maintain auxiliary search structures.
+   * Hook invoked after a row is added, for a cache that maintains search structures of its own.
    * Updates invoke {@link #onRowDeleted} for the old record followed by this hook for the new one.
    */
   protected void onRowInserted(long rowNum, LongTermsAndValues record) {}

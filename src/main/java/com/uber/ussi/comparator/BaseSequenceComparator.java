@@ -12,9 +12,8 @@ import java.util.Set;
 
 /**
  * Shared implementation for the comparators reporting an edit distance, with length and prefix
- * filtering. Subclasses report it as a raw edit count ({@link GldComparator}) or a
- * length-normalized fraction ({@link NgldComparator}), over the {@link SequenceDistance} they
- * compose.
+ * filtering. What an implementation reports is left to it: either the raw edit count of the {@link
+ * SequenceDistance} it composes, or that count as a fraction of the lengths compared.
  *
  * <p>A sequence record carries its terms in order and with repeats, and has no values, so its
  * Uni value is its length. Candidate generation instead indexes the term multiset as a sparse

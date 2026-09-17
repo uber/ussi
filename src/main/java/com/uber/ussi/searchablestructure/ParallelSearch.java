@@ -14,10 +14,9 @@ import java.util.function.IntFunction;
 /**
  * Runs the searches one search is divided into, and keeps the nearest rows across all of them.
  *
- * <p>Both ways of dividing a search use this. {@link ParallelShardSearch} runs one complete search
- * per shard of a structure, and {@link ParallelRowScan} runs one range of a single structure's rows
- * per thread. What they share is this dispatch: submit every division at once, search one of them on
- * the calling thread, then wait for all of them and merge what each kept.
+ * <p>A search may be divided into complete searches of a structure's shards, or into ranges of one
+ * structure's rows. Either way the dispatch is the same: submit every division at once, search one
+ * of them on the calling thread, then wait for all of them and merge what each kept.
  *
  * <p>Each division keeps its own heap, and the heaps are merged once all of them have finished. No
  * heap is shared between threads.
@@ -40,9 +39,9 @@ final class ParallelSearch {
    * The nearest {@code maxResults} rows across {@code numDivisions} divisions of one search.
    *
    * <p>Every division is submitted before any is waited on. The pool starts them in the order they
-   * were submitted, so a search that submitted only some of its divisions and then returned for the
-   * rest would have those later ones queued behind the divisions of every search that arrived in the
-   * meantime.
+   * were submitted, so a search that submitted only some of its divisions and then returned for
+   * the rest would have those later ones queued behind the divisions of every search that arrived
+   * in the meantime.
    *
    * <p>The calling thread searches one division rather than only waiting. This uses the thread
    * already here, and it keeps the search moving when every pool thread is busy.
@@ -73,8 +72,9 @@ final class ParallelSearch {
    * Adds the rows every handed-off division kept, waiting for all of them even once one has failed.
    *
    * <p>A failed division could be left to finish on its own, but only by returning while it still
-   * held the structure, which the read lock the caller searches under would no longer be protecting.
-   * Waiting costs the rest of a search that is going to throw, and it keeps every division inside
+   * held the structure, which the read lock the caller searches under would no longer be
+   * protecting. Waiting costs the rest of a search that is going to throw, and it keeps every
+   * division inside
    * the lock that makes reading the structure safe.
    */
   private static void addHandedOff(

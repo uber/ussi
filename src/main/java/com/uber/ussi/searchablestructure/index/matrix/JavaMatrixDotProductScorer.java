@@ -39,7 +39,7 @@ final class JavaMatrixDotProductScorer implements MatrixDotProductScorer {
     int numRows = matrix.numRows();
     int numRanges = numRangesFor(numRows, matrix.dimension(), ParallelismBudget.shared().budget());
     int rowsPerRange = (numRows + numRanges - 1) / numRanges;
-    SearchThreads.run(
+    SearchThreads.runInParallel(
         numRanges,
         range -> {
           int firstRow = range * rowsPerRange;

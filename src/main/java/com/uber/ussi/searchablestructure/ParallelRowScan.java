@@ -89,7 +89,7 @@ public final class ParallelRowScan {
       int maxResults,
       float minSimilarity,
       RowScorer scorer) {
-    return inRanges(
+    return scanInRanges(
         numRangesFor(rowNumToTermsAndValuesMap.size(), rowVisitCost(record), parallelism),
         rowNumToTermsAndValuesMap.keys.length,
         maxResults,
@@ -128,7 +128,7 @@ public final class ParallelRowScan {
     // slots without exposing whether it is there, so a slot range cannot tell row zero from an
     // empty slot. Copying the candidates out gives parts something they can index.
     long[] rowNums = candidateRowNums.toArray();
-    return inRanges(
+    return scanInRanges(
         numRanges,
         rowNums.length,
         maxResults,
@@ -151,14 +151,14 @@ public final class ParallelRowScan {
   /**
    * Scans {@code numIndexes} worth of rows in {@code numRanges} ranges, merging what each keeps.
    */
-  private static List<RowNumAndSimilarity> inRanges(
+  private static List<RowNumAndSimilarity> scanInRanges(
       int numRanges,
       int numIndexes,
       int maxResults,
       float minSimilarity,
       RangeScorer rangeScorer) {
     int indexesPerRange = (numIndexes + numRanges - 1) / numRanges;
-    return ParallelSearch.inParallel(
+    return ParallelSearch.searchInParallel(
         numRanges,
         maxResults,
         minSimilarity,

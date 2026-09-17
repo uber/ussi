@@ -176,7 +176,7 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
         // One ticket for the whole traversal, so every structure this query visits is served at
         // the query's arrival rather than at the arrival of each structure's own search.
         SearchResults[] results = new SearchResults[1];
-        SearchThreads.underOneTicket(
+        SearchThreads.runUnderOneTicket(
             () ->
                 results[0] =
                     mergeSearchResultsLocked(
@@ -204,7 +204,7 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
       lock.readLock().lock();
       try {
         SearchResults[] results = new SearchResults[1];
-        SearchThreads.underOneTicket(
+        SearchThreads.runUnderOneTicket(
             () ->
                 results[0] =
                     mergeSearchResultsLocked(

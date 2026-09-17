@@ -58,9 +58,9 @@ public final class FilteredSearch {
     while (candidates.hasNext()) {
       long rowNum = candidates.next();
       // Another shard may have proved a higher minimum similarity since this one last looked.
-      float publishedFloor = sharedMinSimilarity.get();
-      if (publishedFloor > currentMinSimilarity) {
-        currentMinSimilarity = publishedFloor;
+      float publishedMinSimilarity = sharedMinSimilarity.get();
+      if (publishedMinSimilarity > currentMinSimilarity) {
+        currentMinSimilarity = publishedMinSimilarity;
         candidates.setMinSimilarity(currentMinSimilarity);
       }
       if (!rowFilter.canScore(rowNum, metadataFilter)) {

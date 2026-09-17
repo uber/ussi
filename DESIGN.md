@@ -541,23 +541,35 @@ A row's lists belong to the shard given by its row number modulo the shard count
 Row numbers are issued in sequence, so the shards receive equal shares and cost
 the same to search.
 
-A search submits all of its shards together. The pool serves shards in submission
-order, so a search submitting some shards and returning for the rest would let a
-later search overtake it. Submitting together also delegates the thread count to
-the pool, which is sized to the cores and so imposes the bound
-`ParallelismBudget` would impose.
+A search submits all of its shards together. The pool starts shard searches in
+the order they were submitted, so a search that submitted only some of its shards
+and then returned for the rest would have those later shards queued behind the
+shards of every search that arrived in the meantime. Submitting all of them at
+once also delegates the thread count to the pool, which is sized to the cores and
+so imposes the bound `ParallelismBudget` would impose.
 
-Sharding multi-threads a search entire, which the alternatives do not.
+Sharding multi-threads a search in its entirety, which the alternatives do not.
 Multi-threading verification reaches only the phase that scores candidates.
-Multi-threading the query's keys visits a row once per thread holding one of its
-keys, where one thread walking every key visits it once.
+Multi-threading the query's keys visits a row once per thread holding one of that
+row's keys, whereas one thread walking every key visits that row once.
 
 The cost is weaker pruning. Inverted lists are sorted by uni value, and both
 length filtering and the rising `minSimilarity` of a filling heap prune against
 that order, so a shard prunes against a weaker threshold over a narrower range
 than the whole index does. Each shard also repeats the walk of the query's keys
 and the seek into each list. Sharding therefore raises the total work of a search
-and returns concurrency for it; without a spare thread it is a loss.
+and returns concurrency for it. Without a spare thread to run the shards on, it
+is a loss.
+
+Each shard keeps its own heap, and the heaps are merged once every shard has
+finished. No heap is shared between threads. A single floor could be shared
+instead of a heap: the k-th nearest score across the shards searched so far is a
+valid floor for all of them, because a score never changes, so a row below that
+floor cannot enter the answer. Sharing it would recover the pruning the shards
+lose, and would require an atomic floor that each shard raises as its own k-th
+nearest improves, and a generator that reads the floor as it traverses rather
+than receiving it once. Both candidate generators take `minSimilarity` by value
+today, so the floor is per shard.
 
 That cost bounds the shard count. An index takes one shard per core only once
 every shard would hold a minimum number of rows, and fewer shards until then. The

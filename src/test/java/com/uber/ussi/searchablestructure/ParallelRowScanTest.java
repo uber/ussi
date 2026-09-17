@@ -68,7 +68,8 @@ public final class ParallelRowScanTest {
         record(7),
         /* parallelism */ 8,
         numRows,
-        (rowNum, termsAndValues, heap) -> visits.merge(rowNum, 1L, Long::sum));
+        /* minSimilarity */ 0.0f,
+        (rowNum, termsAndValues, heap, sharedMinSimilarity) -> visits.merge(rowNum, 1L, Long::sum));
 
     assertEquals(numRows, visits.size());
     assertEquals(Set.of(1L), Set.copyOf(visits.values()));
@@ -166,7 +167,8 @@ public final class ParallelRowScanTest {
         record(7),
         /* parallelism */ 8,
         numCandidates,
-        (rowNum, heap) -> visits.merge(rowNum, 1L, Long::sum));
+        /* minSimilarity */ 0.0f,
+        (rowNum, heap, sharedMinSimilarity) -> visits.merge(rowNum, 1L, Long::sum));
 
     assertTrue(candidates.contains(0), "Expected row zero among the candidates");
     assertTrue(visits.containsKey(0L), "Row zero was never scored");
@@ -202,7 +204,8 @@ public final class ParallelRowScanTest {
                     record(7),
                     /* parallelism */ 8,
                     10,
-                    (rowNum, termsAndValues, heap) -> {
+                    /* minSimilarity */ 0.0f,
+                    (rowNum, termsAndValues, heap, sharedMinSimilarity) -> {
                       scored.incrementAndGet();
                       throw new IllegalArgumentException("Cannot score row " + rowNum);
                     }));
@@ -219,7 +222,8 @@ public final class ParallelRowScanTest {
         record(7),
         parallelism,
         numCandidates,
-        (rowNum, heap) -> threads.add(Thread.currentThread().getName()));
+        /* minSimilarity */ 0.0f,
+        (rowNum, heap, sharedMinSimilarity) -> threads.add(Thread.currentThread().getName()));
     return Set.copyOf(threads);
   }
 
@@ -235,7 +239,8 @@ public final class ParallelRowScanTest {
         query,
         parallelism,
         maxResults,
-        (rowNum, heap) ->
+        /* minSimilarity */ 0.0f,
+        (rowNum, heap, sharedMinSimilarity) ->
             heap.add(new RowNumAndSimilarity(rowNum, similarity(query, rows.get(rowNum)))));
   }
 
@@ -255,7 +260,9 @@ public final class ParallelRowScanTest {
         record(7),
         parallelism,
         numRows,
-        (rowNum, termsAndValues, heap) -> threads.add(Thread.currentThread().getName()));
+        /* minSimilarity */ 0.0f,
+        (rowNum, termsAndValues, heap, sharedMinSimilarity) ->
+            threads.add(Thread.currentThread().getName()));
     return Set.copyOf(threads);
   }
 
@@ -270,7 +277,8 @@ public final class ParallelRowScanTest {
         query,
         parallelism,
         maxResults,
-        (rowNum, termsAndValues, heap) ->
+        /* minSimilarity */ 0.0f,
+        (rowNum, termsAndValues, heap, sharedMinSimilarity) ->
             heap.add(new RowNumAndSimilarity(rowNum, similarity(query, termsAndValues))));
   }
 

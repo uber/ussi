@@ -53,19 +53,24 @@ public final class ParallelRowScan {
     void score(
         long rowNum,
         LongTermsAndValues termsAndValues,
-        BoundedSizeMaxHeap<RowNumAndSimilarity> rows);
+        BoundedSizeMaxHeap<RowNumAndSimilarity> rows,
+        SharedMinSimilarity sharedMinSimilarity);
   }
 
   /** Scores a candidate row, which the caller looks up itself, keeping the best of them. */
   @FunctionalInterface
   public interface CandidateScorer {
-    void score(long rowNum, BoundedSizeMaxHeap<RowNumAndSimilarity> rows);
+    void score(
+        long rowNum,
+        BoundedSizeMaxHeap<RowNumAndSimilarity> rows,
+        SharedMinSimilarity sharedMinSimilarity);
   }
 
   /** Scores the rows one range covers, keeping the best of them. */
   @FunctionalInterface
   private interface RangeScorer {
-    List<RowNumAndSimilarity> score(int fromIndex, int toIndex);
+    List<RowNumAndSimilarity> score(
+        int fromIndex, int toIndex, SharedMinSimilarity sharedMinSimilarity);
   }
 
   /**
@@ -82,13 +87,17 @@ public final class ParallelRowScan {
       LongTermsAndValues record,
       int parallelism,
       int maxResults,
+      float minSimilarity,
       RowScorer scorer) {
     return inRanges(
         numRangesFor(rowNumToTermsAndValuesMap.size(), rowVisitCost(record), parallelism),
         rowNumToTermsAndValuesMap.keys.length,
         maxResults,
-        (fromSlot, toSlot) ->
-            scanSlots(rowNumToTermsAndValuesMap, fromSlot, toSlot, maxResults, scorer));
+        minSimilarity,
+        (fromSlot, toSlot, sharedMinSimilarity) ->
+            scanSlots(
+                rowNumToTermsAndValuesMap, fromSlot, toSlot, maxResults, scorer,
+                sharedMinSimilarity));
   }
 
   /**
@@ -101,13 +110,16 @@ public final class ParallelRowScan {
       LongTermsAndValues record,
       int parallelism,
       int maxResults,
+      float minSimilarity,
       CandidateScorer scorer) {
     int numRanges = numRangesFor(candidateRowNums.size(), rowVisitCost(record), parallelism);
     if (numRanges == 1) {
-      // Scanned where they lie, so a scan not worth splitting does not pay to copy them out.
+      // Scanned where they lie, so a scan not worth splitting does not pay to copy them out. One
+      // range shares its minimum similarity with nobody, and raises it from its own heap alone.
       BoundedSizeMaxHeap<RowNumAndSimilarity> rows = newTopResultsHeap(maxResults);
+      SharedMinSimilarity sharedMinSimilarity = new SharedMinSimilarity(minSimilarity);
       for (LongCursor candidate : candidateRowNums) {
-        scorer.score(candidate.value, rows);
+        scorer.score(candidate.value, rows, sharedMinSimilarity);
       }
       return rows.toList();
     }
@@ -120,7 +132,9 @@ public final class ParallelRowScan {
         numRanges,
         rowNums.length,
         maxResults,
-        (fromIndex, toIndex) -> scanRowNums(rowNums, fromIndex, toIndex, maxResults, scorer));
+        minSimilarity,
+        (fromIndex, toIndex, sharedMinSimilarity) ->
+            scanRowNums(rowNums, fromIndex, toIndex, maxResults, scorer, sharedMinSimilarity));
   }
 
   /**
@@ -136,15 +150,22 @@ public final class ParallelRowScan {
 
   /** Scans {@code numIndexes} worth of rows in {@code numRanges} ranges, merging what each keeps. */
   private static List<RowNumAndSimilarity> inRanges(
-      int numRanges, int numIndexes, int maxResults, RangeScorer rangeScorer) {
+      int numRanges,
+      int numIndexes,
+      int maxResults,
+      float minSimilarity,
+      RangeScorer rangeScorer) {
     int indexesPerRange = (numIndexes + numRanges - 1) / numRanges;
     return ParallelSearch.inParallel(
         numRanges,
         maxResults,
-        range -> {
+        minSimilarity,
+        (range, sharedMinSimilarity) -> {
           int fromIndex = range * indexesPerRange;
           int toIndex = Math.min(numIndexes, fromIndex + indexesPerRange);
-          return fromIndex >= toIndex ? List.of() : rangeScorer.score(fromIndex, toIndex);
+          return fromIndex >= toIndex
+              ? List.of()
+              : rangeScorer.score(fromIndex, toIndex, sharedMinSimilarity);
         });
   }
 
@@ -162,7 +183,8 @@ public final class ParallelRowScan {
       int fromSlot,
       int toSlot,
       int maxResults,
-      RowScorer scorer) {
+      RowScorer scorer,
+      SharedMinSimilarity sharedMinSimilarity) {
     BoundedSizeMaxHeap<RowNumAndSimilarity> rows = newTopResultsHeap(maxResults);
     long[] rowNums = rowNumToTermsAndValuesMap.keys;
     Object[] termsAndValues = rowNumToTermsAndValuesMap.values;
@@ -171,17 +193,22 @@ public final class ParallelRowScan {
       if (value == null) {
         continue;
       }
-      scorer.score(rowNums[slot], (LongTermsAndValues) value, rows);
+      scorer.score(rowNums[slot], (LongTermsAndValues) value, rows, sharedMinSimilarity);
     }
     return rows.toList();
   }
 
   /** Scores the candidate rows an index range covers. */
   private static List<RowNumAndSimilarity> scanRowNums(
-      long[] rowNums, int fromIndex, int toIndex, int maxResults, CandidateScorer scorer) {
+      long[] rowNums,
+      int fromIndex,
+      int toIndex,
+      int maxResults,
+      CandidateScorer scorer,
+      SharedMinSimilarity sharedMinSimilarity) {
     BoundedSizeMaxHeap<RowNumAndSimilarity> rows = newTopResultsHeap(maxResults);
     for (int index = fromIndex; index < toIndex; index++) {
-      scorer.score(rowNums[index], rows);
+      scorer.score(rowNums[index], rows, sharedMinSimilarity);
     }
     return rows.toList();
   }

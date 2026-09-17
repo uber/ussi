@@ -1,5 +1,6 @@
 package com.uber.ussi.searchablestructure.index.inverted.generator;
 
+import com.uber.ussi.searchablestructure.SharedMinSimilarity;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;

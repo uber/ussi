@@ -9,7 +9,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.IntFunction;
 
 /**
  * Runs the searches one search is divided into, and keeps the nearest rows across all of them.
@@ -35,6 +34,11 @@ final class ParallelSearch {
 
   private ParallelSearch() {}
 
+  /** Searches one division of a search, against a minimum similarity shared with the others. */
+  public interface DivisionSearch {
+    List<RowNumAndSimilarity> search(int division, SharedMinSimilarity sharedMinSimilarity);
+  }
+
   /**
    * The nearest {@code maxResults} rows across {@code numDivisions} divisions of one search.
    *
@@ -45,9 +49,13 @@ final class ParallelSearch {
    *
    * <p>The calling thread searches one division rather than only waiting. This uses the thread
    * already here, and it keeps the search moving when every pool thread is busy.
+   *
+   * <p>Divisions share one minimum similarity, seeded at {@code minSimilarity}. A division prunes
+   * at what any of them has proved, which recovers the pruning they lose by keeping separate heaps.
    */
   static List<RowNumAndSimilarity> inParallel(
-      int numDivisions, int maxResults, IntFunction<List<RowNumAndSimilarity>> search) {
+      int numDivisions, int maxResults, float minSimilarity, DivisionSearch search) {
+    SharedMinSimilarity sharedMinSimilarity = new SharedMinSimilarity(minSimilarity);
     BoundedSizeMaxHeap<RowNumAndSimilarity> nearestRowNums =
         new BoundedSizeMaxHeap<>(maxResults, RowNumAndSimilarity.TOP_RESULTS_HEAP_ORDER);
     if (numDivisions <= 0) {
@@ -55,15 +63,15 @@ final class ParallelSearch {
     }
     if (numDivisions == 1) {
       // Searched on the calling thread, so a search that divides into one pays no hand-off.
-      nearestRowNums.addAll(search.apply(0));
+      nearestRowNums.addAll(search.search(0, sharedMinSimilarity));
       return nearestRowNums.toList();
     }
     List<Future<List<RowNumAndSimilarity>>> handedOff = new ArrayList<>(numDivisions - 1);
     for (int division = 1; division < numDivisions; division++) {
       int handedOffDivision = division;
-      handedOff.add(SEARCHERS.submit(() -> search.apply(handedOffDivision)));
+      handedOff.add(SEARCHERS.submit(() -> search.search(handedOffDivision, sharedMinSimilarity)));
     }
-    nearestRowNums.addAll(search.apply(0));
+    nearestRowNums.addAll(search.search(0, sharedMinSimilarity));
     addHandedOff(handedOff, nearestRowNums);
     return nearestRowNums.toList();
   }

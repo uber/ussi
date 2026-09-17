@@ -11,6 +11,8 @@ import com.uber.ussi.config.NamespaceConfig.PopularTermDiscardScope;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
+import com.uber.ussi.searchablestructure.SharedMinSimilarity;
+import com.uber.ussi.searchablestructure.TopResults;
 import com.uber.ussi.searchablestructure.ParallelRowScan;
 import com.uber.ussi.searchablestructure.inverted.KeyAndPrefixFilteringData;
 import com.uber.ussi.searchablestructure.metadata.PreFilteringResult;
@@ -165,14 +167,16 @@ public final class InvertedTermCache extends Cache {
         query,
         searchParallelism(),
         maxResults,
-        (rowNum, rows) -> {
+        minSimilarity,
+        (rowNum, rows, sharedMinSimilarity) -> {
           LongTermsAndValues verificationRow = getVerificationRow(rowNum);
           if (verificationRow == null || !query.sharesAnyTerm(verificationRow)) {
             return;
           }
-          float similarity =
-              (float) comparator.getSimilarity(query, verificationRow, minSimilarity);
-          if (similarity >= minSimilarity) {
+          float threshold =
+              TopResults.tightenedMinSimilarity(rows, minSimilarity, sharedMinSimilarity);
+          float similarity = (float) comparator.getSimilarity(query, verificationRow, threshold);
+          if (similarity >= threshold) {
             rows.add(new RowNumAndSimilarity(rowNum, similarity));
           }
         });

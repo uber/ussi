@@ -20,7 +20,7 @@ import com.uber.ussi.searchablestructure.cache.CacheFactory;
 import com.uber.ussi.searchablestructure.index.Index;
 import com.uber.ussi.searchablestructure.index.IndexConfigValidator;
 import com.uber.ussi.searchablestructure.index.IndexFactory;
-import com.uber.ussi.searchablestructure.index.inverted.generator.TopResults;
+import com.uber.ussi.searchablestructure.TopResults;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
 import java.util.ArrayList;
 import java.util.Arrays;

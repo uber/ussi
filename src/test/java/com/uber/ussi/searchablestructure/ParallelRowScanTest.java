@@ -122,7 +122,7 @@ public final class ParallelRowScanTest {
 
       assertEquals(
           testCase[3],
-          ParallelRowScan.rangeCount(numRows, rowVisitCost, parallelism),
+          ParallelRowScan.numRangesFor(numRows, rowVisitCost, parallelism),
           String.format(
               "%d rows costing %d visits each, in up to %d parts",
               numRows, rowVisitCost, parallelism));

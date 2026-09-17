@@ -32,7 +32,7 @@ public final class ParallelShardSearch {
       int numShards,
       int maxResults,
       float minSimilarity,
-      ParallelSearch.DivisionSearch searchShard) {
+      ParallelSearch.Searcher searchShard) {
     return ParallelSearch.inParallel(numShards, maxResults, minSimilarity, searchShard);
   }
 }

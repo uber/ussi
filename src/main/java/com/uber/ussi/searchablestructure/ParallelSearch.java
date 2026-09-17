@@ -11,21 +11,21 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Runs the searches one search is divided into, and keeps the nearest rows across all of them.
+ * Runs several searches of one structure at the same time, and keeps the nearest rows across all of
+ * them.
  *
- * <p>A search may be divided into complete searches of a structure's shards, or into ranges of one
- * structure's rows. Either way the dispatch is the same: submit every division at once, search one
- * of them on the calling thread, then wait for all of them and merge what each kept.
+ * <p>A structure is searched this way either as shards or as ranges of its rows. Either way every
+ * search is submitted before any is waited on, one of them runs on the calling thread, and what
+ * each keeps is merged once all of them have finished.
  *
- * <p>Each division keeps its own heap, and the heaps are merged once all of them have finished. No
- * heap is shared between threads.
+ * <p>Each search keeps its own heap. No heap is shared between threads.
  */
 final class ParallelSearch {
 
   /**
-   * Threads the divisions of a search are handed off to. Sized to the cores, which is what the
-   * searches in flight demand together: searches are admitted up to the core count, and a search's
-   * divisions are worth no more threads than that.
+   * Threads the searches are handed off to. Sized to the cores, which is what the searches in
+   * flight demand together: searches are admitted up to the core count, and searching one
+   * structure is worth no more threads than that.
    *
    * <p>One pool serves both ways of dividing a search, so the threads a structure takes do not
    * depend on which way it divides, and so the two cannot each claim the cores.
@@ -34,65 +34,66 @@ final class ParallelSearch {
 
   private ParallelSearch() {}
 
-  /** Searches one division of a search, against a minimum similarity shared with the others. */
-  public interface DivisionSearch {
-    List<RowNumAndSimilarity> search(int division, SharedMinSimilarity sharedMinSimilarity);
+  /** One of the searches, against a minimum similarity shared with the others. */
+  public interface Searcher {
+    List<RowNumAndSimilarity> search(int searchNumber, SharedMinSimilarity sharedMinSimilarity);
   }
 
   /**
-   * The nearest {@code maxResults} rows across {@code numDivisions} divisions of one search.
+   * The nearest {@code maxResults} rows across {@code numSearches} searches.
    *
-   * <p>Every division is submitted before any is waited on. The pool starts them in the order they
-   * were submitted, so a search that submitted only some of its divisions and then returned for
-   * the rest would have those later ones queued behind the divisions of every search that arrived
-   * in the meantime.
+   * <p>The pool starts searches in the order they were submitted, so a caller that submitted some
+   * of its searches and then returned for the rest would have those later ones queued behind the
+   * searches of every caller that arrived in the meantime. Submitting them all at once is what
+   * keeps callers served in the order they arrived.
    *
-   * <p>The calling thread searches one division rather than only waiting. This uses the thread
-   * already here, and it keeps the search moving when every pool thread is busy.
+   * <p>The calling thread runs one of the searches rather than only waiting. This uses the thread
+   * already here, and it keeps the work moving when every pool thread is busy.
    *
-   * <p>Divisions share one minimum similarity, seeded at {@code minSimilarity}. A division prunes
-   * at what any of them has proved, which recovers the pruning they lose by keeping separate heaps.
+   * <p>The searches share one minimum similarity, seeded at {@code minSimilarity}, so that each
+   * prunes at what any of them has proved. That recovers the pruning they lose by keeping separate
+   * heaps.
    */
   static List<RowNumAndSimilarity> inParallel(
-      int numDivisions, int maxResults, float minSimilarity, DivisionSearch search) {
+      int numSearches, int maxResults, float minSimilarity, Searcher searcher) {
     SharedMinSimilarity sharedMinSimilarity = new SharedMinSimilarity(minSimilarity);
     BoundedSizeMaxHeap<RowNumAndSimilarity> nearestRowNums =
         new BoundedSizeMaxHeap<>(maxResults, RowNumAndSimilarity.TOP_RESULTS_HEAP_ORDER);
-    if (numDivisions <= 0) {
+    if (numSearches <= 0) {
       return nearestRowNums.toList();
     }
-    if (numDivisions == 1) {
-      // Searched on the calling thread, so a search that divides into one pays no hand-off.
-      nearestRowNums.addAll(search.search(0, sharedMinSimilarity));
+    if (numSearches == 1) {
+      // Searched on the calling thread, so one search alone pays no hand-off.
+      nearestRowNums.addAll(searcher.search(0, sharedMinSimilarity));
       return nearestRowNums.toList();
     }
-    List<Future<List<RowNumAndSimilarity>>> handedOff = new ArrayList<>(numDivisions - 1);
-    for (int division = 1; division < numDivisions; division++) {
-      int handedOffDivision = division;
-      handedOff.add(SEARCHERS.submit(() -> search.search(handedOffDivision, sharedMinSimilarity)));
+    List<Future<List<RowNumAndSimilarity>>> handedOffSearches = new ArrayList<>(numSearches - 1);
+    for (int searchNumber = 1; searchNumber < numSearches; searchNumber++) {
+      int handedOff = searchNumber;
+      handedOffSearches.add(
+          SEARCHERS.submit(() -> searcher.search(handedOff, sharedMinSimilarity)));
     }
-    nearestRowNums.addAll(search.search(0, sharedMinSimilarity));
-    addHandedOff(handedOff, nearestRowNums);
+    nearestRowNums.addAll(searcher.search(0, sharedMinSimilarity));
+    addHandedOff(handedOffSearches, nearestRowNums);
     return nearestRowNums.toList();
   }
 
   /**
-   * Adds the rows every handed-off division kept, waiting for all of them even once one has failed.
+   * Adds the rows every handed-off search kept, waiting for all of them even once one has failed.
    *
-   * <p>A failed division could be left to finish on its own, but only by returning while it still
+   * <p>A failed search could be left to finish on its own, but only by returning while it still
    * held the structure, which the read lock the caller searches under would no longer be
-   * protecting. Waiting costs the rest of a search that is going to throw, and it keeps every
-   * division inside
-   * the lock that makes reading the structure safe.
+   * protecting. Waiting costs the rest of work that is going to throw, and it keeps every search
+   * inside the lock that makes reading the structure safe.
    */
   private static void addHandedOff(
-      List<Future<List<RowNumAndSimilarity>>> handedOff,
+      List<Future<List<RowNumAndSimilarity>>> handedOffSearches,
       BoundedSizeMaxHeap<RowNumAndSimilarity> nearestRowNums) {
     RuntimeException failure = null;
     boolean interrupted = false;
-    for (Future<List<RowNumAndSimilarity>> division : handedOff) {
+    for (Future<List<RowNumAndSimilarity>> handedOffSearch : handedOffSearches) {
       try {
-        nearestRowNums.addAll(division.get());
+        nearestRowNums.addAll(handedOffSearch.get());
       } catch (InterruptedException e) {
         interrupted = true;
         failure = failure != null ? failure : new IllegalStateException(SEARCH_FAILED, e);
@@ -113,7 +114,7 @@ final class ParallelSearch {
     }
   }
 
-  private static final String SEARCH_FAILED = "Failed to search one division of a search.";
+  private static final String SEARCH_FAILED = "Failed to run one of the searches.";
 
   private static ExecutorService createSearchers() {
     AtomicInteger threadNumber = new AtomicInteger(1);

@@ -640,8 +640,8 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
    * materialized only when the merge generator will score from them.
    *
    * <p>A row's lists go to the shard its row number falls in. Row numbers are handed out in turn,
-   * so this divides the rows evenly, and an even division is what makes the shards cost the same
-   * to search as each other.
+   * so the shards receive equal shares, which is what makes them cost the same to search as each
+   * other.
    */
   private List<LongObjectHashMap<InvertedList>> buildInvertedLists(
       LongObjectHashMap<LongTermsAndValues> indexedRows, int numShards) {

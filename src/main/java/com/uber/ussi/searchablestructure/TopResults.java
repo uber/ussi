@@ -41,8 +41,8 @@ public final class TopResults {
   }
 
   /**
-   * The same, over a minimum similarity shared with the other divisions of one search. What this
-   * division has proved is published for them, and what any of them has proved is taken here.
+   * The same, over a minimum similarity shared with the searches running beside this one. What
+   * this search has proved is published for them, and what any of them has proved is taken here.
    */
   public static float tightenedMinSimilarity(
       BoundedSizeMaxHeap<RowNumAndSimilarity> rows,

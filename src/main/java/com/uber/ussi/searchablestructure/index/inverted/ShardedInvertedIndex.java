@@ -24,15 +24,17 @@ import java.util.Objects;
  * number modulo the shard count. Row numbers are handed out in turn, so this divides the rows
  * evenly, and an even division is what makes the shards cost the same to search as each other.
  *
- * <p>Shards divide the whole of a search rather than a phase of one, which is what makes them worth
- * dividing along. They also make a search cheaper before any thread is involved: an inverted list
- * grows with the rows in its index, so a shard holding a share of the rows has lists shorter by
- * that share, and the shards together score fewer candidates than the whole would. A sharded index
- * is therefore faster than an unsharded one even given a single thread.
+ * <p>Shards multi-thread a search entire, which is what distinguishes them from multi-threading one
+ * phase of it. Multi-threading verification reaches only the phase that scores candidates, and
+ * multi-threading over the query's keys visits a row once per thread holding one of its keys.
  *
- * <p>Against that, every shard costs a search a heap, a walk of the query's keys and a seek into
- * each of their lists, whatever threads the search has. That cost is per shard and does not shrink
- * with the shard, which is what bounds the shard count.
+ * <p>The downside is that a shard prunes only from what it has seen. An inverted list is sorted by
+ * uni value, and both length filtering and the rising minimum similarity of a filling heap prune
+ * against that order, so a shard covering a share of the rows prunes against a weaker threshold and
+ * over a narrower range than the whole index would. Each shard also repeats the work a search owes
+ * per structure: a heap, a walk of the query's keys, and a seek into each of their lists. Sharding
+ * therefore increases the total work of a search, and what it buys is that the work runs at once.
+ * That cost is what bounds the shard count.
  *
  * <p>Rows keep the row numbers they were inserted under. A shard holds a share of the rows and
  * never a renumbering of them, so no caller can tell the shards are there.

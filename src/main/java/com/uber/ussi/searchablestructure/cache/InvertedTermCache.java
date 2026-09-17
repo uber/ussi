@@ -173,10 +173,10 @@ public final class InvertedTermCache extends Cache {
           if (verificationRow == null || !query.sharesAnyTerm(verificationRow)) {
             return;
           }
-          float threshold =
+          float tightened =
               TopResults.tightenedMinSimilarity(rows, minSimilarity, sharedMinSimilarity);
-          float similarity = (float) comparator.getSimilarity(query, verificationRow, threshold);
-          if (similarity >= threshold) {
+          float similarity = (float) comparator.getSimilarity(query, verificationRow, tightened);
+          if (similarity >= tightened) {
             rows.add(new RowNumAndSimilarity(rowNum, similarity));
           }
         });

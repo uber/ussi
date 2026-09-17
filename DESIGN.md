@@ -184,7 +184,7 @@ cores, which is what turns splitting off under load rather than letting
 concurrent searches multiply their own fan-out against each other.
 
 A scan is the search that splits most readily, since rows score independently
-and only the best few survive: `ScanSplit` gives each part of the row space its
+and only the best few survive: `ParallelRowScan` gives each part of the row space its
 own heap and merges the heaps, a merge whose size is the part count rather than
 the row count. The hash table holding the rows has no index, so a part is a
 range of its slots, with the empty ones skipped.
@@ -585,7 +585,7 @@ The inverted term cache is not sharded. It is bounded by `max_cache_size` and so
 holds fewer rows than one shard requires, and it is the one inverted structure
 that changes: it revises its popular-term decisions as rows are inserted, deleted
 and updated, and every shard would need those revisions as they occurred. It
-multi-threads through `ScanSplit` instead.
+multi-threads through `ParallelRowScan` instead.
 
 Sharding is invisible to callers, which address rows only by the row numbers they
 inserted them under.

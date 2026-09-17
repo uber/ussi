@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerArray;
 import org.junit.jupiter.api.Test;
 
-class ShardFanOutTest {
+class ParallelShardSearchTest {
   private static final int ROWS_PER_SHARD = 5;
 
   /** Long enough that a search returning on a failure would return while a shard still ran. */
@@ -23,7 +23,7 @@ class ShardFanOutTest {
       String message = "numShards=" + numShards;
       for (int maxResults : new int[] {1, 3, 10}) {
         List<RowNumAndSimilarity> keptRowNums =
-            ShardFanOut.search(numShards, maxResults, shard -> rowsOfShard(shard, numShards));
+            ParallelShardSearch.search(numShards, maxResults, shard -> rowsOfShard(shard, numShards));
 
         assertEquals(
             nearestRowNumsOfAllShards(numShards, maxResults),
@@ -38,7 +38,7 @@ class ShardFanOutTest {
     for (int numShards : new int[] {4, 9, 16, 48}) {
       AtomicIntegerArray numSearchesByShard = new AtomicIntegerArray(numShards);
 
-      ShardFanOut.search(
+      ParallelShardSearch.search(
           numShards,
           ROWS_PER_SHARD,
           shard -> {
@@ -55,7 +55,7 @@ class ShardFanOutTest {
 
   @Test
   void holdsNothingWhenThereIsNoShardToSearch() {
-    assertTrue(ShardFanOut.search(0, 10, shard -> rowsOfShard(shard, 1)).isEmpty());
+    assertTrue(ParallelShardSearch.search(0, 10, shard -> rowsOfShard(shard, 1)).isEmpty());
   }
 
   @Test
@@ -64,7 +64,7 @@ class ShardFanOutTest {
         assertThrows(
             IllegalStateException.class,
             () ->
-                ShardFanOut.search(
+                ParallelShardSearch.search(
                     8,
                     ROWS_PER_SHARD,
                     shard -> {
@@ -89,7 +89,7 @@ class ShardFanOutTest {
     assertThrows(
         IllegalStateException.class,
         () ->
-            ShardFanOut.search(
+            ParallelShardSearch.search(
                 numShards,
                 ROWS_PER_SHARD,
                 shard -> {

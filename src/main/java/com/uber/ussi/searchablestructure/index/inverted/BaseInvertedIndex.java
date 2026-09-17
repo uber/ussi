@@ -17,7 +17,7 @@ import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.RecordType;
 import com.uber.ussi.error.IndexCreationError;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
-import com.uber.ussi.searchablestructure.ShardFanOut;
+import com.uber.ussi.searchablestructure.ParallelShardSearch;
 import com.uber.ussi.searchablestructure.index.Index;
 import com.uber.ussi.searchablestructure.index.IndexType;
 import com.uber.ussi.searchablestructure.index.MetadataFilteredSearchExecutor;
@@ -376,7 +376,7 @@ abstract class BaseInvertedIndex extends Index {
       @Nullable MetaFilter metadataFilter,
       float minSimilarity,
       int maxResults) {
-    return ShardFanOut.search(
+    return ParallelShardSearch.search(
         searchContextByShard.size(),
         maxResults,
         shard ->

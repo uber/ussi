@@ -5,7 +5,7 @@ import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
-import com.uber.ussi.searchablestructure.ScanSplit;
+import com.uber.ussi.searchablestructure.ParallelRowScan;
 import java.util.Collections;
 import java.util.List;
 
@@ -40,7 +40,7 @@ public final class ScanCache extends Cache {
     if (maxResults == 0 || rowNumToTermsAndValuesMap.isEmpty()) {
       return Collections.emptyList();
     }
-    return ScanSplit.search(
+    return ParallelRowScan.search(
         rowNumToTermsAndValuesMap,
         record,
         searchParallelism(),

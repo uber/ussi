@@ -200,6 +200,32 @@ class HybridIndexTest {
   }
 
   @Test
+  void holdsNoRowsOfItsOwnAndAnswersFromItsTermAndSignatureIndexes() {
+    LongTermsAndValues shortRow = jaccard(sequentialTerms(270, 1));
+    LongTermsAndValues longRow = jaccard(sequentialTerms(271, 1));
+    LongObjectHashMap<LongMeta> metadata = longObjectMap();
+    metadata.put(1, new LongMeta(Map.of("city", "sf"), false));
+    metadata.put(2, new LongMeta(Map.of("city", "la"), false));
+    HybridIndex index =
+        new HybridIndex(config(), longObjectMap(1, shortRow, 2, longRow), metadata);
+
+    // That the hybrid stores no rows the compiler already enforces, since it extends Index rather
+    // than RowStoringIndex. What is asserted here is that it answers for the rows all the same.
+    assertEquals(1, index.getNumExactRowsForTests());
+    assertEquals(1, index.getNumSignatureRowsForTests());
+    assertEquals(2, index.size(), "the rows of both, counted once each");
+    assertEquals(2, index.getAll().size());
+    assertEquals(2, index.getAllMetadata().size());
+
+    assertTrue(index.delete(1));
+
+    assertEquals(1, index.size(), "a deleted row is gone from the count");
+    assertEquals(1, index.getAll().size(), "and from the rows a rebuild is given");
+    assertTrue(index.getAll().containsKey(2));
+    assertFalse(index.isEmpty(), "rows remain");
+  }
+
+  @Test
   void metadataFilteringAndDeletionApplyAcrossBothChildren() {
     LongTermsAndValues exact = jaccard(sequentialTerms(270, 1));
     LongTermsAndValues approximate = jaccard(sequentialTerms(271, 1));

@@ -18,7 +18,7 @@ import com.uber.ussi.entity.termsandvalues.RecordType;
 import com.uber.ussi.error.IndexCreationError;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.ParallelShardSearch;
-import com.uber.ussi.searchablestructure.index.Index;
+import com.uber.ussi.searchablestructure.index.RowStoringIndex;
 import com.uber.ussi.searchablestructure.index.IndexType;
 import com.uber.ussi.searchablestructure.index.MetadataFilteredSearchExecutor;
 import com.uber.ussi.searchablestructure.index.inverted.generator.FilteredSearch;
@@ -58,7 +58,7 @@ import javax.annotation.Nullable;
  * index holds the other side, mapping each row number to its two forms and its Uni value, so
  * candidate generation reads the lists and verification reads the forward index.
  */
-abstract class BaseInvertedIndex extends Index {
+abstract class BaseInvertedIndex extends RowStoringIndex {
   private static final long[] EMPTY_ROW_NUMS = new long[0];
   private static final float[] EMPTY_VALUES = new float[0];
 

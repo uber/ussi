@@ -14,7 +14,7 @@ import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
-import com.uber.ussi.searchablestructure.index.Index;
+import com.uber.ussi.searchablestructure.index.RowStoringIndex;
 import com.uber.ussi.searchablestructure.index.MetadataFilteredSearchExecutor;
 import com.uber.ussi.searchablestructure.metadata.MetadataFilteringStrategy;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
@@ -30,7 +30,7 @@ import javax.annotation.Nullable;
  * implies. Which comparators can do that is {@link DotProductScored}, and {@code
  * IndexConfigValidator} rejects a namespace configured with one that cannot.
  */
-public final class MatrixIndex extends Index {
+public final class MatrixIndex extends RowStoringIndex {
   private final DotProductScored dotProductScored;
   private final MatrixDotProductScorer dotProductScorer;
   private final int dimension;

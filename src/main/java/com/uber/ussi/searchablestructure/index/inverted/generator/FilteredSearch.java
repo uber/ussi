@@ -48,14 +48,21 @@ public final class FilteredSearch {
       KeyAndPrefixFilteringData[] queryKeys,
       Context context,
       RowFilter rowFilter,
-      LongFunction<LongTermsAndValues> verificationRowLookup) {
+      LongFunction<LongTermsAndValues> verificationRowLookup,
+      SharedFloor sharedFloor) {
     CandidateIterator candidates =
         new CandidateIterator(
             comparator, context, queryKeys, indexedQuery.getUniValue(), minSimilarity);
     BoundedSizeMaxHeap<RowNumAndSimilarity> rows = TopResults.newTopResultsHeap(maxResults);
-    double currentMinSimilarity = minSimilarity;
+    double currentMinSimilarity = Math.max(minSimilarity, sharedFloor.get());
     while (candidates.hasNext()) {
       long rowNum = candidates.next();
+      // Another shard may have proved a higher floor since this one last looked.
+      float publishedFloor = sharedFloor.get();
+      if (publishedFloor > currentMinSimilarity) {
+        currentMinSimilarity = publishedFloor;
+        candidates.setMinSimilarity(currentMinSimilarity);
+      }
       if (!rowFilter.canScore(rowNum, metadataFilter)) {
         continue;
       }
@@ -73,6 +80,7 @@ public final class FilteredSearch {
         if (tightenedMinSimilarity > currentMinSimilarity) {
           currentMinSimilarity = tightenedMinSimilarity;
           candidates.setMinSimilarity(currentMinSimilarity);
+          sharedFloor.raiseTo((float) currentMinSimilarity);
         }
       }
     }

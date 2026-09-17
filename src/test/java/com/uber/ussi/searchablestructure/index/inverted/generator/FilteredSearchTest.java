@@ -87,7 +87,8 @@ class FilteredSearchTest {
             queryKeys,
             stubContext(),
             (rowNum, metadataFilter) -> true,
-            rows::get);
+            rows::get,
+            new SharedFloor(0.0f));
 
     assertEquals(2, results.size());
     assertTrue(results.stream().anyMatch(result -> result.getRowNum() == 1));

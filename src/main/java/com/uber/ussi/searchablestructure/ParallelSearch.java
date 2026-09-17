@@ -30,7 +30,7 @@ final class ParallelSearch {
    * prunes at what any of them has proved. That recovers the pruning they lose by keeping separate
    * heaps.
    */
-  static List<RowNumAndSimilarity> inParallel(
+  static List<RowNumAndSimilarity> searchInParallel(
       int numSearches, int maxResults, float minSimilarity, Searcher searcher) {
     BoundedSizeMaxHeap<RowNumAndSimilarity> nearestRowNums =
         new BoundedSizeMaxHeap<>(maxResults, RowNumAndSimilarity.TOP_RESULTS_HEAP_ORDER);
@@ -40,7 +40,7 @@ final class ParallelSearch {
     SharedMinSimilarity sharedMinSimilarity = new SharedMinSimilarity(minSimilarity);
     @SuppressWarnings("unchecked")
     List<RowNumAndSimilarity>[] keptBySearch = new List[numSearches];
-    SearchThreads.run(
+    SearchThreads.runInParallel(
         numSearches,
         searchNumber ->
             keptBySearch[searchNumber] = searcher.search(searchNumber, sharedMinSimilarity));

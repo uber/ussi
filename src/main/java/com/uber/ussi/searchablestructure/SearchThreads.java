@@ -17,27 +17,27 @@ import java.util.function.IntConsumer;
 /**
  * The threads one search may use, and the order they are given out in.
  *
- * <p>Every structure that divides a search hands the pieces here, so that the threads in flight for
+ * <p>Every structure that divides a search hands its work units here, so that the threads in flight for
  * one search stay within the budget {@link ParallelismBudget} allows it and the searches in flight
  * together stay within the cores. A structure holding threads of its own would spend a budget the
  * others had already been promised.
  *
  * <p>A search runs as many pieces at a time as its budget allows and the rest wait their turn.
- * Waiting in turn would otherwise cost a search its place, since one returning for its next pieces
+ * Waiting in turn would otherwise cost a search its place, since one returning for its next work units
  * would queue behind every search that arrived in the meantime, so the pool serves by the ticket a
- * search takes once rather than by the order pieces were submitted.
+ * search takes once rather than by the order work units were submitted.
  *
- * <p>The calling thread runs one piece of every turn rather than only waiting. This uses the thread
+ * <p>The calling thread runs one work unit of every turn rather than only waiting. This uses the thread
  * already here, and it keeps the search moving when every pool thread is busy.
  */
 public final class SearchThreads {
 
-  private static final ThreadPoolExecutor SEARCHERS = createSearchers();
+  private static final ThreadPoolExecutor SEARCHERS = createThreadPool();
 
-  /** Taken once per query, so that every piece of one query is served at the query's arrival. */
+  /** Taken once per query, so that every work unit of one query is served at the query's arrival. */
   private static final AtomicLong NEXT_TICKET = new AtomicLong();
 
-  /** The ticket of the query this thread is serving, while it is inside {@link #underOneTicket}. */
+  /** The ticket of the query this thread is serving, while it is inside {@link #runUnderOneTicket}. */
   private static final ThreadLocal<Long> CURRENT_TICKET = new ThreadLocal<>();
 
   private SearchThreads() {}
@@ -47,10 +47,10 @@ public final class SearchThreads {
    * query's arrival rather than at the arrival of each search within it.
    *
    * <p>A query visits its structures one after another, and each may divide its own search. Without
-   * this, the pieces of a later structure would take a later ticket and queue behind the queries
+   * this, the work units of a later structure would take a later ticket and queue behind the queries
    * that arrived while the earlier structures were being searched.
    */
-  public static void underOneTicket(Runnable query) {
+  public static void runUnderOneTicket(Runnable query) {
     if (CURRENT_TICKET.get() != null) {
       query.run();
       return;
@@ -64,66 +64,66 @@ public final class SearchThreads {
   }
 
   /**
-   * Runs {@code numPieces} pieces of one search, numbered from zero, and returns once all of them
+   * Runs {@code numWorkUnits} work units of one search, numbered from zero, and returns once all of them
    * have finished.
    *
-   * <p>A piece that fails is rethrown once the rest have finished. Returning before then would
-   * leave a piece reading a structure that the read lock its caller searches under is no longer
+   * <p>A work unit that fails is rethrown once the rest have finished. Returning before then would
+   * leave a work unit reading a structure that the read lock its caller searches under is no longer
    * protecting.
    */
-  public static void run(int numPieces, IntConsumer piece) {
-    if (numPieces <= 0) {
+  public static void runInParallel(int numWorkUnits, IntConsumer workUnit) {
+    if (numWorkUnits <= 0) {
       return;
     }
-    if (numPieces == 1) {
-      // Run on the calling thread, so a search in one piece pays no hand-off.
-      piece.accept(0);
+    if (numWorkUnits == 1) {
+      // Run on the calling thread, so a search of one work unit pays no hand-off.
+      workUnit.accept(0);
       return;
     }
     Long queryTicket = CURRENT_TICKET.get();
     long ticket = queryTicket != null ? queryTicket : NEXT_TICKET.getAndIncrement();
-    int numAtOnce = Math.max(1, Math.min(numPieces, ParallelismBudget.shared().budget()));
-    for (int firstOfTurn = 0; firstOfTurn < numPieces; firstOfTurn += numAtOnce) {
-      int afterTurn = Math.min(numPieces, firstOfTurn + numAtOnce);
+    int numAtOnce = Math.max(1, Math.min(numWorkUnits, ParallelismBudget.shared().budget()));
+    for (int firstOfTurn = 0; firstOfTurn < numWorkUnits; firstOfTurn += numAtOnce) {
+      int afterTurn = Math.min(numWorkUnits, firstOfTurn + numAtOnce);
       List<Future<?>> handedOff = new ArrayList<>(afterTurn - firstOfTurn - 1);
-      for (int pieceNumber = firstOfTurn + 1; pieceNumber < afterTurn; pieceNumber++) {
-        int handedOffPiece = pieceNumber;
-        handedOff.add(submit(ticket, () -> piece.accept(handedOffPiece)));
+      for (int workUnitNumber = firstOfTurn + 1; workUnitNumber < afterTurn; workUnitNumber++) {
+        int handedOffWorkUnit = workUnitNumber;
+        handedOff.add(submitWorkUnit(ticket, () -> workUnit.accept(handedOffWorkUnit)));
       }
-      piece.accept(firstOfTurn);
-      await(handedOff);
+      workUnit.accept(firstOfTurn);
+      awaitWorkUnits(handedOff);
     }
   }
 
-  /** Queues a piece to be served at its search's ticket rather than at its own submission. */
-  private static Future<?> submit(long ticket, Runnable piece) {
-    TicketedPiece<Void> ticketed =
-        new TicketedPiece<>(
+  /** Queues a work unit to be served at its search's ticket rather than at its own submission. */
+  private static Future<?> submitWorkUnit(long ticket, Runnable workUnit) {
+    TicketedWorkUnit<Void> ticketed =
+        new TicketedWorkUnit<>(
             ticket,
             () -> {
-              piece.run();
+              workUnit.run();
               return null;
             });
     SEARCHERS.execute(ticketed);
     return ticketed;
   }
 
-  /** Waits for every handed-off piece, and rethrows the first failure once all of them are done. */
-  private static void await(List<Future<?>> handedOff) {
+  /** Waits for every handed-off work unit, and rethrows the first failure once all of them are done. */
+  private static void awaitWorkUnits(List<Future<?>> handedOff) {
     RuntimeException failure = null;
     boolean interrupted = false;
-    for (Future<?> piece : handedOff) {
+    for (Future<?> handedOffWorkUnit : handedOff) {
       try {
-        piece.get();
+        handedOffWorkUnit.get();
       } catch (InterruptedException e) {
         interrupted = true;
-        failure = failure != null ? failure : new IllegalStateException(PIECE_FAILED, e);
+        failure = failure != null ? failure : new IllegalStateException(WORK_UNIT_FAILED, e);
       } catch (ExecutionException e) {
         // An undivided search would have thrown this from the caller's thread, so it is rethrown.
         RuntimeException thrown =
             e.getCause() instanceof RuntimeException runtimeCause
                 ? runtimeCause
-                : new IllegalStateException(PIECE_FAILED, e.getCause());
+                : new IllegalStateException(WORK_UNIT_FAILED, e.getCause());
         failure = failure != null ? failure : thrown;
       }
     }
@@ -135,9 +135,9 @@ public final class SearchThreads {
     }
   }
 
-  private static final String PIECE_FAILED = "Failed to run one piece of a search.";
+  private static final String WORK_UNIT_FAILED = "Failed to run one work unit of a search.";
 
-  private static ThreadPoolExecutor createSearchers() {
+  private static ThreadPoolExecutor createThreadPool() {
     AtomicInteger threadNumber = new AtomicInteger(1);
     int numThreads = Math.max(1, Runtime.getRuntime().availableProcessors());
     return new ThreadPoolExecutor(
@@ -153,21 +153,21 @@ public final class SearchThreads {
         });
   }
 
-  /** A piece that waits its turn by its search's ticket, and by its own order within that. */
-  private static final class TicketedPiece<T> extends FutureTask<T>
-      implements Comparable<TicketedPiece<?>> {
+  /** A work unit that waits its turn by its search's ticket, and by its own order within that. */
+  private static final class TicketedWorkUnit<T> extends FutureTask<T>
+      implements Comparable<TicketedWorkUnit<?>> {
     private static final AtomicLong NEXT_WITHIN_TICKET = new AtomicLong();
 
     private final long ticket;
     private final long withinTicket = NEXT_WITHIN_TICKET.getAndIncrement();
 
-    TicketedPiece(long ticket, Callable<T> piece) {
-      super(piece);
+    TicketedWorkUnit(long ticket, Callable<T> workUnit) {
+      super(workUnit);
       this.ticket = ticket;
     }
 
     @Override
-    public int compareTo(TicketedPiece<?> other) {
+    public int compareTo(TicketedWorkUnit<?> other) {
       int byTicket = Long.compare(ticket, other.ticket);
       return byTicket != 0 ? byTicket : Long.compare(withinTicket, other.withinTicket);
     }

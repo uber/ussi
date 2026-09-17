@@ -4,20 +4,20 @@ package com.uber.ussi.searchablestructure;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * The highest minimum similarity any division of a search has proved the answer will hold, shared
- * between its divisions.
+ * The highest minimum similarity any of several searches running together has proved the answer
+ * will hold, shared between them.
  *
- * <p>A division that has filled its heap holds as many rows as the answer keeps, each scoring at
+ * <p>A search that has filled its heap holds as many rows as the answer keeps, each scoring at
  * least
  * its weakest retained row. Those rows are among the answer's candidates, so the answer's weakest
- * kept score is at least that division's, and no row scoring below it can reach the answer. One
- * division's minimum similarity is therefore sound for every division, and this holds the highest
+ * kept score is at least that search's, and no row scoring below it can reach the answer. One
+ * search's minimum similarity is therefore sound for all of them, and this holds the highest
  * any of
  * them has published.
  *
- * <p>A division whose heap is not yet full has proved nothing and publishes nothing.
+ * <p>A search whose heap is not yet full has proved nothing and publishes nothing.
  *
- * <p>This only rises, and it is one value rather than a structure, so it needs no lock. Divisions
+ * <p>This only rises, and it is one value rather than a structure, so it needs no lock. The
  * keep
  * their own heaps; nothing but this scalar is shared.
  */

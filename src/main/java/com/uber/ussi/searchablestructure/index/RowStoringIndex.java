@@ -13,12 +13,10 @@ import com.uber.ussi.searchablestructure.metadata.PreFilteringResult;
 import java.util.Objects;
 
 /**
- * An index holding rows of its own, which is every index but one built from other indexes.
+ * An index that holds its own rows.
  *
  * <p>It keeps the rows, their metadata, and the tombstones of the rows deleted from it, and it
- * answers for them. An index built from other indexes keeps none of these and answers from the
- * indexes it is built from, so it extends {@link Index} directly and inherits nothing here to leave
- * unfilled.
+ * answers for all three.
  */
 public abstract class RowStoringIndex extends Index {
 

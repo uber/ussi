@@ -22,10 +22,9 @@ import java.util.Objects;
  * <p>Deletions are soft: the row joins a tombstone set and scoring skips it. Tombstoned rows are
  * dropped only when the index is rebuilt from {@link #getAll}.
  *
- * <p>What holds the rows is left to the index. {@link RowStoringIndex} holds its own and answers
- * for them, which is what all but one index does. An index built from other indexes holds none and
- * answers from the indexes it is built from, so that its rows are counted and returned once rather
- * than kept twice.
+ * <p>An index answers for the rows it holds, and where it keeps them is its own business. That is
+ * why {@link #size}, {@link #getAll}, {@link #getAllMetadata} and {@link #delete} are implemented
+ * rather than inherited.
  */
 public abstract class Index implements SearchableStructure, AutoCloseable {
   public static final String MAX_PRE_FILTERING_ROWS_RATIO = "max_pre_filtering_rows_ratio";

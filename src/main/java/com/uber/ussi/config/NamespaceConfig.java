@@ -243,9 +243,9 @@ public final class NamespaceConfig {
     CANDIDATES_AND_VERIFICATION,
 
     /**
-     * The term is absent from candidate generation only, so a search reports the similarity
-     * between the records as supplied. Recall is not exact: pruning measures similarity without
-     * the discarded terms, so a record within the threshold can be pruned before verification.
+     * The term is absent from candidate generation only, so a search reports the similarity between
+     * the records as supplied. Recall is not exact: pruning measures similarity without the
+     * discarded terms, so a record within the minimum similarity can be pruned before verification.
      */
     CANDIDATES_ONLY
   }

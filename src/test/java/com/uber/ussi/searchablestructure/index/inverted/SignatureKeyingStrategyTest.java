@@ -22,8 +22,8 @@ class SignatureKeyingStrategyTest {
 
   /**
    * The bound the measure states is a share of a record's signatures, so the generator's margin
-   * relaxes it before the prefix is taken. Jaccard's threshold is already that share, which is why
-   * the record's own Uni value adds nothing to it.
+   * relaxes it before the prefix is taken. Jaccard's minimum similarity is already that share,
+   * which is why the record's own Uni value adds nothing to it.
    */
   @Test
   void thePrefixRelaxesTheMeasuresSharedBoundByTheGeneratorMargin() {
@@ -41,9 +41,10 @@ class SignatureKeyingStrategyTest {
   }
 
   /**
-   * A distance threshold reaches the strategy as a similarity, so the conversion into the measure's
-   * own units has to happen before the measure states its bound. At minSimilarity 0.8 the ngld
-   * budget is 0.2, leaving 7/11 of the signatures to collide; ICWS estimates that to within 0.1.
+   * A distance minimum similarity reaches the strategy as a similarity, so the conversion into the
+   * measure's own units has to happen before the measure states its bound. At minSimilarity 0.8 the
+   * ngld budget is 0.2, leaving 7/11 of the signatures to collide; ICWS estimates that to within
+   * 0.1.
    */
   @Test
   void thePrefixConvertsASimilarityIntoTheMeasuresOwnUnits() {

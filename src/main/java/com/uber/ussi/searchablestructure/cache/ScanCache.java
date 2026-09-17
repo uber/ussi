@@ -50,9 +50,9 @@ public final class ScanCache extends Cache {
           if (!matchesMetaFilter(rowNum, metadataFilter)) {
             return;
           }
-          float threshold = TopResults.tightenedMinSimilarity(rows, minSimilarity);
-          float similarity = (float) comparator.getSimilarity(record, termsAndValues, threshold);
-          if (similarity >= threshold) {
+          float tightened = TopResults.tightenedMinSimilarity(rows, minSimilarity);
+          float similarity = (float) comparator.getSimilarity(record, termsAndValues, tightened);
+          if (similarity >= tightened) {
             rows.add(new RowNumAndSimilarity(rowNum, similarity));
           }
         });

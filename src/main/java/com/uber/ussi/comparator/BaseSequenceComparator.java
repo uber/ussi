@@ -57,7 +57,7 @@ abstract class BaseSequenceComparator extends Comparator implements KeyShareBoun
    * the sequences' combined length: the shared counts then come to {@code (1 - u) / 2} of that
    * length and the combined counts to {@code (1 + u) / 2}, so the multiset similarity the keys are
    * shared at is at least the ratio of the two. The lengths cancel, which is what lets one share
-   * stand for every candidate the threshold admits.
+   * stand for every candidate the minimum similarity admits.
    */
   @Override
   public final double getMinSharedKeyFraction(

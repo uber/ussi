@@ -1,4 +1,5 @@
-<!-- AUTHOR: Shijie Lu (shijie@uber.com), Shalini Kedlaya (skedlaya@uber.com), Ahmed Metwally (ametwally@uber.com) -->
+<!-- AUTHOR: Shijie Lu (shijie@uber.com), Shalini Kedlaya (skedlaya@uber.com),
+Ahmed Metwally (ametwally@uber.com) -->
 
 # USSI Design
 
@@ -75,37 +76,37 @@ When the total number of searchable structures reaches
 `maxNumSearchableStructures`, older indexes are consolidated in the background.
 
 Each searchable structure and the final merge keep only `maxNumSimilarities`
-results, accumulated in a `BoundedSizeMaxHeap`. A threshold search is
+results, accumulated in a `BoundedSizeMaxHeap`. A minimum similarity search is
 therefore a **capped range query**, returning the best `maxNumSimilarities`
-rows meeting the threshold rather than every row that meets it.
+rows meeting the minimum similarity rather than every row that meets it.
 
 ### Searching Several Structures
 
 A query visits the active cache, the graduating caches, and the indexes, and
-merges what they return. Each is told the weakest score the answer already
-holds enough of, and may decline to score any row beneath it: once the merge
-holds its full complement of results, a weaker row cannot reach the answer, so
-scoring it is wasted work. That floor starts at whatever the caller asked for,
-rises as structures return results, and never falls, which is what lets a
-structure treat it as a bound rather than a hint. It sits one step below the
-weakest result held, so a row scoring exactly as well still qualifies. Passing
-it costs nothing to add, because every structure already prunes on a floor to
-answer a threshold search; a nearest-neighbour search used to pass zero.
+merges what they return. Each is told the weakest score the answer already holds
+enough of, and may decline to score any row beneath it: once the merge holds its
+full complement of results, a weaker row cannot reach the answer, so scoring it
+is wasted work. That floor starts at whatever the caller asked for, rises as
+structures return results, and never falls, which is what lets a structure treat
+it as a bound rather than a hint. It sits one step below the weakest result
+held, so a row scoring exactly as well still qualifies. Passing it costs nothing
+to add, because every structure already prunes on a floor to answer a minimum
+similarity search; a nearest-neighbour search used to pass zero.
 
 Order therefore matters, and the structures are visited oldest first. Caches
 graduate at one size and older indexes are consolidated into larger ones, so the
 oldest structure holds the most rows and is the likeliest to hold the answer's
-best; raising the floor there is what every structure after it spends. The active
-cache holds the newest rows, which have no reason to be the best matches, so it
-is searched last. Ordering this way is free rather than a trade: an update
-deletes a row before re-inserting it, so one structure holds any given row and no
-order can change the version a search finds. Deletes still scan newest first,
+best; raising the floor there is what every structure after it spends. The
+active cache holds the newest rows, which have no reason to be the best matches,
+so it is searched last. Ordering this way is free rather than a trade: an update
+deletes a row before re-inserting it, so one structure holds any given row and
+no order can change the version a search finds. Deletes still scan newest first,
 where the first structure holding a row must be the current one.
 
 The saving depends on the number of structures, because a floor must have
 somewhere to be spent. An inverted index holds, for each key, a list of the rows
-carrying that key; these are its **inverted lists**, and a row drawn from them to
-be scored is a **candidate**. Indexes and Candidate Generation describe both.
+carrying that key; these are its **inverted lists**, and a row drawn from them
+to be scored is a **candidate**. Indexes and Candidate Generation describe both.
 Measured across several structures, the floor cuts candidates by about half, and
 the inverted lists walked by more. With one active cache and one index it saves
 nothing.
@@ -184,10 +185,10 @@ cores, which is what turns splitting off under load rather than letting
 concurrent searches multiply their own fan-out against each other.
 
 A scan is the search that splits most readily, since rows score independently
-and only the best few survive: `ParallelRowScan` gives each part of the row space its
-own heap and merges the heaps, a merge whose size is the part count rather than
-the row count. The hash table holding the rows has no index, so a part is a
-range of its slots, with the empty ones skipped.
+and only the best few survive: `ParallelRowScan` gives each part of the row
+space its own heap and merges the heaps, a merge whose size is the part count
+rather than the row count. The hash table holding the rows has no index, so a
+part is a range of its slots, with the empty ones skipped.
 
 A scan of the candidate rows a metadata filter produced splits the same way,
 which covers pre-filtering in the scan index and the direct scan the inverted
@@ -199,36 +200,37 @@ candidates are copied out instead, which gives parts something to index and
 costs one pass. A candidate scan not worth splitting is scanned where it lies,
 so it pays for no copy.
 
-Only a scan whose rows all score against the same threshold is split. A scan
-that raises its threshold as its heap fills prunes using what it has already
-scored, and parts each raising a threshold from their own heap would prune less
-than the whole scan does, so such a scan keeps its single heap and its pruning.
-An inverted index scores its candidates against a rising threshold, so no phase
-of a single inverted search is multi-threaded. The pruning that would forfeit
-depends on the data rather than the machine, so no measurement settles it.
+Only a scan whose rows all score against the same minimum similarity is split. A
+scan that raises its minimum similarity as its heap fills prunes using what it
+has already scored, and parts each raising a minimum similarity from their own
+heap would prune less than the whole scan does, so such a scan keeps its single
+heap and its pruning. An inverted index scores its candidates against a rising
+tightened, so no phase of a single inverted search is multi-threaded. The
+pruning that would forfeit depends on the data rather than the machine, so no
+measurement settles it.
 
 An inverted index multi-threads by sharding instead. It searches several shards
 at once, and each shard search is complete in itself, with its own heap and its
-own threshold. This forfeits the same pruning, and here the loss is accepted: a
-sharded search does more total work and receives concurrency in return. See
-Sharded Inverted Index.
+own minimum similarity. This forfeits the same pruning, and here the loss is
+accepted: a sharded search does more total work and receives concurrency in
+return. See Sharded Inverted Index.
 
 Whether to split at all is worth deciding, because a scan can be short enough
 that handing its parts out costs more than the scan. How finely to split is not,
-because that cost does not grow with the number of parts enough to matter: a scan
-barely past the minimum still gains from as many parts as there are cores, so
-holding parts back to keep each one large loses more than it protects. A scan
+because that cost does not grow with the number of parts enough to matter: a
+scan barely past the minimum still gains from as many parts as there are cores,
+so holding parts back to keep each one large loses more than it protects. A scan
 below a minimum amount of work therefore stays on the calling thread, and one
-above it uses every thread it may. The minimum is expressed in work rather than in
-rows so that it holds for records an order of magnitude apart in length, since a
-scan of few long records costs as much as one of many short ones.
+above it uses every thread it may. The minimum is expressed in work rather than
+in rows so that it holds for records an order of magnitude apart in length,
+since a scan of few long records costs as much as one of many short ones.
 
 The minimum earns its place at high query rates rather than on an idle machine.
 The budget is derived from the searches observed in flight, and searches short
 enough to leave the cores idle between them read as lower concurrency than they
-impose, so the budget can sit above one thread while a small cache serves hundreds
-of thousands of searches a second. Handing out parts for each of those costs far
-more than splitting saves.
+impose, so the budget can sit above one thread while a small cache serves
+hundreds of thousands of searches a second. Handing out parts for each of those
+costs far more than splitting saves.
 
 ## Configuration Validation
 
@@ -392,8 +394,8 @@ x86-64 and ARM64 and not adopted. The appeal is that a batch reads the matrix
 once for all of its queries rather than once for each, but the library first
 copies the matrix into packed buffers, a cost set by the size of the matrix
 rather than the size of the batch, so a small batch pays it for almost no reuse.
-Batches large enough to amortize that copy are bound by arithmetic rather than by
-memory, so the remaining gain is throughput taken out of tail latency, and it
+Batches large enough to amortize that copy are bound by arithmetic rather than
+by memory, so the remaining gain is throughput taken out of tail latency, and it
 only appears at loads well past the core count.
 
 ### Term Index
@@ -411,31 +413,31 @@ the lists and verification reads the forward index.
 Candidate traversal runs on two axes. A **vertical scan** visits the query's
 keys, and a **horizontal scan** walks the inverted list of each key it visits.
 Traversal combines length, position, and prefix filtering while tightening the
-similarity threshold as the top-k heap fills. The latter two both prune on a
+minimum similarity as the top-k heap fills. The latter two both prune on a
 partial unilateral value: the portion of a `uniValue` consumed so far, leaving
 the rest to bound what the unconsumed part can still contribute.
 
 Position filtering prunes during a comparison, on the partial unilateral values
 of the two records being compared, which the comparators carry as
 `partialUniValue1` and `partialUniValue2`. Once the most the unscanned terms
-could still add leaves the pair short of the threshold, the comparison stops.
+could still add leaves the pair short of the tightened, the comparison stops.
 
 Prefix filtering prunes before any comparison, on the same quantity taken over
-the query's keys. The prefix is chosen per query, cheapest inverted list
-first, and the vertical scan halts once the partial unilateral value of the
-visited keys exceeds the query's `maxPrefixSum`, the most a qualifying
-candidate may leave unmatched. `maxPrefixSum` takes one of two shapes, and
-which one a measure takes is what decides how it is derived. A threshold that
-is already a share of the keys gives the share of their unilateral value a
-candidate at exactly the threshold can afford to miss: a similarity for
-Jaccard and Ruzicka, a normalized distance for NGLD, and any signature-keyed
-structure, a signature standing for one draw. Keys are shared in proportion to
-the multiset similarity of the records they were drawn from whether they are
-terms or signatures, so that share is one fraction serving both key spaces. A
-threshold that counts keys instead states `maxPrefixSum` directly and no share
-comes into it, GLD's edits counting a sequence's terms and L2's squared
-distance being in the units of the squared values its unilateral value sums.
-The comparator supplies `maxPrefixSum` for term keys and the signature keying
+the query's keys. The prefix is chosen per query, cheapest inverted list first,
+and the vertical scan halts once the partial unilateral value of the visited
+keys exceeds the query's `maxPrefixSum`, the most a qualifying candidate may
+leave unmatched. `maxPrefixSum` takes one of two shapes, and which one a measure
+takes is what decides how it is derived. A minimum similarity that is already a
+share of the keys gives the share of their unilateral value a candidate at
+exactly the minimum similarity can afford to miss: a similarity for Jaccard and
+Ruzicka, a normalized distance for NGLD, and any signature-keyed structure, a
+signature standing for one draw. Keys are shared in proportion to the multiset
+similarity of the records they were drawn from whether they are terms or
+signatures, so that share is one fraction serving both key spaces. A minimum
+similarity that counts keys instead states `maxPrefixSum` directly and no share
+comes into it, GLD's edits counting a sequence's terms and L2's squared distance
+being in the units of the squared values its unilateral value sums. The
+comparator supplies `maxPrefixSum` for term keys and the signature keying
 strategy for signature keys. A row absent from every list visited so far has
 missed all of them, so once that accumulation passes `maxPrefixSum`, no row
 still unseen can qualify and the rest of the query's keys go unvisited. Either
@@ -493,18 +495,18 @@ MinHash is not among the generators it accepts.
 
 Prefix filtering over signature keys needs the smallest share of the query's
 signatures that a qualifying candidate can collide on. Signatures collide at a
-rate tracking the multiset similarity of the records behind them, so for
-Jaccard and Ruzicka that share is the threshold itself. An edit distance
+rate tracking the multiset similarity of the records behind them, so for Jaccard
+and Ruzicka that share is the minimum similarity itself. An edit distance
 measures something else, and the share follows from the same L1 bound the
 term-keyed lists use: multisets within L1 distance `u` of their combined length
 share at least `(1 - u) / (1 + u)` of it, and the lengths cancel, so one share
-covers every candidate the threshold admits. A normalized distance is already a
-share of the combined length; a raw edit count becomes one against the shortest
-candidate length filtering admits.
+covers every candidate the minimum similarity admits. A normalized distance is
+already a share of the combined length; a raw edit count becomes one against the
+shortest candidate length filtering admits.
 
 Signature prefix filtering applies a generator-specific approximation safety
 margin: `0.1` for MinHash, I2CWS, ICWS, and SCWS, and `0.15` for PCWS. The
-margin relaxes that share rather than the comparator's own threshold, because a
+margin relaxes that share rather than the comparator's own tightened, because a
 generator's concentration bound is stated on the similarity it estimates. These
 margins broaden candidate generation but do not make the signature index
 exact.
@@ -532,34 +534,34 @@ shard, each holding the lists of a disjoint share of its rows. A search searches
 every shard and keeps the nearest rows across all of them.
 
 Only the lists are sharded. The forward index, each row's uni value, the
-metadata and the tombstones are keyed by row number, belong to the index, and are
-read by every shard's search. An index of one shard is the general case with one
-shard rather than a separate form, so no index is converted between sharded and
-unsharded.
+metadata and the tombstones are keyed by row number, belong to the index, and
+are read by every shard's search. An index of one shard is the general case with
+one shard rather than a separate form, so no index is converted between sharded
+and unsharded.
 
-A row's lists belong to the shard given by its row number modulo the shard count.
-Row numbers are issued in sequence, so the shards receive equal shares and cost
-the same to search.
+A row's lists belong to the shard given by its row number modulo the shard
+count. Row numbers are issued in sequence, so the shards receive equal shares
+and cost the same to search.
 
 A search submits all of its shards together. The pool starts shard searches in
-the order they were submitted, so a search that submitted only some of its shards
-and then returned for the rest would have those later shards queued behind the
-shards of every search that arrived in the meantime. Submitting all of them at
-once also delegates the thread count to the pool, which is sized to the cores and
-so imposes the bound `ParallelismBudget` would impose.
+the order they were submitted, so a search that submitted only some of its
+shards and then returned for the rest would have those later shards queued
+behind the shards of every search that arrived in the meantime. Submitting all
+of them at once also delegates the thread count to the pool, which is sized to
+the cores and so imposes the bound `ParallelismBudget` would impose.
 
 Sharding multi-threads a search in its entirety, which the alternatives do not.
 Multi-threading verification reaches only the phase that scores candidates.
-Multi-threading the query's keys visits a row once per thread holding one of that
-row's keys, whereas one thread walking every key visits that row once.
+Multi-threading the query's keys visits a row once per thread holding one of
+that row's keys, whereas one thread walking every key visits that row once.
 
 The cost is weaker pruning. Inverted lists are sorted by uni value, and both
 length filtering and the rising `minSimilarity` of a filling heap prune against
-that order, so a shard prunes against a weaker threshold over a narrower range
-than the whole index does. Each shard also repeats the walk of the query's keys
-and the seek into each list. Sharding therefore raises the total work of a search
-and returns concurrency for it. Without a spare thread to run the shards on, it
-is a loss.
+that order, so a shard prunes against a weaker minimum similarity over a
+narrower range than the whole index does. Each shard also repeats the walk of
+the query's keys and the seek into each list. Sharding therefore raises the
+total work of a search and returns concurrency for it. Without a spare thread to
+run the shards on, it is a loss.
 
 Each shard keeps its own heap, and the heaps are merged once every shard has
 finished. No heap is shared between threads. A single floor could be shared
@@ -572,9 +574,9 @@ than receiving it once. Both candidate generators take `minSimilarity` by value
 today, so the floor is per shard.
 
 That cost bounds the shard count. An index takes one shard per core only once
-every shard would hold a minimum number of rows, and fewer shards until then. The
-minimum is 50,000 rows, chosen conservatively rather than measured: sharding was
-measured to pay at about 60,000 rows per shard and to lose at about 15,000.
+every shard would hold a minimum number of rows, and fewer shards until then.
+The minimum is 50,000 rows, chosen conservatively rather than measured: sharding
+was measured to pay at about 60,000 rows per shard and to lose at about 15,000.
 
 Only inverted indexes are sharded. A scan index already multi-threads one search
 across its rows, and a matrix index scored by OpenBLAS multi-threads inside that
@@ -583,22 +585,22 @@ draws nothing from the budget, so sharding it remains unexplored.
 
 The inverted term cache is not sharded. It is bounded by `max_cache_size` and so
 holds fewer rows than one shard requires, and it is the one inverted structure
-that changes: it revises its popular-term decisions as rows are inserted, deleted
-and updated, and every shard would need those revisions as they occurred. It
-multi-threads through `ParallelRowScan` instead.
+that changes: it revises its popular-term decisions as rows are inserted,
+deleted and updated, and every shard would need those revisions as they
+occurred. It multi-threads through `ParallelRowScan` instead.
 
-Sharding is invisible to callers, which address rows only by the row numbers they
-inserted them under.
+Sharding is invisible to callers, which address rows only by the row numbers
+they inserted them under.
 
 ## Discarding Popular Terms
 
 A term occurring in most rows generates most of the index as candidates without
-narrowing anything down, so both the inverted cache and the inverted indexes
-can discard terms above a configured popularity. Popularity is measured over the
+narrowing anything down, so both the inverted cache and the inverted indexes can
+discard terms above a configured popularity. Popularity is measured over the
 whole structure, never over part of one. A sharded index finds its popular terms
-once over all its rows and gives the same terms to every shard. A shard measuring
-for itself would count a term's share of its own rows rather than of the index's,
-and would discard terms the index keeps.
+once over all its rows and gives the same terms to every shard. A shard
+measuring for itself would count a term's share of its own rows rather than of
+the index's, and would discard terms the index keeps.
 
 In a hybrid index, only the term index discards, and its popular terms are
 counted over the rows that term index holds. Discarding shortens inverted lists,
@@ -612,19 +614,19 @@ differ in which side of the answer stays exact, not in how aggressive they are.
 Under the default `candidates_and_verification`, a discarded term is absent
 from the inverted lists and from the records the comparator scores. A search
 reports the similarity between the records that remain once the popular terms
-are removed from both, and every row within the threshold of the query,
+are removed from both, and every row within the minimum similarity of the query,
 measured that same way, is found. This redefines what the reported similarities
 mean, which is the right trade when the popular terms carry no signal worth
 reporting.
 
 Under `candidates_only`, a discarded term is absent from the inverted lists
-only. A search reports the similarity between the records as supplied,
-including their discarded terms, which is the right trade when an application
-has to report an exact similarity on the original records but cannot pay to
-generate candidates from their popular terms. The cost is recall: candidate
-generation still prunes on the similarity measured without the discarded terms,
-and removing a shared term can only lower that measure, so a row within the
-threshold of the query can be pruned before verification ever scores it. How
+only. A search reports the similarity between the records as supplied, including
+their discarded terms, which is the right trade when an application has to
+report an exact similarity on the original records but cannot pay to generate
+candidates from their popular terms. The cost is recall: candidate generation
+still prunes on the similarity measured without the discarded terms, and
+removing a shared term can only lower that measure, so a row within the minimum
+similarity of the query can be pruned before verification ever scores it. How
 much is lost depends on how much of the similarity the discarded terms carried.
 
 This also rules out scoring a row from the conjunction accumulated over the
@@ -668,9 +670,10 @@ they share, as it goes. What it holds mid-row is a partial conjunction, and
 `maxSimilarityFromPartialConjunction` bounds the best any completion of it
 could reach, using the unscanned keys' unilateral value to bound what the keys
 still to arrive can add. The row is abandoned as soon as that bound falls below
-the threshold the search currently holds. It trades a priority queue over the
+the minimum similarity the search currently holds. It trades a priority queue
+over the
 query's keys for the ability to prune a row mid-scan, which pays off when a
-query has many keys and the threshold rejects most rows early.
+query has many keys and the minimum similarity rejects most rows early.
 
 When the keys are the terms of a sparse record, the inverted lists also carry
 the row's value at that key, so the accumulated conjunction is the row's exact

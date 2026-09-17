@@ -7,10 +7,10 @@ import org.bytedeco.javacpp.Pointer;
 /**
  * Sets the OpenBLAS thread count through a function pointer resolved once.
  *
- * <p>{@link openblas_nolapack#blas_set_num_threads} re-runs the library load and four symbol lookups
- * on every call in order to re-detect whether the vendor is OpenBLAS or MKL, which costs orders of
- * magnitude more than the native call it wraps. Resolving the symbol a single time leaves only the
- * call. The vendor cannot change while the process runs, so resolving once is equivalent.
+ * <p>{@link openblas_nolapack#blas_set_num_threads} re-runs the library load and four symbol
+ * lookups on every call in order to re-detect whether the vendor is OpenBLAS or MKL, which costs
+ * orders of magnitude more than the native call it wraps. Resolving the symbol a single time leaves
+ * only the call. The vendor cannot change while the process runs, so resolving once is equivalent.
  *
  * <p>Falls back to the standard binding when the OpenBLAS symbol is absent, which is how that
  * binding recognises a different vendor.

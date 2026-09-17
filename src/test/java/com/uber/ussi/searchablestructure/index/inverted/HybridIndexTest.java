@@ -52,7 +52,7 @@ class HybridIndexTest {
   }
 
   @Test
-  void searchesBothChildrenAndMergesNearestAndThresholdResults() {
+  void searchesBothChildrenAndMergesNearestAndMinSimilarityResults() {
     LongTermsAndValues exact = jaccard(sequentialTerms(270, 1));
     LongTermsAndValues approximate = jaccard(sequentialTerms(271, 1));
     HybridIndex index =
@@ -60,13 +60,13 @@ class HybridIndexTest {
 
     List<RowNumAndSimilarity> nearest =
         index.getNearestNeighborRowNums(2, approximate, MetaFilter.empty());
-    List<RowNumAndSimilarity> threshold =
+    List<RowNumAndSimilarity> minSimilarity =
         index.getSimilarRowNums(1.0f, approximate, MetaFilter.empty());
 
     assertEquals(List.of(2L, 1L), rowNumsNearestFirst(nearest));
     assertEquals(1.0f, similarityForRow(nearest, 2), DELTA);
     assertEquals(270.0f / 271.0f, similarityForRow(nearest, 1), DELTA);
-    assertEquals(List.of(2L), rowNumsNearestFirst(threshold));
+    assertEquals(List.of(2L), rowNumsNearestFirst(minSimilarity));
     assertEquals(
         List.of(2L, 1L),
         rowNumsNearestFirst(index.getSimilarRowNums(0.5f, approximate, MetaFilter.empty())));
@@ -76,7 +76,7 @@ class HybridIndexTest {
   }
 
   @Test
-  void jaccardThresholdRoutingSkipsCardinalityRangesThatCannotMatch() {
+  void jaccardMinSimilarityRoutingSkipsCardinalityRangesThatCannotMatch() {
     LongTermsAndValues smallQuery = jaccard(sequentialTerms(100, 1));
     HybridIndex smallQueryIndex =
         new HybridIndex(
@@ -313,7 +313,7 @@ class HybridIndexTest {
       assertEquals(
           rowNums(filteredScanIndex.getSimilarRowNums(0.2f, query, MetaFilter.empty())),
           rowNums(mergeIndex.getSimilarRowNums(0.2f, query, MetaFilter.empty())),
-          "threshold queryIndex=" + queryIndex);
+          "minimum similarity queryIndex=" + queryIndex);
     }
   }
 

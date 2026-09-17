@@ -196,7 +196,11 @@ class SignatureIndexTest {
                 filteredScanIndex.getSimilarRowNums(minSimilarity, query, MetaFilter.empty())),
             rowNumsAndSimilarities(
                 mergeIndex.getSimilarRowNums(minSimilarity, query, MetaFilter.empty())),
-            comparatorType + " threshold queryIndex=" + queryIndex + " min=" + minSimilarity);
+            comparatorType
+                + " minimum similarity queryIndex="
+                + queryIndex
+                + " min="
+                + minSimilarity);
       }
     }
   }

@@ -19,11 +19,11 @@ import java.util.List;
  * the part count multiplied by the result count. Both the rows a structure holds and a set of
  * candidate rows a metadata filter produced are scanned this way.
  *
- * <p>Only a scan whose rows all score against the same threshold belongs here. A scan that raises
- * its threshold as its heap fills prunes using what it has already scored, and parts each raising a
- * threshold from their own heap would prune less than the whole scan does, so such a scan keeps its
- * single heap and its pruning instead. How much pruning it would lose depends on the data, so no
- * measurement would settle it.
+ * <p>Only a scan whose rows all score against the same minimum similarity belongs here. A scan that
+ * raises its minimum similarity as its heap fills prunes using what it has already scored, and
+ * parts each raising a minimum similarity from their own heap would prune less than the whole scan
+ * does, so such a scan keeps its single heap and its pruning instead. How much pruning it would
+ * lose depends on the data, so no measurement would settle it.
  *
  * <p>Whether to split at all is worth deciding, because a scan can be short enough that handing its
  * parts out costs more than the scan; how finely to split is not, because that cost does not grow

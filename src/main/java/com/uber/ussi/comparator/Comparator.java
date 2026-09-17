@@ -33,7 +33,7 @@ public abstract class Comparator implements Serializable {
 
   /**
    * Returns the comparison value of the two records. Below minSimilarity the value only has to
-   * correspond to a similarity below that threshold, so implementations may stop scanning early.
+   * correspond to a similarity below that tightened, so implementations may stop scanning early.
    */
   protected abstract double compareInternal(
       LongTermsAndValues termsAndValues1, LongTermsAndValues termsAndValues2, double minSimilarity)
@@ -75,9 +75,9 @@ public abstract class Comparator implements Serializable {
 
   /**
    * Returns the value this comparator reports at {@code normalizedSimilarityValue}, the inverse of
-   * what {@link #getSimilarity} returns. A threshold reaches the API as a similarity and every
-   * bound is expressed in the comparator's own units, so anything deriving a bound outside this
-   * class converts it here rather than holding the normalizer.
+   * what {@link #getSimilarity} returns. A minimum similarity reaches the API as a similarity and
+   * every bound is expressed in the comparator's own units, so anything deriving a bound outside
+   * this class converts it here rather than holding the normalizer.
    */
   public final double fromSimilarity(double normalizedSimilarityValue) {
     return comparatorNormalizer.normalizedSimilarityValueToComparatorValue(
@@ -133,9 +133,9 @@ public abstract class Comparator implements Serializable {
   }
 
   /**
-   * Returns the prefix sum a threshold gives when it is a share of the keys: what a candidate
-   * obliged to share {@code minSharedKeyFraction} of them may leave unshared, out of keys whose
-   * combined Uni value is {@code keysUniValue}.
+   * Returns the prefix sum a minimum similarity gives when it is a share of the keys: what a
+   * candidate obliged to share {@code minSharedKeyFraction} of them may leave unshared, out of keys
+   * whose combined Uni value is {@code keysUniValue}.
    *
    * <p>One shape serves both key spaces. Keys are shared in proportion to the multiset similarity
    * of the records they were drawn from, whether they are the record's own terms or signatures
@@ -153,14 +153,15 @@ public abstract class Comparator implements Serializable {
   }
 
   /**
-   * Returns the maximum prefix sum in this comparator's own units, given its threshold in them.
+   * Returns the maximum prefix sum in this comparator's own units, given its minimum similarity in
+   * them.
    *
    * <p>Two shapes arise, and which one a measure takes is what decides the implementation. A
-   * threshold that is already a share of the keys gives it through {@link
+   * minimum similarity that is already a share of the keys gives it through {@link
    * #maxPrefixSumFromSharedFraction}: a similarity for Jaccard and Ruzicka, a normalized distance
-   * for NGLD. A threshold that counts keys instead states it directly, and no share comes into it:
-   * GLD's edits count a sequence's terms, and L2's squared distance is in the units of the squared
-   * values its Uni value sums.
+   * for NGLD. A minimum similarity that counts keys instead states it directly, and no share comes
+   * into it: GLD's edits count a sequence's terms, and L2's squared distance is in the units of the
+   * squared values its Uni value sums.
    *
    * <p>A measure with no useful bound of either shape returns {@code uniValue}, the whole record.
    * Traversal halts once the keys it has visited accumulate past the prefix sum, and their

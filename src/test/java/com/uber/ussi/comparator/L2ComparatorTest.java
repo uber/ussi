@@ -237,15 +237,15 @@ class L2ComparatorTest {
     Assertions.assertEquals(/* expected */ distance, distance1, /* delta */ 0.0);
     Assertions.assertEquals(distance1, distance2, /* delta */ 0.0);
 
-    double belowThresholdSimilarity =
+    double belowMinSimilaritySimilarity =
         comparatorNormalizer.comparatorValueToNormalizedSimilarityValue(
             distance - MathUtils.EPSILON_12);
     distance1 =
-        comparator.compareInternal(termsAndValues1, termsAndValues2, belowThresholdSimilarity);
+        comparator.compareInternal(termsAndValues1, termsAndValues2, belowMinSimilaritySimilarity);
     distance2 =
-        comparator.compareInternal(termsAndValues2, termsAndValues1, belowThresholdSimilarity);
+        comparator.compareInternal(termsAndValues2, termsAndValues1, belowMinSimilaritySimilarity);
     double maxAllowedDistance =
-        comparatorNormalizer.normalizedSimilarityValueToComparatorValue(belowThresholdSimilarity);
+        comparatorNormalizer.normalizedSimilarityValueToComparatorValue(belowMinSimilaritySimilarity);
     Assertions.assertTrue(maxAllowedDistance < distance1 && distance1 <= distance);
     Assertions.assertEquals(distance1, distance2, /* delta */ 0.0);
 

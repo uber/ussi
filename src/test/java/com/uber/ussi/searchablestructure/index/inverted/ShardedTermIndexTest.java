@@ -42,7 +42,7 @@ class ShardedTermIndexTest {
       assertSameRows(
           oneShard.getSimilarRowNums(0.1f, query, MetaFilter.empty()),
           sharded.getSimilarRowNums(0.1f, query, MetaFilter.empty()),
-          "threshold numShards=" + numShards);
+          "minimum similarity numShards=" + numShards);
     }
   }
 

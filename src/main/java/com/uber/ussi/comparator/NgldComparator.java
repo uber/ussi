@@ -84,9 +84,10 @@ public class NgldComparator extends BaseSequenceComparator {
   }
 
   /**
-   * A normalized distance is already a share of the sequences' combined length, so the threshold
-   * gives one directly and the record's own length says nothing extra. Inverting the
-   * normalization turns the threshold into {@code d / totalLength}, which the L1 bound scales.
+   * A normalized distance is already a share of the sequences' combined length, so the minimum
+   * similarity gives one directly and the record's own length says nothing extra. Inverting the
+   * normalization turns the minimum similarity into {@code d / totalLength}, which the L1 bound
+   * scales.
    */
   @Override
   protected double getMaxUnmatchedFraction(double recordUniValue, double comparatorValue) {

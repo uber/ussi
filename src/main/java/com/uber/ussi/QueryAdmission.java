@@ -75,8 +75,8 @@ final class QueryAdmission {
    *
    * <p>In flight only rises when a search is admitted, so sampling it on admission catches every
    * peak within an interval. The next interval is seeded with what is in flight now, because a
-   * search outlasting its interval is already running when the next one opens and would otherwise go
-   * uncounted until it finished.
+   * search outlasting its interval is already running when the next one opens and would otherwise
+   * go uncounted until it finished.
    */
   int takePeakInFlight() {
     return peakInFlight.getAndSet(inFlight());

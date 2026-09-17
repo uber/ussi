@@ -181,7 +181,7 @@ public final class InvertedTermCache extends Cache {
   /**
    * Generates candidates from the inverted lists of the query terms in nondecreasing prefix cost,
    * stopping once the accumulated uni-transformed prefix mass exceeds the budget implied by the
-   * dynamically tightened similarity threshold. Candidates and the budget come from {@code
+   * dynamically tightened minimum similarity. Candidates and the budget come from {@code
    * discardedTermFreeQuery}, whose terms the prefix mass accumulates over, while scoring uses
    * {@code query}, the only form the comparator can score.
    */

@@ -126,8 +126,8 @@ abstract class BaseRuzickaComparator extends Comparator
   }
 
   /**
-   * These measures are themselves the multiset similarity the keys are shared at, so the threshold
-   * needs no conversion and the record's own Uni value says nothing extra.
+   * These measures are themselves the multiset similarity the keys are shared at, so the minimum
+   * similarity needs no conversion and the record's own Uni value says nothing extra.
    */
   @Override
   public double getMinSharedKeyFraction(double recordUniValue, double comparatorValue) {

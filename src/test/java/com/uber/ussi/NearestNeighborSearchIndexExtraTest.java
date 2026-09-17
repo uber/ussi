@@ -86,7 +86,7 @@ class NearestNeighborSearchIndexExtraTest {
   }
 
   @Test
-  void getSimilarRowNumsReturnsMatchesAboveThreshold() {
+  void getSimilarRowNumsReturnsMatchesAboveMinSimilarity() {
     NearestNeighborSearchIndex index = NearestNeighborSearchIndex.create(config());
     long sf = index.insert(denseVector(1f, 0f), Map.of("city", "sf"));
 

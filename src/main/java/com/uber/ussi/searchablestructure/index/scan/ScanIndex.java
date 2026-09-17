@@ -8,7 +8,7 @@ import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
-import com.uber.ussi.searchablestructure.ScanSplit;
+import com.uber.ussi.searchablestructure.ParallelRowScan;
 import com.uber.ussi.searchablestructure.index.Index;
 import com.uber.ussi.searchablestructure.index.MetadataFilteredSearchExecutor;
 import com.uber.ussi.searchablestructure.metadata.MetadataFilteringStrategy;
@@ -85,7 +85,7 @@ public final class ScanIndex extends Index {
       @Nullable MetaFilter metadataFilter,
       float minSimilarity,
       int maxResults) {
-    return ScanSplit.search(
+    return ParallelRowScan.search(
         rowNumToTermsAndValuesMap,
         requestTermsAndValues,
         searchParallelism(),
@@ -106,7 +106,7 @@ public final class ScanIndex extends Index {
       @Nullable MetaFilter metadataFilter,
       float minSimilarity,
       int maxResults) {
-    return ScanSplit.searchCandidates(
+    return ParallelRowScan.searchCandidates(
         rowNums,
         requestTermsAndValues,
         searchParallelism(),

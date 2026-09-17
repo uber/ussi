@@ -11,7 +11,7 @@ import com.uber.ussi.config.NamespaceConfig.PopularTermDiscardScope;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
-import com.uber.ussi.searchablestructure.ScanSplit;
+import com.uber.ussi.searchablestructure.ParallelRowScan;
 import com.uber.ussi.searchablestructure.inverted.KeyAndPrefixFilteringData;
 import com.uber.ussi.searchablestructure.metadata.PreFilteringResult;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
@@ -160,7 +160,7 @@ public final class InvertedTermCache extends Cache {
 
   private List<RowNumAndSimilarity> bruteForceSearch(
       LongTermsAndValues query, LongHashSet matchingRowNums, float minSimilarity, int maxResults) {
-    return ScanSplit.searchCandidates(
+    return ParallelRowScan.searchCandidates(
         matchingRowNums,
         query,
         searchParallelism(),

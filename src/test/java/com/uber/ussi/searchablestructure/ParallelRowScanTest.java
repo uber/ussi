@@ -19,7 +19,7 @@ import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 
 /** Tests that a split scan returns what a sequential scan returns, however it is split. */
-public final class ScanSplitTest {
+public final class ParallelRowScanTest {
 
   private static final int TERMS_PER_RECORD = 8;
 
@@ -63,7 +63,7 @@ public final class ScanSplitTest {
     LongObjectHashMap<LongTermsAndValues> rows = corpus(numRows);
     Map<Long, Long> visits = new ConcurrentHashMap<>();
 
-    ScanSplit.search(
+    ParallelRowScan.search(
         rows,
         record(7),
         /* parallelism */ 8,
@@ -122,7 +122,7 @@ public final class ScanSplitTest {
 
       assertEquals(
           testCase[3],
-          ScanSplit.partCount(numRows, rowVisitCost, parallelism),
+          ParallelRowScan.rangeCount(numRows, rowVisitCost, parallelism),
           String.format(
               "%d rows costing %d visits each, in up to %d parts",
               numRows, rowVisitCost, parallelism));
@@ -161,7 +161,7 @@ public final class ScanSplitTest {
     LongHashSet candidates = candidatesOf(corpus(numCandidates));
     Map<Long, Long> visits = new ConcurrentHashMap<>();
 
-    ScanSplit.searchCandidates(
+    ParallelRowScan.searchCandidates(
         candidates,
         record(7),
         /* parallelism */ 8,
@@ -197,7 +197,7 @@ public final class ScanSplitTest {
         assertThrows(
             IllegalArgumentException.class,
             () ->
-                ScanSplit.search(
+                ParallelRowScan.search(
                     rows,
                     record(7),
                     /* parallelism */ 8,
@@ -214,7 +214,7 @@ public final class ScanSplitTest {
   /** The threads a scan of {@code numCandidates} candidates runs on. */
   private static Set<String> threadsUsedToScanCandidates(int numCandidates, int parallelism) {
     Set<String> threads = ConcurrentHashMap.newKeySet();
-    ScanSplit.searchCandidates(
+    ParallelRowScan.searchCandidates(
         candidatesOf(corpus(numCandidates)),
         record(7),
         parallelism,
@@ -230,7 +230,7 @@ public final class ScanSplitTest {
       LongTermsAndValues query,
       int parallelism,
       int maxResults) {
-    return ScanSplit.searchCandidates(
+    return ParallelRowScan.searchCandidates(
         candidates,
         query,
         parallelism,
@@ -250,7 +250,7 @@ public final class ScanSplitTest {
   /** The threads a scan of {@code numRows} rows runs on. */
   private static Set<String> threadsUsedToScan(int numRows, int parallelism) {
     Set<String> threads = ConcurrentHashMap.newKeySet();
-    ScanSplit.search(
+    ParallelRowScan.search(
         corpus(numRows),
         record(7),
         parallelism,
@@ -265,7 +265,7 @@ public final class ScanSplitTest {
       LongTermsAndValues query,
       int parallelism,
       int maxResults) {
-    return ScanSplit.search(
+    return ParallelRowScan.search(
         rows,
         query,
         parallelism,

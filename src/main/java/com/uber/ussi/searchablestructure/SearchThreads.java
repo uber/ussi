@@ -17,17 +17,20 @@ import java.util.function.IntConsumer;
 /**
  * The threads one search may use, and the order they are given out in.
  *
- * <p>Every structure that divides a search hands its work units here, so that the threads in flight for
+ * <p>Every structure that divides a search hands its work units here, so that the threads in flight
+ * for
  * one search stay within the budget {@link ParallelismBudget} allows it and the searches in flight
  * together stay within the cores. A structure holding threads of its own would spend a budget the
  * others had already been promised.
  *
  * <p>A search runs as many pieces at a time as its budget allows and the rest wait their turn.
- * Waiting in turn would otherwise cost a search its place, since one returning for its next work units
+ * Waiting in turn would otherwise cost a search its place, since one returning for its next work
+ * units
  * would queue behind every search that arrived in the meantime, so the pool serves by the ticket a
  * search takes once rather than by the order work units were submitted.
  *
- * <p>The calling thread runs one work unit of every turn rather than only waiting. This uses the thread
+ * <p>The calling thread runs one work unit of every turn rather than only waiting. This uses the
+ * thread
  * already here, and it keeps the search moving when every pool thread is busy.
  */
 public final class SearchThreads {
@@ -47,7 +50,8 @@ public final class SearchThreads {
    * query's arrival rather than at the arrival of each search within it.
    *
    * <p>A query visits its structures one after another, and each may divide its own search. Without
-   * this, the work units of a later structure would take a later ticket and queue behind the queries
+   * this, the work units of a later structure would take a later ticket and queue behind the
+   * queries
    * that arrived while the earlier structures were being searched.
    */
   public static void runUnderOneTicket(Runnable query) {
@@ -64,7 +68,8 @@ public final class SearchThreads {
   }
 
   /**
-   * Runs {@code numWorkUnits} work units of one search, numbered from zero, and returns once all of them
+   * Runs {@code numWorkUnits} work units of one search, numbered from zero, and returns once all of
+   * them
    * have finished.
    *
    * <p>A work unit that fails is rethrown once the rest have finished. Returning before then would

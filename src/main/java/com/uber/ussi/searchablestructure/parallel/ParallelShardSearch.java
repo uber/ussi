@@ -13,8 +13,8 @@ import java.util.List;
  * which divides the rows of a single structure between threads rather than searching several
  * structures of rows at once.
  *
- * <p>Each shard search is complete in itself, with its own heap and its own tightened, so each
- * prunes from the rows it has seen rather than from the answer as a whole.
+ * <p>Each shard search is complete in itself, with its own heap and its own tightened minimum
+ * similarity, so each prunes from the rows it has seen rather than from the answer as a whole.
  *
  * <p>This returns only once every shard it submitted has finished. Callers search under a read
  * lock that excludes writers from the shards for exactly as long as the search holds it. A

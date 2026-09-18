@@ -4,22 +4,19 @@ package com.uber.ussi.searchablestructure.parallel;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * The highest minimum similarity any of several searches running together has proved the answer
- * will hold, shared between them.
+ * The highest minimum similarity any work unit of one search has proved the answer will hold,
+ * shared between them.
  *
- * <p>A search that has filled its heap holds as many rows as the answer keeps, each scoring at
- * least
- * its weakest retained row. Those rows are among the answer's candidates, so the answer's weakest
- * kept score is at least that search's, and no row scoring below it can reach the answer. One
- * search's minimum similarity is therefore sound for all of them, and this holds the highest
- * any of
- * them has published.
+ * <p>A work unit that has filled its heap holds as many rows as the answer keeps, each scoring at
+ * least its weakest retained row. Those rows are among the answer's candidates, so the answer's
+ * weakest kept score is at least that work unit's, and no row scoring below it can reach the
+ * answer. One work unit's minimum similarity is therefore sound for all of them, and this holds
+ * the highest any of them has published.
  *
- * <p>A search whose heap is not yet full has proved nothing and publishes nothing.
+ * <p>A work unit whose heap is not yet full has proved nothing and publishes nothing.
  *
- * <p>This only rises, and it is one value rather than a structure, so it needs no lock. The
- * keep
- * their own heaps. Nothing but this scalar is shared.
+ * <p>This only rises, and it is one value rather than a structure, so it needs no lock. The work
+ * units keep their own heaps. Nothing but this scalar is shared.
  */
 public final class SharedMinSimilarity {
 

@@ -302,23 +302,21 @@ outright. Seeding therefore chooses the prefix for what has already been
 proved, rather than for what the caller asked for, and a prefix chosen for a
 lower value covers keys no row reaching the answer can be found under.
 
-The two candidate generators differ after that seed. `FilteredSearch` re-reads
-the shared value once per candidate and feeds it back into that narrowing, so a
-shard picks up its siblings' proof while it runs. `MergeSearch` accumulates
-similarity across a frontier of every key at once, tightens on what it proves
-itself, and does not re-read, so a sibling's proof reaches it only through the
-seed. Re-reading per frontier step is available to it and unmeasured.
+Both candidate generators re-read as they go, at the granularity each traverses
+in. `FilteredSearch` re-reads once per candidate and feeds the value back into
+that narrowing. `MergeSearch` re-reads once per frontier step, where it tightens
+the length-filtering test that ends the walk and the bound a row is merged
+under, but not the uni value each list was entered at, which is fixed when the
+frontier is built.
 
 Publishing is never deferred to the end of a work unit. Each work unit keeps its
 own minimum similarity, uses that local copy for its own pruning, and writes to
 the shared value as the local one improves, so its siblings can spend what it
-proved while it is still running. The two kinds differ in what they write. A
-shard search writes only when its local value rises, which is a write per
-improvement. A scan range writes on every row, since
-`TopResults.tightenedMinSimilarity()` publishes before it reads, so a scan pays
-an atomic write per row whether or not anything improved. Guarding that write
-with the range's own last published value would remove most of them, and is
-unmeasured.
+proved while it is still running. Only a work unit that raises the shared value
+writes to it: a scan range consults the value for every row, and a row proving
+nothing new is the common case, so the value is read before it is written and a
+write reaches the cache line the other work units read only when it carries
+something.
 
 The matrix index takes no part in this. It scores every row with one bulk
 multiply and keeps a single heap on the calling thread, so it has no second work

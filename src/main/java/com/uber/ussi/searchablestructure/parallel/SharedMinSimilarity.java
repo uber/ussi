@@ -36,8 +36,15 @@ public final class SharedMinSimilarity {
    *
    * <p>Publishers race only with each other, and the accumulator retries for them: it re-reads and
    * re-applies until it writes, so the highest of them survives whatever order they arrive in.
+   *
+   * <p>One published no higher than the last returns on a read alone. A write would reach the
+   * cache line every other work unit reads, and a work unit publishing what it has already
+   * published raises nothing by it.
    */
   public void raiseTo(float minSimilarity) {
+    if (minSimilarity <= get()) {
+      return;
+    }
     minSimilarityBits.accumulateAndGet(
         Float.floatToRawIntBits(minSimilarity),
         (publishedBits, candidateBits) ->

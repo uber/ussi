@@ -42,15 +42,23 @@ public final class TopResults {
   }
 
   /**
-   * The same, over a minimum similarity shared with the searches running beside this one. What
-   * this search has proved is published for them, and what any of them has proved is taken here.
+   * The same, over a minimum similarity shared with the work units running beside this one. What
+   * this work unit has proved is published for them, and what any of them has proved is taken
+   * here.
+   *
+   * <p>Callers reach this for every row, and a row proving nothing new is the common case, so the
+   * shared value is read before it is written and written only by a caller that raises it.
    */
   public static float tightenedMinSimilarity(
       BoundedSizeMaxHeap<RowNumAndSimilarity> rows,
       float minSimilarity,
       SharedMinSimilarity sharedMinSimilarity) {
     float proved = tightenedMinSimilarity(rows, minSimilarity);
+    float published = sharedMinSimilarity.get();
+    if (proved <= published) {
+      return published;
+    }
     sharedMinSimilarity.raiseTo(proved);
-    return Math.max(proved, sharedMinSimilarity.get());
+    return proved;
   }
 }

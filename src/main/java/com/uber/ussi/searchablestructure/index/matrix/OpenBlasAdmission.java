@@ -28,7 +28,7 @@ final class OpenBlasAdmission {
   private static final int FALLBACK_MAX_CONCURRENT_CALLERS = 64;
 
   private static final int MAX_CONCURRENT_CALLERS =
-      Math.min(Math.max(1, Runtime.getRuntime().availableProcessors()), readMaxNumThreads());
+      Math.min(Math.max(1, Runtime.getRuntime().availableProcessors()), readMaxThreads());
 
   private static final Semaphore PERMITS = new Semaphore(MAX_CONCURRENT_CALLERS, /* fair */ true);
 
@@ -64,15 +64,15 @@ final class OpenBlasAdmission {
    * request above its own maximum with that maximum. The number configured beforehand is restored,
    * so obtaining it leaves the library as it was found.
    */
-  static int readMaxNumThreads() {
+  static int readMaxThreads() {
     try {
       int configuredNumThreads = openblas_full.openblas_get_num_threads();
       CachedBlasThreadCountSetter.setNumThreads(Integer.MAX_VALUE);
-      int maxNumThreads = openblas_full.openblas_get_num_threads();
+      int maxThreads = openblas_full.openblas_get_num_threads();
       if (configuredNumThreads > 0) {
         CachedBlasThreadCountSetter.setNumThreads(configuredNumThreads);
       }
-      return maxNumThreads > 0 ? maxNumThreads : FALLBACK_MAX_CONCURRENT_CALLERS;
+      return maxThreads > 0 ? maxThreads : FALLBACK_MAX_CONCURRENT_CALLERS;
     } catch (LinkageError | RuntimeException e) {
       return FALLBACK_MAX_CONCURRENT_CALLERS;
     }

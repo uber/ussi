@@ -21,7 +21,7 @@ class OpenBlasAdmissionTest {
         maxConcurrentCallers <= Runtime.getRuntime().availableProcessors(),
         "admitted " + maxConcurrentCallers + " callers on a machine of fewer cores");
     assertTrue(
-        maxConcurrentCallers <= OpenBlasAdmission.readMaxNumThreads(),
+        maxConcurrentCallers <= OpenBlasAdmission.readMaxThreads(),
         "admitted " + maxConcurrentCallers + " callers with fewer buffers than that");
   }
 
@@ -63,9 +63,9 @@ class OpenBlasAdmissionTest {
     }
   }
 
-  /** Reading the number must restore whatever number was configured beforehand. */
+  /** Reading the count must leave the library at whatever count was already in force. */
   @Test
-  void readingTheMaxNumThreadsIsRepeatable() {
-    assertEquals(OpenBlasAdmission.readMaxNumThreads(), OpenBlasAdmission.readMaxNumThreads());
+  void readingTheMaxThreadsIsRepeatable() {
+    assertEquals(OpenBlasAdmission.readMaxThreads(), OpenBlasAdmission.readMaxThreads());
   }
 }

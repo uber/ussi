@@ -23,7 +23,6 @@ import org.junit.jupiter.api.Test;
 
 class LongTermsAndValuesTest {
 
-
   @Test
   void accessorsReturnStoredData() {
     LongTermsAndValues record =

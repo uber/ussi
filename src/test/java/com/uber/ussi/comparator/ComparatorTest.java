@@ -21,7 +21,6 @@ import org.junit.jupiter.api.Test;
 
 class ComparatorTest {
 
-
   private static Comparator l2Comparator() {
     return ComparatorFactory.createComparator("l2", Map.of(), new ReciprocalComparatorNormalizer());
   }

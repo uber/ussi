@@ -218,7 +218,4 @@ public final class ParallelRowScan {
   private static BoundedSizeMaxHeap<RowNumAndSimilarity> newTopResultsHeap(int maxResults) {
     return new BoundedSizeMaxHeap<>(maxResults, RowNumAndSimilarity.TOP_RESULTS_HEAP_ORDER);
   }
-
-
-
 }

@@ -13,7 +13,6 @@ import org.junit.jupiter.api.Test;
 
 class ComparatorNormalizerTest {
 
-
   @Test
   void identityNormalizerIsIdentityWithinRange() {
     IdentityComparatorNormalizer normalizer = new IdentityComparatorNormalizer();

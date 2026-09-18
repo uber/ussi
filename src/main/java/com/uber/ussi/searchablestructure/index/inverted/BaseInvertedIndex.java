@@ -17,8 +17,6 @@ import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.RecordType;
 import com.uber.ussi.error.IndexCreationError;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
-import com.uber.ussi.searchablestructure.ParallelShardSearch;
-import com.uber.ussi.searchablestructure.SharedMinSimilarity;
 import com.uber.ussi.searchablestructure.index.RowStoringIndex;
 import com.uber.ussi.searchablestructure.index.IndexType;
 import com.uber.ussi.searchablestructure.index.MetadataFilteredSearchExecutor;
@@ -28,6 +26,8 @@ import com.uber.ussi.searchablestructure.index.inverted.generator.MergeSearch;
 import com.uber.ussi.searchablestructure.TopResults;
 import com.uber.ussi.searchablestructure.inverted.KeyAndPrefixFilteringData;
 import com.uber.ussi.searchablestructure.metadata.MetadataFilteringStrategy;
+import com.uber.ussi.searchablestructure.parallel.ParallelShardSearch;
+import com.uber.ussi.searchablestructure.parallel.SharedMinSimilarity;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
 import com.uber.ussi.utils.ConfigKeys;
 import com.uber.ussi.utils.MathUtils;
@@ -46,7 +46,7 @@ import javax.annotation.Nullable;
  *
  * <ul>
  *   <li><b>indexed</b> is the form whose terms are the inverted-list keys, which candidate
- *       generation probes and the shared-key test reads; see {@link RecordIndexingStrategy}.
+ *       generation probes and the shared-key test reads. See {@link RecordIndexingStrategy}.
  *   <li><b>verification</b> is the form the comparator scores: the record as supplied, minus any
  *       high-popularity terms dropped at build time.
  * </ul>
@@ -113,7 +113,7 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
       IndexType indexType,
       @Nullable LongHashSet structureDiscardedTerms) {
     this(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap, indexType,
-        structureDiscardedTerms, numShardsFor(rowNumToTermsAndValuesMap.size()));
+        structureDiscardedTerms, getNumShards(rowNumToTermsAndValuesMap.size()));
   }
 
   /**
@@ -295,7 +295,7 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
     return indexedRowNumToTermsAndValuesMap.get(rowNum);
   }
 
-  /** See {@link FilteredSearch#getFirstMatchingUniValue}. */
+  /** See {@link FilteredSearch#getFirstMatchingUniValue getFirstMatchingUniValue()}. */
   final int getFirstMatchingUniValueForTests(
       long[] rowNums,
       double comparatorUniValue,
@@ -312,7 +312,7 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
         searchToIndex);
   }
 
-  /** See {@link FilteredSearch#getLastMatchingUniValue}. */
+  /** See {@link FilteredSearch#getLastMatchingUniValue getLastMatchingUniValue()}. */
   final int getLastMatchingUniValueForTests(
       long[] rowNums,
       double comparatorUniValue,
@@ -456,7 +456,7 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
 
   /**
    * Scores the pre-filtered candidate rows sequentially. They arrive from the metadata index rather
-   * than from an inverted list, so the shared-key restriction is applied here by hand to keep both
+   * than from an inverted list, so the shared-key restriction is applied here directly to keep both
    * metadata filtering strategies returning the same rows.
    */
   private List<RowNumAndSimilarity> searchCandidateRows(
@@ -639,7 +639,7 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
    * Builds the uni-sorted inverted list of every key, one set of lists per shard. Values are
    * materialized only when the merge generator will score from them.
    *
-   * <p>A row's lists go to the shard its row number falls in. Row numbers are handed out in turn,
+   * <p>A row's lists go to the shard its row number falls in. Row numbers are assigned in turn,
    * so the shards receive equal shares, which is what makes them cost the same to search as each
    * other.
    */
@@ -711,7 +711,7 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
    * not follow the load, because the shards are fixed when the index is built and a search under
    * load searches the same shards with fewer threads.
    */
-  static int numShardsFor(int numRows) {
+  static int getNumShards(int numRows) {
     int numCores = Math.max(1, Runtime.getRuntime().availableProcessors());
     return Math.max(1, Math.min(numCores, numRows / MIN_NUM_ROWS_PER_SHARD));
   }

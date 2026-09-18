@@ -231,7 +231,7 @@ class NearestNeighborSearchIndexExtraTest {
 
       assertTrue(index.delete(first));
 
-      // Consolidation runs once the structure count reaches maxNumSearchableStructures.
+      // Consolidation runs once the structures reach the configured maximum.
       invokeConsolidate(index);
 
       SearchResults result =

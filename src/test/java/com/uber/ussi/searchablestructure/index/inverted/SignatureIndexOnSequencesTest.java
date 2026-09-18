@@ -23,7 +23,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Sequences reaching the signature-keyed lists. A sequence's signatures are drawn from its term
  * multiset, so candidates come from the multiset bound the term-keyed lists already use, only
- * estimated rather than computed; the edit distance still verifies order on every survivor.
+ * estimated rather than computed. The edit distance still verifies order on every survivor.
  */
 class SignatureIndexOnSequencesTest {
   private static final float DELTA = 1e-6f;
@@ -33,7 +33,7 @@ class SignatureIndexOnSequencesTest {
 
   /**
    * MinSimilaritys that admit a handful of edits over sequences this long. GLD scores an edit count
-   * through the reciprocal normalizer, so 0.25 admits three edits and 0.1 admits nine; NGLD
+   * through the reciprocal normalizer, so 0.25 admits three edits and 0.1 admits nine. NGLD
    * divides by the lengths, so the same counts land near the top of its range.
    */
   private static final Map<String, float[]> MIN_SIMILARITIES =

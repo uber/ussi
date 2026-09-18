@@ -4,8 +4,8 @@ package com.uber.ussi.searchablestructure.index.matrix;
 /**
  * A row-major dense matrix held in chunks, each a whole number of rows.
  *
- * <p>A namespace can hold more values than one Java array can, so the matrix is split rather than
- * refused. Splitting on a row boundary keeps every row contiguous, which is what a bulk multiply
+ * <p>A namespace can hold more values than one Java array can, so the matrix is divided rather than
+ * refused. Dividing on a row boundary keeps every row contiguous, which is what a bulk multiply
  * needs, and keeps the index of a value within its chunk inside {@code int} range.
  */
 final class DenseMatrix {
@@ -28,7 +28,7 @@ final class DenseMatrix {
     this.rowsPerChunk = rowsPerChunk;
   }
 
-  /** Allocates room for {@code numRows} rows, to be filled by {@link #setRow}. */
+  /** Allocates room for {@code numRows} rows, to be filled by {@link #setRow setRow()}. */
   static DenseMatrix allocate(int numRows, int dimension, int maxChunkValues) {
     if (numRows < 0) {
       throw new IllegalArgumentException("numRows must be >= 0.");

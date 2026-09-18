@@ -70,8 +70,8 @@ public abstract class SequenceDistance implements Serializable {
    * <p>Only the band is stored, right-aligned: slot {@code index} of a row holds column {@code
    * lowColumn + index - 1}, and slot zero holds the column just left of the band. That keeps a row
    * {@code min(numColumns, 2 * maxDistance + 1)} slots wide. Because the band's first column
-   * advances by one on most rows, a retained row has to slide one slot left to stay aligned; see
-   * {@link #shiftLeft}.
+   * advances by one on most rows, a retained row has to slide one slot left to stay aligned. See
+   * {@link #shiftLeft shiftLeft()}.
    *
    * <p>The rows rotate by reference rather than being copied. Every cell read while filling a row
    * is either written earlier in that same row, sits in a retained row at a slot that row wrote,
@@ -138,7 +138,7 @@ public abstract class SequenceDistance implements Serializable {
             best = Math.min(best, previous[index - 1] + 1);
           }
           // Below slot two the transposed cell lies left of the band, over budget, so the move
-          // cannot win; the same test keeps the two-back term reads in range.
+          // cannot win. The same test keeps the two-back term reads in range.
           if (transposes
               && row >= 2
               && index >= 2

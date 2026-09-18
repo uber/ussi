@@ -123,7 +123,7 @@ class ShardedTermIndexTest {
       assertFalse(row.getRowNum() == deleted, "the deleted row is not returned");
     }
     assertFalse(
-        sharded.getAll().containsKey(deleted), "the deleted row is not handed on a rebuild");
+        sharded.getAll().containsKey(deleted), "the deleted row is not returned for a rebuild");
   }
 
   @Test
@@ -131,18 +131,18 @@ class ShardedTermIndexTest {
     int numCores = Math.max(1, Runtime.getRuntime().availableProcessors());
     int minNumRows = BaseInvertedIndex.MIN_NUM_ROWS_PER_SHARD;
 
-    assertEquals(1, BaseInvertedIndex.numShardsFor(0));
-    assertEquals(1, BaseInvertedIndex.numShardsFor(minNumRows - 1));
-    assertEquals(1, BaseInvertedIndex.numShardsFor(minNumRows));
-    assertEquals(2, BaseInvertedIndex.numShardsFor(2 * minNumRows));
-    assertEquals(numCores, BaseInvertedIndex.numShardsFor(numCores * minNumRows));
+    assertEquals(1, BaseInvertedIndex.getNumShards(0));
+    assertEquals(1, BaseInvertedIndex.getNumShards(minNumRows - 1));
+    assertEquals(1, BaseInvertedIndex.getNumShards(minNumRows));
+    assertEquals(2, BaseInvertedIndex.getNumShards(2 * minNumRows));
+    assertEquals(numCores, BaseInvertedIndex.getNumShards(numCores * minNumRows));
     assertEquals(
         numCores,
-        BaseInvertedIndex.numShardsFor(1000 * numCores * minNumRows),
+        BaseInvertedIndex.getNumShards(1000 * numCores * minNumRows),
         "the shard count is bounded by the cores however many rows there are");
   }
 
-  /** Rows numbered from zero, as the engine hands them out, so shards divide them in turn. */
+  /** Rows numbered from zero, as the engine assigns them, so shards divide them in turn. */
   private static LongObjectHashMap<LongTermsAndValues> randomRows(int numRows, int vocabulary) {
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
     Random random = new Random(7);

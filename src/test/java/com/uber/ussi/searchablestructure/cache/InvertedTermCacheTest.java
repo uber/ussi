@@ -270,7 +270,7 @@ class InvertedTermCacheTest {
   @Test
   void smallSamplesErrTowardFilteringWithTheDefaultConfidence() {
     // Term 1 is in half the rows, below the 0.7 cap, but at 4 rows the 95% upper bound (0.91)
-    // exceeds it; at 40 rows the bound tightens to 0.63 and the term is readmitted.
+    // exceeds it. At 40 rows the bound tightens to 0.63 and the term is readmitted.
     InvertedTermCache cache =
         new InvertedTermCache(
             config("jaccard", Map.of(ConfigKeys.MAX_FRACTION_IDS_PER_TERM, "0.7")));

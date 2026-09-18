@@ -43,7 +43,7 @@ class SignatureKeyingStrategyTest {
   /**
    * A distance minimum similarity reaches the strategy as a similarity, so the conversion into the
    * measure's own units has to happen before the measure states its bound. At minSimilarity 0.8 the
-   * ngld budget is 0.2, leaving 7/11 of the signatures to collide; ICWS estimates that to within
+   * ngld budget is 0.2, leaving 7/11 of the signatures to collide. ICWS estimates that to within
    * 0.1.
    */
   @Test

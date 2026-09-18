@@ -48,7 +48,7 @@ class SequenceComparatorTest {
 
   private static final LengthFilteringCase[] LENGTH_FILTERING_CASES = {
     // At 0.5 similarity a 4-term query tolerates a distance of 0.5 * (4 + length2) / 1.5, which
-    // reaches 2 only at 2 terms; shorter candidates differ by more and are rejected.
+    // reaches 2 only at 2 terms. Shorter candidates differ by more and are rejected.
     new LengthFilteringCase("ngld", "complement", 4, 4, 0.5, true),
     new LengthFilteringCase("ngld", "complement", 4, 2, 0.5, true),
     new LengthFilteringCase("ngld", "complement", 4, 1, 0.5, false),

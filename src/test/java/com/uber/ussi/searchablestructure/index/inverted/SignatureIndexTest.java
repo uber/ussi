@@ -41,7 +41,7 @@ class SignatureIndexTest {
     assertEquals(1, index.getNumIndexedKeysForTests(ONLY_SHARD));
     assertEquals(
         1, index.getKeysAndUniTransformedValues(jaccard(new long[] {11}, 1f)).length);
-    // A single-term record hashes to one signature every time, and getKeys owes distinct keys.
+    // A single-term record hashes to one signature every time, and getKeys() owes distinct keys.
     long[] signatures = index.getKeys(jaccard(new long[] {11}, 1f));
     assertEquals(1, signatures.length);
     assertArrayEquals(new long[] {7}, index.getRowNumsForKeyForTests(ONLY_SHARD, signatures[0]));
@@ -128,7 +128,7 @@ class SignatureIndexTest {
 
   /**
    * No signature generator leaves nothing to key the lists by, a property of the config rather than
-   * the rows. One that could generate them names the missing param; one that could not does not.
+   * the rows. One that could generate them names the missing param. One that could not does not.
    */
   @Test
   void aComparatorWithoutSignaturesIsRejectedBeforeBuildingRows() {

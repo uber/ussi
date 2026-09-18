@@ -13,7 +13,7 @@ import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
  * against the ordered sequences.
  *
  * <p>Discarding a popular term from the multisets alone costs recall, because the bound stops
- * holding for the sequences that still carry it; see {@code popular_term_discard_scope}.
+ * holding for the sequences that still carry it. See {@code popular_term_discard_scope}.
  */
 final class SequenceIndexingStrategy implements RecordIndexingStrategy {
 

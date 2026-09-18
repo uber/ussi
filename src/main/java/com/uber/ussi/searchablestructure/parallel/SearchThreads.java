@@ -1,5 +1,5 @@
 /* AUTHOR: Ahmed Metwally (ametwally@uber.com) */
-package com.uber.ussi.searchablestructure;
+package com.uber.ussi.searchablestructure.parallel;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -17,18 +17,17 @@ import java.util.function.IntConsumer;
 /**
  * The threads one search may use, and the order they are given out in.
  *
- * <p>Every structure that divides a search hands its work units here, so that the searches in
- * flight together stay within the cores. A structure holding threads of its own would spend cores
- * the others had already been promised.
+ * <p>Every structure that divides a search submits its work units here, so that the concurrent
+ * searches together stay within the cores. A structure holding threads of its own would spend
+ * cores the others had already been promised.
  *
- * <p>A search hands out every work unit it has. The pool holds one thread per core, so work units
+ * <p>A search submits every work unit it has. The pool holds one thread per core, so work units
  * wait in it while the cores are busy, and it serves them by the ticket a search takes once rather
  * than by the order they were submitted. A search therefore keeps its place while it is being
  * served, instead of queueing behind the searches that arrived in the meantime.
  *
- * <p>The calling thread runs one work unit of every turn rather than only waiting. This uses the
- * thread
- * already here, and it keeps the search moving when every pool thread is busy.
+ * <p>The calling thread runs one work unit rather than only waiting. This uses the thread already
+ * here, and it keeps the search moving when every pool thread is busy.
  */
 public final class SearchThreads {
 
@@ -40,7 +39,8 @@ public final class SearchThreads {
   private static final AtomicLong NEXT_TICKET = new AtomicLong();
 
   /**
-   * The ticket of the query this thread is serving, while it is inside {@link #runUnderOneTicket}.
+   * The ticket of the query this thread is serving, while it is inside {@link #runUnderOneTicket
+   * runUnderOneTicket()}.
    */
   private static final ThreadLocal<Long> CURRENT_TICKET = new ThreadLocal<>();
 
@@ -82,19 +82,19 @@ public final class SearchThreads {
       return;
     }
     if (numWorkUnits == 1) {
-      // Run on the calling thread, so a search of one work unit pays no hand-off.
+      // Run on the calling thread, so a search of one work unit is not submitted at all.
       workUnit.accept(0);
       return;
     }
     Long queryTicket = CURRENT_TICKET.get();
     long ticket = queryTicket != null ? queryTicket : NEXT_TICKET.getAndIncrement();
-    List<Future<?>> handedOff = new ArrayList<>(numWorkUnits - 1);
+    List<Future<?>> submitted = new ArrayList<>(numWorkUnits - 1);
     for (int workUnitNumber = 1; workUnitNumber < numWorkUnits; workUnitNumber++) {
-      int handedOffWorkUnit = workUnitNumber;
-      handedOff.add(submitWorkUnit(ticket, () -> workUnit.accept(handedOffWorkUnit)));
+      int submittedWorkUnit = workUnitNumber;
+      submitted.add(submitWorkUnit(ticket, () -> workUnit.accept(submittedWorkUnit)));
     }
     workUnit.accept(0);
-    awaitWorkUnits(handedOff);
+    awaitWorkUnits(submitted);
   }
 
   /** Queues a work unit to be served at its search's ticket rather than at its own submission. */
@@ -111,14 +111,14 @@ public final class SearchThreads {
   }
 
   /**
-   * Waits for every handed-off work unit, and rethrows the first failure once all of them are done.
+   * Waits for every submitted work unit, and rethrows the first failure once all of them are done.
    */
-  private static void awaitWorkUnits(List<Future<?>> handedOff) {
+  private static void awaitWorkUnits(List<Future<?>> submitted) {
     RuntimeException failure = null;
     boolean interrupted = false;
-    for (Future<?> handedOffWorkUnit : handedOff) {
+    for (Future<?> submittedWorkUnit : submitted) {
       try {
-        handedOffWorkUnit.get();
+        submittedWorkUnit.get();
       } catch (InterruptedException e) {
         interrupted = true;
         failure = failure != null ? failure : new IllegalStateException(WORK_UNIT_FAILED, e);
@@ -157,7 +157,7 @@ public final class SearchThreads {
         });
   }
 
-  /** A work unit that waits its turn by its search's ticket, and by its own order within that. */
+  /** A work unit ordered by its search's ticket, and by its own order within that search. */
   private static final class TicketedWorkUnit<T> extends FutureTask<T>
       implements Comparable<TicketedWorkUnit<?>> {
     private static final AtomicLong NEXT_WITHIN_TICKET = new AtomicLong();

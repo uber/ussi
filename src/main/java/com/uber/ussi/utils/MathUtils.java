@@ -106,7 +106,7 @@ public final class MathUtils {
       }
     }
 
-    /** Returns the lower bound of the one-sided interval; the upper bound is always 1.0. */
+    /** Returns the lower bound of the one-sided interval. The upper bound is always 1.0. */
     public double getConfidenceIntervalLowerBound(int numTrials, int numSuccesses) {
       validateNumTrialsAndNumSuccesses(numTrials, numSuccesses);
       double pHat = numSuccesses * 1.0 / numTrials;
@@ -114,7 +114,7 @@ public final class MathUtils {
       return Math.max(0.0, pHat - errorMargin);
     }
 
-    /** Returns the upper bound of the one-sided interval; the lower bound is always 0.0. */
+    /** Returns the upper bound of the one-sided interval. The lower bound is always 0.0. */
     public double getConfidenceIntervalUpperBound(int numTrials, int numSuccesses) {
       validateNumTrialsAndNumSuccesses(numTrials, numSuccesses);
       double pHat = numSuccesses * 1.0 / numTrials;

@@ -224,7 +224,7 @@ class ComparatorTest {
     }
   }
 
-  /** Sequence measures need a distance to bound with; the rest reject the parameter. */
+  /** Sequence measures need a distance to bound with. The rest reject the parameter. */
   private static Comparator comparator(String comparatorType) {
     Map<String, String> comparatorParams =
         List.of("gld", "ngld").contains(comparatorType)

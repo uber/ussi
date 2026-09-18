@@ -14,21 +14,21 @@ class OpenBlasAdmissionTest {
    */
   @Test
   void boundsCallersByBothTheCoresAndWhatTheBinaryHoldsBuffersFor() {
-    int maxConcurrentCallers = OpenBlasAdmission.maxConcurrentCallers();
+    int maxNumConcurrentCallers = OpenBlasAdmission.getMaxNumConcurrentCallers();
 
-    assertTrue(maxConcurrentCallers >= 1, "at least one caller must be admitted");
+    assertTrue(maxNumConcurrentCallers >= 1, "at least one caller must be admitted");
     assertTrue(
-        maxConcurrentCallers <= Runtime.getRuntime().availableProcessors(),
-        "admitted " + maxConcurrentCallers + " callers on a machine of fewer cores");
+        maxNumConcurrentCallers <= Runtime.getRuntime().availableProcessors(),
+        "admitted " + maxNumConcurrentCallers + " callers on a machine of fewer cores");
     assertTrue(
-        maxConcurrentCallers <= OpenBlasAdmission.readMaxNumThreads(),
-        "admitted " + maxConcurrentCallers + " callers with fewer buffers than that");
+        maxNumConcurrentCallers <= OpenBlasAdmission.readMaxNumThreads(),
+        "admitted " + maxNumConcurrentCallers + " callers with fewer buffers than that");
   }
 
   @Test
   void admitsUpToItsBoundAndMakesTheNextCallerWait() throws Exception {
-    int maxConcurrentCallers = OpenBlasAdmission.maxConcurrentCallers();
-    for (int caller = 0; caller < maxConcurrentCallers; caller++) {
+    int maxNumConcurrentCallers = OpenBlasAdmission.getMaxNumConcurrentCallers();
+    for (int caller = 0; caller < maxNumConcurrentCallers; caller++) {
       OpenBlasAdmission.acquire();
     }
 
@@ -45,7 +45,7 @@ class OpenBlasAdmissionTest {
     try {
       // Waiting for the caller to be queued, rather than for a timeout to lapse, is unbounded and
       // a stronger statement than "it had not finished yet". Bails out if it is wrongly admitted.
-      while (OpenBlasAdmission.waitingCallers() == 0 && admitted.getCount() > 0) {
+      while (OpenBlasAdmission.getNumWaitingCallers() == 0 && admitted.getCount() > 0) {
         Thread.onSpinWait();
       }
 
@@ -57,7 +57,7 @@ class OpenBlasAdmissionTest {
       assertEquals(0, admitted.getCount(), "releasing a buffer must admit the waiting caller");
     } finally {
       beyondTheBound.join();
-      for (int caller = 0; caller < maxConcurrentCallers - 1; caller++) {
+      for (int caller = 0; caller < maxNumConcurrentCallers - 1; caller++) {
         OpenBlasAdmission.release();
       }
     }

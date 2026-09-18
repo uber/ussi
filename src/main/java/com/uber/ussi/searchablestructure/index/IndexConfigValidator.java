@@ -208,7 +208,7 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
       return;
     }
     if (comparatorType == null) {
-      // The rules below need a known comparator; ComparatorConfigValidator reports the name.
+      // The rules below need a known comparator. ComparatorConfigValidator reports the name.
       return;
     }
     Comparator comparator = ComparatorFactory.tryCreateComparator(config);

@@ -71,7 +71,7 @@ public class L2Comparator extends Comparator
     MathUtils.StableSumAccumulator sumSquaredL2Distance = new MathUtils.StableSumAccumulator();
     int pointer1 = 0;
     int pointer2 = 0;
-    // Dense records align values by position; sparse merge sorted terms, a missing term is 0.0.
+    // Dense records align values by position. Sparse merge sorted terms, a missing term is 0.0.
     while (pointer1 < termsAndValues1.valuesLength() || pointer2 < termsAndValues2.valuesLength()) {
       float value1;
       float value2;

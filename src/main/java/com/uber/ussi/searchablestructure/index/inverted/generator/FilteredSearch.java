@@ -6,9 +6,9 @@ import com.uber.ussi.comparator.Comparator;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
-import com.uber.ussi.searchablestructure.SharedMinSimilarity;
 import com.uber.ussi.searchablestructure.TopResults;
 import com.uber.ussi.searchablestructure.inverted.KeyAndPrefixFilteringData;
+import com.uber.ussi.searchablestructure.parallel.SharedMinSimilarity;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
 import com.uber.ussi.utils.MathUtils;
 import java.util.Arrays;
@@ -29,8 +29,8 @@ import javax.annotation.Nullable;
  */
 public final class FilteredSearch {
   /**
-   * Below this range size, {@link #getFirstMatchingUniValue} and {@link #getLastMatchingUniValue}
-   * scan linearly instead of binary searching.
+   * Below this range size, {@link #getFirstMatchingUniValue getFirstMatchingUniValue()} and {@link
+   * #getLastMatchingUniValue getLastMatchingUniValue()} scan linearly instead of binary searching.
    */
   private static final int MIN_NUM_CANDIDATES_FOR_BINARY_SEARCH = 32;
 
@@ -97,7 +97,7 @@ public final class FilteredSearch {
    * Returns the inclusive lower bound of a key's matching row range within [searchFromIndex,
    * searchToIndex). Re-narrowing a key's previous range as minSimilarity rises is sound because a
    * matching range only ever shrinks. Endpoint checks resolve it in O(1) when they agree, since
-   * rowNums is uni-sorted; otherwise short ranges are scanned and long ones binary searched.
+   * rowNums is uni-sorted. Otherwise short ranges are scanned and long ones binary searched.
    */
   public static int getFirstMatchingUniValue(
       Comparator comparator,
@@ -214,7 +214,7 @@ public final class FilteredSearch {
 
   /**
    * Iterates deduplicated candidates in nondecreasing prefix cost. Takes ownership of the
-   * {@code keyData} it is handed and sorts it in place. Not an {@code Iterator}, whose element
+   * {@code keyData} it receives and sorts it in place. Not an {@code Iterator}, whose element
    * type would box every row number it yields.
    */
   static final class CandidateIterator {

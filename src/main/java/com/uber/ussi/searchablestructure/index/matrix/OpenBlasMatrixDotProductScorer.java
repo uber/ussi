@@ -4,7 +4,7 @@ package com.uber.ussi.searchablestructure.index.matrix;
 import static org.bytedeco.openblas.global.openblas.CblasNoTrans;
 import static org.bytedeco.openblas.global.openblas.CblasRowMajor;
 
-import com.uber.ussi.searchablestructure.ParallelismBudget;
+import com.uber.ussi.searchablestructure.parallel.ParallelismBudget;
 import com.uber.ussi.utils.Utils;
 import java.util.Queue;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -28,9 +28,12 @@ final class OpenBlasMatrixDotProductScorer implements MatrixDotProductScorer {
       (pointer, values, length) -> pointer.put(values, 0, length);
   static SgemvOperation sgemvOperation = openblas::cblas_sgemv;
   static Runnable blasNativeLoadProbe = openblas_nolapack::blas_get_num_threads;
-  static IntConsumer blasThreadCountSetter = CachedBlasThreadCountSetter::setNumThreads;
+  static IntConsumer blasNumThreadsSetter = CachedBlasThreadCountSetter::setNumThreads;
 
-  // One entry per native binary carried as a runtime dependency; isAvailable still probes the load.
+  /**
+   * One entry per native binary carried as a runtime dependency. {@link #isAvailable()} still
+   * probes the load.
+   */
   private static final boolean IS_SUPPORTED_PLATFORM =
       (Utils.isRunningOnLinux() && Utils.isRunningOnArm())
           || (Utils.isRunningOnLinux() && Utils.isRunningOnX86())
@@ -58,14 +61,14 @@ final class OpenBlasMatrixDotProductScorer implements MatrixDotProductScorer {
     // The count is process-global to OpenBLAS and rebuilds its thread pool, so it cannot be chosen
     // per score, where it would cost orders of magnitude more than the gemv itself. The budget
     // applies it instead, whenever the search concurrency changes.
-    ParallelismBudget.shared().onChange(blasThreadCountSetter::accept);
+    ParallelismBudget.shared().onChange(blasNumThreadsSetter::accept);
     this.matrix = matrix;
     this.nativeChunks = new FloatPointer[matrix.numChunks()];
     for (int chunk = 0; chunk < nativeChunks.length; ++chunk) {
       nativeChunks[chunk] = floatArrayPointerFactory.create(matrix.chunk(chunk));
     }
     this.maxRowsInAChunk = widestChunk(matrix);
-    // Matches the bound on searches in flight, so a score never waits for a buffer. They are
+    // Matches the bound on concurrent searches, so a score never waits for a buffer. They are
     // created on demand rather than up front, because for a matrix of few columns the buffers are
     // a noticeable fraction of the matrix itself.
     this.maxScratches = Math.max(1, Runtime.getRuntime().availableProcessors());
@@ -149,7 +152,7 @@ final class OpenBlasMatrixDotProductScorer implements MatrixDotProductScorer {
 
   /**
    * A free set of buffers, making one more if the bound allows. Waiting cannot normally happen,
-   * since searches in flight are bounded by the same number.
+   * since concurrent searches are bounded by the same number.
    */
   private Scratch takeScratch() {
     Scratch reused = availableScratches.poll();

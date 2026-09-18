@@ -168,7 +168,7 @@ class SequenceDistanceTest {
   }
 
   /**
-   * Sequences far longer than the budget, where the band covers a sliver of the table; the tally
+   * Sequences far longer than the budget, where the band covers a sliver of the table. The tally
    * guards against drifting into the wide-band case.
    */
   @Test
@@ -351,7 +351,7 @@ class SequenceDistanceTest {
     assertEquals(2.0, new FixedBoundFactorDistance(2.0).getL1BoundFactor(), EPSILON_9);
   }
 
-  /** A distance that exists only to hand the parent constructor an L1 bound factor to check. */
+  /** A distance that exists only to give the parent constructor an L1 bound factor to check. */
   private static final class FixedBoundFactorDistance extends SequenceDistance {
     private FixedBoundFactorDistance(double l1BoundFactor) {
       super(l1BoundFactor, /* allowsSubstitution */ true, /* allowsTransposition */ false);

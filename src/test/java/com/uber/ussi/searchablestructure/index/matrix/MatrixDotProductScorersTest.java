@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-import com.uber.ussi.searchablestructure.ParallelismBudget;
+import com.uber.ussi.searchablestructure.parallel.ParallelismBudget;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -157,7 +157,8 @@ class MatrixDotProductScorersTest {
     // The budget, not the core count: it tracks the search concurrency, so the value at
     // construction depends on what else is running.
     assertEquals(
-        List.of(ParallelismBudget.shared().budget()), fakeOpenBlas.threadCountUpdates);
+        List.of(ParallelismBudget.shared().getNumThreadsPerSearch()),
+        fakeOpenBlas.numThreadsUpdates);
   }
 
   @Test
@@ -262,7 +263,7 @@ class MatrixDotProductScorersTest {
         OpenBlasMatrixDotProductScorer.floatPointerArrayWriter;
     Runnable originalNativeLoadProbe = OpenBlasMatrixDotProductScorer.blasNativeLoadProbe;
     java.util.function.IntConsumer originalThreadCountSetter =
-        OpenBlasMatrixDotProductScorer.blasThreadCountSetter;
+        OpenBlasMatrixDotProductScorer.blasNumThreadsSetter;
     try {
       OpenBlasMatrixDotProductScorer.floatArrayPointerFactory = values -> null;
       OpenBlasMatrixDotProductScorer.floatSizePointerFactory = size -> null;
@@ -287,8 +288,8 @@ class MatrixDotProductScorersTest {
               incY) -> fakeOpenBlas.gemvCalls++;
       OpenBlasMatrixDotProductScorer.blasNativeLoadProbe =
           () -> fakeOpenBlas.nativeLoadProbeCalls++;
-      OpenBlasMatrixDotProductScorer.blasThreadCountSetter =
-          numThreads -> fakeOpenBlas.threadCountUpdates.add(numThreads);
+      OpenBlasMatrixDotProductScorer.blasNumThreadsSetter =
+          numThreads -> fakeOpenBlas.numThreadsUpdates.add(numThreads);
       runnable.run();
     } finally {
       OpenBlasMatrixDotProductScorer.floatArrayPointerFactory = originalArrayPointerFactory;
@@ -298,7 +299,7 @@ class MatrixDotProductScorersTest {
       OpenBlasMatrixDotProductScorer.floatPointerArrayWriter = originalArrayWriter;
       OpenBlasMatrixDotProductScorer.sgemvOperation = originalSgemvOperation;
       OpenBlasMatrixDotProductScorer.blasNativeLoadProbe = originalNativeLoadProbe;
-      OpenBlasMatrixDotProductScorer.blasThreadCountSetter = originalThreadCountSetter;
+      OpenBlasMatrixDotProductScorer.blasNumThreadsSetter = originalThreadCountSetter;
     }
   }
 
@@ -307,6 +308,6 @@ class MatrixDotProductScorersTest {
     private int deallocateCalls;
     private int gemvCalls;
     private int queryWrites;
-    private final List<Integer> threadCountUpdates = new ArrayList<>();
+    private final List<Integer> numThreadsUpdates = new ArrayList<>();
   }
 }

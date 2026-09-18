@@ -4,6 +4,7 @@ package com.uber.ussi.searchablestructure;
 import com.carrotsearch.hppc.LongObjectHashMap;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
+import com.uber.ussi.searchablestructure.parallel.ParallelismBudget;
 import java.util.List;
 
 /** Common searchable structure API shared by caches and indexes. */
@@ -34,15 +35,15 @@ public interface SearchableStructure {
       float minSimilarity, LongTermsAndValues record, MetaFilter metadataFilter);
 
   /**
-   * Threads this structure may use to answer one search. Splitting a search across more than this
-   * oversubscribes the machine once the other searches in flight are counted, which costs more in
-   * tail latency than the split saves.
+   * Threads this structure may use to answer one search. Dividing a search across more than this
+   * oversubscribes the machine once the other concurrent searches are counted, which costs more in
+   * tail latency than the division saves.
    *
    * <p>A structure whose thread count is a process-global setting cannot read this per search,
-   * since the setting is shared by every search in flight; it registers with {@link
+   * since the setting is shared by every concurrent search. Such a structure registers with {@link
    * ParallelismBudget#onChange} instead.
    */
   default int searchParallelism() {
-    return ParallelismBudget.shared().budget();
+    return ParallelismBudget.shared().getNumThreadsPerSearch();
   }
 }

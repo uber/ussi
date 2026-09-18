@@ -25,7 +25,7 @@ public enum RecordType {
   }
 
   /**
-   * Returns the name a message names this record type by. A config never names one; see IndexType.
+   * Returns the name a message names this record type by. A config never names one. See IndexType.
    */
   public String getDisplayName() {
     return displayName;

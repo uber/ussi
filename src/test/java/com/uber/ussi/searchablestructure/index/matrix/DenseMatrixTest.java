@@ -20,9 +20,9 @@ class DenseMatrixTest {
     assertEquals(0, matrix.firstRowInChunk(0));
   }
 
-  /** A chunk holds a whole number of rows, so a row is never split across two of them. */
+  /** A chunk holds a whole number of rows, so a row is never divided across two of them. */
   @Test
-  void splitsOnRowBoundaries() {
+  void dividesOnRowBoundaries() {
     // Room for two rows per chunk, with a fifth row left over.
     DenseMatrix matrix = DenseMatrix.allocate(5, 3, /* maxChunkValues */ 7);
 

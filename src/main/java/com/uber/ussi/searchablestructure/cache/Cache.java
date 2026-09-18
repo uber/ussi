@@ -127,7 +127,8 @@ public abstract class Cache implements SearchableStructure {
 
   /**
    * Hook invoked after a row is added, for a cache that maintains search structures of its own.
-   * Updates invoke {@link #onRowDeleted} for the old record followed by this hook for the new one.
+   * Updates invoke {@link #onRowDeleted onRowDeleted()} for the old record followed by this hook
+   * for the new one.
    */
   protected void onRowInserted(long rowNum, LongTermsAndValues record) {}
 
@@ -153,9 +154,7 @@ public abstract class Cache implements SearchableStructure {
     }
     LongTermsAndValues record = rowNumToTermsAndValuesMap.remove(rowNum);
     metadataFilteringModule.delete(rowNum);
-    if (record != null) {
-      onRowDeleted(rowNum, record);
-    }
+    onRowDeleted(rowNum, record);
     return true;
   }
 

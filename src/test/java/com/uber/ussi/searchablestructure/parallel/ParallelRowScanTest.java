@@ -1,5 +1,5 @@
 /* AUTHOR: Ahmed Metwally (ametwally@uber.com) */
-package com.uber.ussi.searchablestructure;
+package com.uber.ussi.searchablestructure.parallel;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -10,6 +10,7 @@ import com.carrotsearch.hppc.cursors.LongObjectCursor;
 import com.carrotsearch.hppc.LongObjectHashMap;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
+import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -18,7 +19,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 
-/** Tests that a split scan returns what a sequential scan returns, however it is split. */
+/** Tests that a divided scan returns what a sequential scan returns, however it is divided. */
 public final class ParallelRowScanTest {
 
   private static final int TERMS_PER_RECORD = 8;
@@ -30,17 +31,17 @@ public final class ParallelRowScanTest {
     };
     for (int[] testCase : rowsAndParallelism) {
       int numRows = testCase[0];
-      int parallelism = testCase[1];
+      int numThreads = testCase[1];
       LongObjectHashMap<LongTermsAndValues> rows = corpus(numRows);
       LongTermsAndValues query = record(7);
 
       List<RowNumAndSimilarity> sequential = scanAll(rows, query, /* parallelism */ 1, numRows);
-      List<RowNumAndSimilarity> split = scanAll(rows, query, parallelism, numRows);
+      List<RowNumAndSimilarity> divided = scanAll(rows, query, numThreads, numRows);
 
       assertEquals(
           asMap(sequential),
-          asMap(split),
-          String.format("%d rows scanned in up to %d parts", numRows, parallelism));
+          asMap(divided),
+          String.format("%d rows scanned in up to %d ranges", numRows, numThreads));
     }
   }
 
@@ -51,10 +52,10 @@ public final class ParallelRowScanTest {
 
     // Scores are distinct per row here, so the best few are a single answer rather than a tie.
     List<RowNumAndSimilarity> sequential = scanAll(rows, query, /* parallelism */ 1, 10);
-    List<RowNumAndSimilarity> split = scanAll(rows, query, /* parallelism */ 8, 10);
+    List<RowNumAndSimilarity> divided = scanAll(rows, query, /* numThreads */ 8, 10);
 
-    assertEquals(10, split.size());
-    assertEquals(asMap(sequential), asMap(split));
+    assertEquals(10, divided.size());
+    assertEquals(asMap(sequential), asMap(divided));
   }
 
   @Test
@@ -66,7 +67,7 @@ public final class ParallelRowScanTest {
     ParallelRowScan.search(
         rows,
         record(7),
-        /* parallelism */ 8,
+        /* numThreads */ 8,
         numRows,
         /* minSimilarity */ 0.0f,
         (rowNum, termsAndValues, heap, sharedMinSimilarity) -> visits.merge(rowNum, 1L, Long::sum));
@@ -77,7 +78,7 @@ public final class ParallelRowScanTest {
 
   @Test
   public void scansOnSeveralThreadsWhenThereAreThreadsToScanWith() {
-    Set<String> threads = threadsUsedToScan(/* numRows */ 5_000, /* parallelism */ 8);
+    Set<String> threads = threadsUsedToScan(/* numRows */ 5_000, /* numThreads */ 8);
 
     assertTrue(threads.size() > 1, "Expected several threads, scanned on " + threads);
   }
@@ -91,19 +92,19 @@ public final class ParallelRowScanTest {
 
   @Test
   public void scansOnTheCallingThreadAloneWhenTheScanIsTooSmallToHandOut() {
-    Set<String> threads = threadsUsedToScan(/* numRows */ 10, /* parallelism */ 8);
+    Set<String> threads = threadsUsedToScan(/* numRows */ 10, /* numThreads */ 8);
 
     assertEquals(Set.of(Thread.currentThread().getName()), threads);
   }
 
   @Test
-  public void splitsOnlyScansWorthHandingOut() {
+  public void takesOneRangeUntilTheScanIsWorthDividing() {
     int[][] rowsVisitCostParallelismAndParts = {
-      // Too little work to be worth handing out, whatever the threads on offer.
+      // Too little work to be worth submitting, whatever the threads on offer.
       {1, 1, 8, 1},
       {10, 8, 8, 1},
       {255, 16, 8, 1},
-      // Past the minimum the scan uses every thread it may, rather than holding parts back.
+      // Past the minimum the scan uses every thread it may, rather than holding ranges back.
       {256, 16, 8, 8},
       {256, 16, 48, 48},
       {1_000_000, 8, 8, 8},
@@ -118,15 +119,15 @@ public final class ParallelRowScanTest {
     };
     for (int[] testCase : rowsVisitCostParallelismAndParts) {
       int numRows = testCase[0];
-      int rowVisitCost = testCase[1];
-      int parallelism = testCase[2];
+      int numVisitsPerRow = testCase[1];
+      int numThreads = testCase[2];
 
       assertEquals(
           testCase[3],
-          ParallelRowScan.numRangesFor(numRows, rowVisitCost, parallelism),
+          ParallelRowScan.getNumRanges(numRows, numVisitsPerRow, numThreads),
           String.format(
-              "%d rows costing %d visits each, in up to %d parts",
-              numRows, rowVisitCost, parallelism));
+              "%d rows costing %d visits each, in up to %d ranges",
+              numRows, numVisitsPerRow, numThreads));
     }
   }
 
@@ -137,26 +138,27 @@ public final class ParallelRowScanTest {
     };
     for (int[] testCase : candidatesAndParallelism) {
       int numCandidates = testCase[0];
-      int parallelism = testCase[1];
+      int numThreads = testCase[1];
       LongObjectHashMap<LongTermsAndValues> rows = corpus(numCandidates);
       LongHashSet candidates = candidatesOf(rows);
       LongTermsAndValues query = record(7);
 
       List<RowNumAndSimilarity> sequential =
           scanCandidates(candidates, rows, query, /* parallelism */ 1, numCandidates);
-      List<RowNumAndSimilarity> split =
-          scanCandidates(candidates, rows, query, parallelism, numCandidates);
+      List<RowNumAndSimilarity> divided =
+          scanCandidates(candidates, rows, query, numThreads, numCandidates);
 
       assertEquals(
           asMap(sequential),
-          asMap(split),
-          String.format("%d candidates scanned in up to %d parts", numCandidates, parallelism));
+          asMap(divided),
+          String.format("%d candidates scanned in up to %d ranges", numCandidates, numThreads));
     }
   }
 
   @Test
   public void scoresEveryCandidateExactlyOnceIncludingRowZero() {
-    // A set keeps row zero apart from its slots and will not say whether it holds it, so a split
+    // A set keeps row zero apart from its slots and will not say whether it holds it, so a scan
+    // divided over those slots
     // that reads those slots loses row zero silently. This is what the candidates are copied for.
     int numCandidates = 5_000;
     LongHashSet candidates = candidatesOf(corpus(numCandidates));
@@ -165,7 +167,7 @@ public final class ParallelRowScanTest {
     ParallelRowScan.searchCandidates(
         candidates,
         record(7),
-        /* parallelism */ 8,
+        /* numThreads */ 8,
         numCandidates,
         /* minSimilarity */ 0.0f,
         (rowNum, heap, sharedMinSimilarity) -> visits.merge(rowNum, 1L, Long::sum));
@@ -202,7 +204,7 @@ public final class ParallelRowScanTest {
                 ParallelRowScan.search(
                     rows,
                     record(7),
-                    /* parallelism */ 8,
+                    /* numThreads */ 8,
                     10,
                     /* minSimilarity */ 0.0f,
                     (rowNum, termsAndValues, heap, sharedMinSimilarity) -> {
@@ -215,12 +217,12 @@ public final class ParallelRowScanTest {
   }
 
   /** The threads a scan of {@code numCandidates} candidates runs on. */
-  private static Set<String> threadsUsedToScanCandidates(int numCandidates, int parallelism) {
+  private static Set<String> threadsUsedToScanCandidates(int numCandidates, int numThreads) {
     Set<String> threads = ConcurrentHashMap.newKeySet();
     ParallelRowScan.searchCandidates(
         candidatesOf(corpus(numCandidates)),
         record(7),
-        parallelism,
+        numThreads,
         numCandidates,
         /* minSimilarity */ 0.0f,
         (rowNum, heap, sharedMinSimilarity) -> threads.add(Thread.currentThread().getName()));
@@ -232,12 +234,12 @@ public final class ParallelRowScanTest {
       LongHashSet candidates,
       LongObjectHashMap<LongTermsAndValues> rows,
       LongTermsAndValues query,
-      int parallelism,
+      int numThreads,
       int maxResults) {
     return ParallelRowScan.searchCandidates(
         candidates,
         query,
-        parallelism,
+        numThreads,
         maxResults,
         /* minSimilarity */ 0.0f,
         (rowNum, heap, sharedMinSimilarity) ->
@@ -253,12 +255,12 @@ public final class ParallelRowScanTest {
   }
 
   /** The threads a scan of {@code numRows} rows runs on. */
-  private static Set<String> threadsUsedToScan(int numRows, int parallelism) {
+  private static Set<String> threadsUsedToScan(int numRows, int numThreads) {
     Set<String> threads = ConcurrentHashMap.newKeySet();
     ParallelRowScan.search(
         corpus(numRows),
         record(7),
-        parallelism,
+        numThreads,
         numRows,
         /* minSimilarity */ 0.0f,
         (rowNum, termsAndValues, heap, sharedMinSimilarity) ->
@@ -270,12 +272,12 @@ public final class ParallelRowScanTest {
   private static List<RowNumAndSimilarity> scanAll(
       LongObjectHashMap<LongTermsAndValues> rows,
       LongTermsAndValues query,
-      int parallelism,
+      int numThreads,
       int maxResults) {
     return ParallelRowScan.search(
         rows,
         query,
-        parallelism,
+        numThreads,
         maxResults,
         /* minSimilarity */ 0.0f,
         (rowNum, termsAndValues, heap, sharedMinSimilarity) ->

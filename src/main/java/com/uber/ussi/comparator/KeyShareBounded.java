@@ -22,10 +22,12 @@ public interface KeyShareBounded {
    * can share with it, in [0.0, 1.0].
    *
    * <p>Keys are shared at a rate tracking the multiset similarity of the records they were drawn
-   * from, so this is that similarity at the tightened, whatever the comparator itself measures. One
+   * from, so this is that similarity at the tightened minimum similarity, whatever the comparator
+   * itself measures. One
    * fraction therefore serves both key spaces: signatures collide at it, since each stands for one
    * draw, and a record's own terms are shared in the same proportion. A comparator measuring
-   * something else has to bound the multiset similarity from its own tightened, and one whose
+   * something else has to bound the multiset similarity from its own tightened minimum similarity,
+   * and one whose
    * minimum similarity is not already a share of the record needs {@code recordUniValue}, the Uni
    * value over the record's own terms, to express one.
    *

@@ -86,34 +86,36 @@ A query visits the active cache, the graduating caches, and the indexes, and
 merges what they return. Each is told the weakest score the answer already holds
 enough of, and may decline to score any row beneath it: once the merge holds its
 full complement of results, a weaker row cannot reach the answer, so scoring it
-is wasted work. That floor starts at whatever the caller asked for, rises as
-structures return results, and never falls, which is what lets a structure treat
-it as a bound rather than a hint. It sits one step below the weakest result
-held, so a row scoring exactly as well still qualifies. Passing it costs nothing
-to add, because every structure already prunes on a floor to answer a minimum
-similarity search; a nearest-neighbour search used to pass zero.
+is wasted work. That minimum similarity starts at whatever the caller asked for,
+rises as structures return results, and never falls, which is what lets a
+structure treat it as a bound rather than a hint. It sits one step below the
+weakest result held, so a row scoring exactly as well still qualifies. Passing
+it costs nothing to add, because every structure already prunes on a minimum
+similarity to answer a minimum similarity search. A nearest-neighbour search
+used to pass zero.
 
 Order therefore matters, and the structures are visited oldest first. Caches
 graduate at one size and older indexes are consolidated into larger ones, so the
 oldest structure holds the most rows and is the likeliest to hold the answer's
-best; raising the floor there is what every structure after it spends. The
+best, and raising the minimum similarity there is what every structure after it
+spends. The
 active cache holds the newest rows, which have no reason to be the best matches,
 so it is searched last. Ordering this way is free rather than a trade: an update
 deletes a row before re-inserting it, so one structure holds any given row and
 no order can change the version a search finds. Deletes still scan newest first,
 where the first structure holding a row must be the current one.
 
-The saving depends on the number of structures, because a floor must have
-somewhere to be spent. An inverted index holds, for each key, a list of the rows
-carrying that key; these are its **inverted lists**, and a row drawn from them
-to be scored is a **candidate**. Indexes and Candidate Generation describe both.
-Measured across several structures, the floor cuts candidates by about half, and
-the inverted lists walked by more. With one active cache and one index it saves
-nothing.
+The saving depends on the number of structures, because a minimum similarity
+must have somewhere to be spent. An inverted index holds, for each key, a list
+of the rows carrying that key; these are its **inverted lists**, and a row drawn
+from them to be scored is a **candidate**. Indexes and Candidate Generation
+describe both. Measured across several structures, it cuts candidates by about
+half, and the inverted lists walked by more. With one active cache and one index
+it saves nothing.
 
 The hybrid index already searched its term index and signature index in this
-order. It now also accepts a floor from its caller, in addition to raising one
-between the two.
+order. It now also accepts a minimum similarity from its caller, in addition to
+raising one between the two.
 
 The structures are visited one after another rather than at the same time.
 Their sizes differ by orders of magnitude, since an active cache is bounded by
@@ -121,7 +123,7 @@ Their sizes differ by orders of magnitude, since an active cache is bounded by
 so the largest search decides the latency whether or not the others run beside
 it, and threads spent on the small ones would buy nearly nothing. Visiting them
 in turn buys something the other arrangement cannot: searches running at the
-same time cannot narrow one another, because neither has results yet. Splitting
+same time cannot narrow one another, because neither has results yet. Dividing
 a single structure's own search is a separate question, answered in [Threads
 Within One Search](#threads-within-one-search).
 
@@ -158,13 +160,13 @@ snapshot.
 
 ## Concurrent Searches
 
-`QueryAdmission` bounds the searches in flight, across every index and cache in
+`QueryAdmission` bounds the concurrent searches, across every index and cache in
 the process, to the number of cores, and admits waiting searches in the order
 they arrived. Past the core count searches contend for the same cores without
 any of them finishing sooner, so the bound gives up no throughput that was
-otherwise reachable, and arrival order keeps a search from losing its turn to one
-that arrived later. The bound is process-wide because the cores it rations are
-not divided between indexes.
+otherwise reachable, and arrival order keeps a search from losing its turn to
+one that arrived later. The bound is process-wide because the cores it rations
+are not divided between indexes.
 
 Keeping within the cores is sound practice on its own, and for some index
 implementations it is more than that. A native scorer may hold a per-thread
@@ -177,60 +179,152 @@ machines tested, so a bound of the cores keeps them inside it.
 
 ### Threads Within One Search
 
-`ParallelismBudget` divides the cores among the searches in flight, so a search
-splitting its own work stays within what the machine has left once the other
+`ParallelismBudget` divides the cores among the concurrent searches, so a search
+dividing its own work stays within what the machine has left once the other
 searches are counted. The budget is the whole machine while one search runs
-alone and falls to a single thread once the searches in flight already fill the
-cores, which is what turns splitting off under load rather than letting
-concurrent searches multiply their own fan-out against each other.
+alone and falls to a single thread once the concurrent searches already fill the
+cores, which is what turns dividing off under load rather than letting
+concurrent searches multiply their own width against each other.
 
-A scan is the search that splits most readily, since rows score independently
-and only the best few survive: `ParallelRowScan` gives each part of the row
-space its own heap and merges the heaps, a merge whose size is the part count
+It derives two counts, out of two different numbers of cores, because the work
+they govern differs:
+
+- **Work submitted to `SearchThreads`** takes the processors the machine has,
+  divided by the concurrent searches. That work waits in a queue when the cores
+  are busy and spreads over every core, so every core it may use is worth
+  having. Every structure that divides its own search reads this one.
+- **A process-global thread count**, which today means the OpenBLAS thread
+  count behind the dense scorer, takes the cores of *one socket*, divided by the
+  concurrent searches. Such a library keeps threads of its own and occupies its
+  cores for as long as the setting stands, and those threads gain nothing past
+  one socket: two hardware threads of a core share that core's execution units,
+  and a socket reaches another socket's memory over a link. `ProcessorTopology`
+  reads the socket count and the widest core from the kernel and bounds the
+  result by the processors this process may run on, so a host of two sockets
+  carrying two hardware threads a core gives this count a quarter of what the
+  first one gets, and a host of one socket of single-threaded cores gives the
+  two counts the same number.
+
+A scan is the search that divides most readily, since rows score independently
+and only the best few survive. `ParallelRowScan` gives each range of the row
+space its own heap and merges the heaps, a merge whose size is the range count
 rather than the row count. The hash table holding the rows has no index, so a
-part is a range of its slots, with the empty ones skipped.
+range covers its slots, with the empty ones skipped.
 
-A scan of the candidate rows a metadata filter produced splits the same way,
+A scan of the candidate rows a metadata filter produced divides the same way,
 which covers pre-filtering in the scan index and the direct scan the inverted
 term cache falls back to. Candidates arrive as a set rather than a map, and a
 set cannot be divided into slot ranges: it holds no values to mark an empty slot
 with, and it keeps the zero key outside its slots without exposing whether that
 key is present, so a slot range cannot tell row zero from an empty slot. The
-candidates are copied out instead, which gives parts something to index and
-costs one pass. A candidate scan not worth splitting is scanned where it lies,
+candidates are copied out instead, which gives the ranges something to index and
+costs one pass. A candidate scan not worth dividing is scanned where it lies,
 so it pays for no copy.
 
-Only a scan whose rows all score against the same minimum similarity is split. A
-scan that raises its minimum similarity as its heap fills prunes using what it
-has already scored, and parts each raising a minimum similarity from their own
+Only a scan whose rows all score against the same minimum similarity is
+divided. A scan that raises its minimum similarity as its heap fills prunes
+using what it
+has already scored, and ranges each raising a minimum similarity from their own
 heap would prune less than the whole scan does, so such a scan keeps its single
 heap and its pruning. An inverted index scores its candidates against a rising
-tightened, so no phase of a single inverted search is multi-threaded. The
+tightened minimum similarity, so no phase of a single inverted search runs in
+parallel. The
 pruning that would forfeit depends on the data rather than the machine, so no
 measurement settles it.
 
-An inverted index multi-threads by sharding instead. It searches several shards
-at once, and each shard search is complete in itself, with its own heap and its
+An inverted index runs in parallel by sharding instead. It searches several
+shards at once, and each shard search is complete in itself, with its own heap
+and its
 own minimum similarity. This forfeits the same pruning, and here the loss is
 accepted: a sharded search does more total work and receives concurrency in
 return. See Sharded Inverted Index.
 
-Whether to split at all is worth deciding, because a scan can be short enough
-that handing its parts out costs more than the scan. How finely to split is not,
-because that cost does not grow with the number of parts enough to matter: a
-scan barely past the minimum still gains from as many parts as there are cores,
-so holding parts back to keep each one large loses more than it protects. A scan
+Whether to divide at all is worth deciding, because a scan can be short enough
+that submitting its ranges costs more than the scan. How finely to divide it is
+not, because that cost does not grow with the number of ranges enough to matter.
+A scan barely past the minimum still gains from as many ranges as there are
+cores, so holding ranges back to keep each one large loses more than it
+protects. A scan
 below a minimum amount of work therefore stays on the calling thread, and one
 above it uses every thread it may. The minimum is expressed in work rather than
 in rows so that it holds for records an order of magnitude apart in length,
 since a scan of few long records costs as much as one of many short ones.
 
 The minimum earns its place at high query rates rather than on an idle machine.
-The budget is derived from the searches observed in flight, and searches short
+The budget is derived from the concurrent searches observed, and searches short
 enough to leave the cores idle between them read as lower concurrency than they
 impose, so the budget can sit above one thread while a small cache serves
-hundreds of thousands of searches a second. Handing out parts for each of those
-costs far more than splitting saves.
+hundreds of thousands of searches a second. Submitting ranges for each of those
+costs far more than dividing saves.
+
+### The Shared Minimum Similarity
+
+The work units of one search prune against each other through
+`SharedMinSimilarity`, a single float behind an atomic. A work unit whose heap
+is full holds as many rows as the answer keeps, each at least as similar as its
+weakest, so no row below that weakest score can reach the answer. That makes one
+work unit's minimum similarity sound for all of them, and the shared value holds
+the highest any of them has published. A work unit whose heap is not yet full
+has proved nothing and publishes nothing. The value only rises, so a reader
+never has to re-check it for correctness, and nothing but this scalar is shared.
+
+Two entry points create it, one per search, and pass the same object to every
+work unit:
+
+- `ParallelRowScan` creates one for a scan of a structure's rows or of the
+  candidate rows a metadata filter produced, and gives it to the row scorer of
+  every range. `ScanIndex`, `ScanCache`, and `InvertedTermCache` reach it this
+  way.
+- `ParallelShardSearch` creates one for a search of an inverted index's shards,
+  and gives it to every shard search. `TermIndex`, `SignatureIndex`, and
+  `HybridIndex` reach it this way through `BaseInvertedIndex`.
+
+**A work unit begins from the value current when it starts, not from the value
+current when the search began.** This matters because work units do not start
+together: the pool runs as many as it has threads, and the rest wait, so a work
+unit can start after its siblings have already proved a great deal. The two
+kinds of work unit take it at different granularities, and both are correct:
+
+- A range of a scan reads the shared value for every row, through
+  `TopResults.tightenedMinSimilarity()`, which publishes what this range has
+  proved and returns the higher of that and the shared value. The result is
+  given to the comparator as a bound before the row is scored, so the first row
+  a late-starting range scores already uses everything its siblings proved.
+- A shard search reads the shared value as it starts, seeding the minimum
+  similarity it traverses with. Seeding is what matters most, since a shard
+  starting late would otherwise re-open keys its siblings had already pruned
+  away.
+
+What a shard does with the value is more than compare scores against it. A
+rising minimum similarity tightens length and prefix filtering, so it narrows
+the sub-range each inverted list is scanned over and can halt the vertical scan
+outright. Seeding therefore chooses the prefix for what has already been
+proved, rather than for what the caller asked for, and a prefix chosen for a
+lower value covers keys no row reaching the answer can be found under.
+
+The two candidate generators differ after that seed. `FilteredSearch` re-reads
+the shared value once per candidate and feeds it back into that narrowing, so a
+shard picks up its siblings' proof while it runs. `MergeSearch` accumulates
+similarity across a frontier of every key at once, tightens on what it proves
+itself, and does not re-read, so a sibling's proof reaches it only through the
+seed. Re-reading per frontier step is available to it and unmeasured.
+
+Publishing is never deferred to the end of a work unit. Each work unit keeps its
+own minimum similarity, uses that local copy for its own pruning, and writes to
+the shared value as the local one improves, so its siblings can spend what it
+proved while it is still running. The two kinds differ in what they write. A
+shard search writes only when its local value rises, which is a write per
+improvement. A scan range writes on every row, since
+`TopResults.tightenedMinSimilarity()` publishes before it reads, so a scan pays
+an atomic write per row whether or not anything improved. Guarding that write
+with the range's own last published value would remove most of them, and is
+unmeasured.
+
+The matrix index takes no part in this. It scores every row with one bulk
+multiply and keeps a single heap on the calling thread, so it has no second work
+unit to prune against. Its parallelism is inside the multiply, over ranges of
+the matrix that write disjoint stretches of one dot-product array and prune
+nothing.
 
 ## Configuration Validation
 
@@ -279,7 +373,7 @@ narrow sense in mind; nothing does, and nothing should.
 ### Searchable Structures
 
 Index implementations live under `com.uber.ussi.searchablestructure.index`,
-split into sub-packages by the technology each one indexes with. Record type
+divided into sub-packages by the technology each one indexes with. Record type
 names no package, because a structure and the record type it stores vary
 independently: `IndexType` pairs each structure with the record types it can
 store, and an index holds the one record type its comparator also reads.
@@ -313,6 +407,25 @@ The shared `Index` base class, `IndexFactory`, and
 the inverted indexes and the inverted cache both order their query keys with,
 so it sits beside both. Mutable `ScanCache` and `InvertedTermCache` live under
 `searchablestructure.cache`.
+
+`searchablestructure.parallel` holds everything that divides one search between
+threads, so that a structure reaches all of it through one package and none of
+it lives beside the structures it serves:
+
+- `SearchThreads` owns the pool every structure submits its work units to, and
+  the ticket ordering that serves them at their query's arrival.
+- `ParallelismBudget` derives the threads one search may use from the concurrent
+  searches, and `ProcessorTopology` gives it the cores of one socket for the
+  thread count a process-global library holds.
+- `ParallelRowScan` divides a scan into ranges of rows, `ParallelShardSearch`
+  searches every shard of an inverted index at once, and both reach the pool
+  through `ParallelSearch`, which merges what the work units keep.
+- `WorkUnitSearcher` is what those two take, and `SharedMinSimilarity` is what
+  the work units of one search prune against each other with.
+
+`RowNumAndSimilarity` and `TopResults` stay in `searchablestructure` itself,
+since a result and the heap holding it are the vocabulary of every structure
+rather than of the divided search.
 
 ### Comparators
 
@@ -420,7 +533,8 @@ the rest to bound what the unconsumed part can still contribute.
 Position filtering prunes during a comparison, on the partial unilateral values
 of the two records being compared, which the comparators carry as
 `partialUniValue1` and `partialUniValue2`. Once the most the unscanned terms
-could still add leaves the pair short of the tightened, the comparison stops.
+could still add leaves the pair short of the tightened minimum similarity, the
+comparison stops.
 
 Prefix filtering prunes before any comparison, on the same quantity taken over
 the query's keys. The prefix is chosen per query, cheapest inverted list first,
@@ -506,7 +620,8 @@ shortest candidate length filtering admits.
 
 Signature prefix filtering applies a generator-specific approximation safety
 margin: `0.1` for MinHash, I2CWS, ICWS, and SCWS, and `0.15` for PCWS. The
-margin relaxes that share rather than the comparator's own tightened, because a
+margin relaxes that share rather than the comparator's own tightened minimum
+similarity, because a
 generator's concentration bound is stated on the similarity it estimates. These
 margins broaden candidate generation but do not make the signature index
 exact.
@@ -519,10 +634,10 @@ signature index. The configured length range may
 fall entirely below, entirely above, or across this internal boundary.
 
 Queries search the index matching the query length first. Jaccard's cardinality
-bounds can skip the other when no row on that side can reach the search's current
-`minSimilarity`. Ruzicka and popularity-filtered searches conservatively search
-both, because term count alone cannot prove one side irrelevant. Results from the
-indexes searched are merged and limited by `maxNumSimilarities`.
+bounds can skip the other when no row on that side can reach the search's
+current `minSimilarity`. Ruzicka and popularity-filtered searches conservatively
+search both, because term count alone cannot prove one side irrelevant. Results
+from the indexes searched are merged and limited by `maxNumSimilarities`.
 
 The hybrid requires a comparator with a configured signature generator, which
 rules out `l2` and any other comparator left without one.
@@ -550,10 +665,11 @@ behind the shards of every search that arrived in the meantime. Submitting all
 of them at once also delegates the thread count to the pool, which is sized to
 the cores and so imposes the bound `ParallelismBudget` would impose.
 
-Sharding multi-threads a search in its entirety, which the alternatives do not.
-Multi-threading verification reaches only the phase that scores candidates.
-Multi-threading the query's keys visits a row once per thread holding one of
-that row's keys, whereas one thread walking every key visits that row once.
+Sharding runs a search in parallel in its entirety, which the alternatives do
+not. Running verification in parallel reaches only the phase that scores 
+candidates. Running the query's keys in parallel visits a row once per thread
+holding one of that row's keys, whereas one thread walking every key visits 
+that row once.
 
 The cost is weaker pruning. Inverted lists are sorted by uni value, and both
 length filtering and the rising `minSimilarity` of a filling heap prune against
@@ -564,22 +680,20 @@ total work of a search and returns concurrency for it. Without a spare thread to
 run the shards on, it is a loss.
 
 Each shard keeps its own heap, and the heaps are merged once every shard has
-finished. No heap is shared between threads. A single floor could be shared
-instead of a heap: the k-th nearest score across the shards searched so far is a
-valid floor for all of them, because a score never changes, so a row below that
-floor cannot enter the answer. Sharing it would recover the pruning the shards
-lose, and would require an atomic floor that each shard raises as its own k-th
-nearest improves, and a generator that reads the floor as it traverses rather
-than receiving it once. Both candidate generators take `minSimilarity` by value
-today, so the floor is per shard.
+finished. No heap is shared between threads. One scalar is: the k-th nearest
+score any shard has reached is a valid minimum similarity for all of them,
+because a score never changes, so a row below it cannot enter the answer.
+`SharedMinSimilarity` holds that value and recovers most of the pruning the
+shards would otherwise lose. [The Shared Minimum
+Similarity](#the-shared-minimum-similarity) describes it.
 
 That cost bounds the shard count. An index takes one shard per core only once
 every shard would hold a minimum number of rows, and fewer shards until then.
 The minimum is 50,000 rows, chosen conservatively rather than measured: sharding
 was measured to pay at about 60,000 rows per shard and to lose at about 15,000.
 
-Only inverted indexes are sharded. A scan index already multi-threads one search
-across its rows, and a matrix index scored by OpenBLAS multi-threads inside that
+Only inverted indexes are sharded. A scan index already divides one search
+across its rows, and a matrix index scored by OpenBLAS divides inside that
 scorer, both from the same budget. A matrix index scored by the pure-Java scorer
 draws nothing from the budget, so sharding it remains unexplored.
 
@@ -587,7 +701,7 @@ The inverted term cache is not sharded. It is bounded by `max_cache_size` and so
 holds fewer rows than one shard requires, and it is the one inverted structure
 that changes: it revises its popular-term decisions as rows are inserted,
 deleted and updated, and every shard would need those revisions as they
-occurred. It multi-threads through `ParallelRowScan` instead.
+occurred. It divides through `ParallelRowScan` instead.
 
 Sharding is invisible to callers, which address rows only by the row numbers
 they inserted them under.

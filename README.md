@@ -123,7 +123,7 @@ comparator from what you want measured:
 | Sequence or string | none | `gld`, `ngld` |
 
 `jaccard` counts any non-zero value as present and ignores magnitudes, so a
-multiset handed to it behaves as a set. `ruzicka` keeps magnitudes, giving
+multiset given to it behaves as a set. `ruzicka` keeps magnitudes, giving
 weighted Jaccard over weights and multiset Jaccard over counts. Both treat
 opposite signs as not intersecting, and `ruzicka` weighs by absolute value.
 `l2` uses the values as given.
@@ -310,6 +310,53 @@ Values under one key are ORed, and different keys are ANDed, so this matches
 rows in either SF or LA where the country is US. Keys and values match exactly
 after lowercasing, and an empty `MetaFilter` matches every non-deleted row.
 
+### Strategies An Index Type Supports
+
+Every index type accepts every value of `metadata_filtering_strategy`. The
+configuration is rejected only when the value names no strategy at all, so
+`in_filtering` on a matrix index builds and runs. What differs between index
+types is what `auto` chooses and what an explicitly named strategy costs.
+
+| strategy | scan index | inverted indexes | matrix index |
+|---|---|---|---|
+| `auto` (default) | in-filtering | pre-filtering when the filter is selective enough, otherwise in-filtering | pre-filtering when the filter is selective enough, otherwise post-filtering |
+| `in_filtering` | in-filtering | in-filtering | in-filtering, without the bulk multiply |
+| `pre_filtering` | pre-filtering, otherwise in-filtering | pre-filtering, otherwise in-filtering | pre-filtering, otherwise post-filtering |
+| `post_filtering` | post-filtering | post-filtering | post-filtering |
+
+A search carrying no `MetaFilter` skips all of this and scores every row, which
+for the matrix index is one bulk multiply and for the others is their ordinary
+traversal.
+
+What each strategy does, what it costs, and where it does not run as named:
+
+- **`in_filtering`** applies the filter to each row as it is scored, and returns
+  every row the filter accepts. On the matrix index it costs the bulk multiply:
+  that index scores an unfiltered search with one matrix-vector multiply over
+  every row, and a filter cannot be pushed into that multiply, so in-filtering
+  scores row by row instead. It pays there only when the filter rejects enough
+  rows to outweigh the multiply, which is why `auto` never chooses it for that
+  index type.
+- **`pre_filtering`** asks the metadata index which rows match and scores only
+  those, and returns every row the filter accepts. It runs only while the
+  filter matches at most `max_pre_filtering_rows_ratio` of the rows. Past that
+  it falls back, to in-filtering on the scan and inverted indexes and to
+  post-filtering on the matrix index, and the fallback is not reported.
+- **`post_filtering`** scores rows without the filter and applies the filter to
+  what it kept, so it keeps the matrix index's bulk multiply. It is the one
+  strategy that can return fewer rows than the filter accepts. It asks for more
+  rows than the caller wanted, expanded by how selective the filter is and
+  capped by `maxNumSimilarities`, and rows the filter accepts can still fall
+  outside the expanded set.
+- **`auto`** chooses per index type as the table shows. It never chooses
+  in-filtering on the matrix index, where that would cost the multiply, which
+  is why it is the one default that can post-filter.
+
+In-filtering and pre-filtering return the same rows and differ only in the work
+done to reach them. Post-filtering is the one strategy that changes which rows
+come back, and a matrix index under `auto` reaches it whenever a filter is not
+selective enough to pre-filter.
+
 ## What To Expect From Results
 
 Most of the time results are exact, meaning every row at or above the minimum
@@ -327,6 +374,13 @@ looser than it is for a comparator the signatures estimate directly.
 matters for sparse `l2`, where two records with no terms in common can still
 have a non-zero similarity. Those rows are not returned. Use `scan` if you need
 them.
+
+**Post-filtering can return fewer rows than exist.** A search that resolves to
+post-filtering scores rows without applying the metadata filter and filters
+what it kept, so rows the filter accepts can fall outside what it kept. The
+matrix index post-filters under `auto` whenever a filter is not selective
+enough to pre-filter. [Strategies An Index Type
+Supports](#strategies-an-index-type-supports) says when each strategy runs.
 
 **Background maintenance is invisible to results.** Rows move from the active
 cache into indexes, and older indexes consolidate, without affecting what a

@@ -70,6 +70,13 @@ public final class MergeSearch {
     IntArrayList advancedKeyIndexes = new IntArrayList(queryKeys.length);
 
     while (!frontier.isEmpty()) {
+      // Another shard may have proved a higher minimum similarity since this one last looked. It
+      // tightens the length-filtering test below and the bound a row is merged under, though not
+      // the uni value each list was entered at, which is fixed when the frontier is built.
+      float publishedMinSimilarity = sharedMinSimilarity.get();
+      if (publishedMinSimilarity > currentMinSimilarity) {
+        currentMinSimilarity = publishedMinSimilarity;
+      }
       FrontierHead nextHead = frontier.peek();
       long rowNum = nextHead.rowNum;
       double uniValue2 = nextHead.uniValue2;

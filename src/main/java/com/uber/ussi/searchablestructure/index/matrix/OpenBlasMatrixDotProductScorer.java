@@ -104,6 +104,9 @@ final class OpenBlasMatrixDotProductScorer implements MatrixDotProductScorer {
     }
     MatrixDotProductScorers.validateScoreInputs(matrix, queryValues, dotProducts);
     int dimension = matrix.dimension();
+    // Held for the whole score, because a buffer belongs to the thread for as long as it is inside
+    // the library.
+    OpenBlasAdmission.acquire();
     Scratch scratch = takeScratch();
     try {
       floatPointerArrayWriter.write(scratch.query, queryValues, dimension);
@@ -127,6 +130,7 @@ final class OpenBlasMatrixDotProductScorer implements MatrixDotProductScorer {
       }
     } finally {
       availableScratches.offer(scratch);
+      OpenBlasAdmission.release();
     }
   }
 

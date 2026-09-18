@@ -209,7 +209,6 @@ class FilteredSearchTest {
     return stubContext(Map.of(10L, new long[] {1, 2}, 20L, new long[] {1, 3}));
   }
 
-
   private static FilteredSearch.Context stubContext(Map<Long, long[]> rowNumsByKey) {
     return stubContext(rowNumsByKey, UNI_VALUES, minSimilarity -> Double.POSITIVE_INFINITY);
   }

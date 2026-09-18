@@ -75,9 +75,9 @@ public abstract class Comparator implements Serializable {
 
   /**
    * Returns the value this comparator reports at {@code normalizedSimilarityValue}, the inverse of
-   * what {@link #getSimilarity} returns. A minimum similarity reaches the API as a similarity and
-   * every bound is expressed in the comparator's own units, so anything deriving a bound outside
-   * this class converts it here rather than holding the normalizer.
+   * what {@link #getSimilarity getSimilarity()} returns. A minimum similarity reaches the API as a
+   * similarity and every bound is expressed in the comparator's own units, so anything deriving a
+   * bound outside this class converts it here rather than holding the normalizer.
    */
   public final double fromSimilarity(double normalizedSimilarityValue) {
     return comparatorNormalizer.normalizedSimilarityValueToComparatorValue(
@@ -114,7 +114,7 @@ public abstract class Comparator implements Serializable {
 
   /**
    * Returns the most a traversal of this record's terms, in uniTransformed value order, may
-   * accumulate while an unseen candidate can still be similar enough; only terms within it have to
+   * accumulate while an unseen candidate can still be similar enough. Only terms within it have to
    * generate candidates. A larger minSimilarity gives a smaller prefix sum, down to a single term
    * at 1.0.
    */
@@ -167,8 +167,8 @@ public abstract class Comparator implements Serializable {
    * Traversal halts once the keys it has visited accumulate past the prefix sum, and their
    * accumulation reaches exactly the record's Uni value, so the whole record never halts it: every
    * key generates candidates and nothing is pruned. That is sound rather than merely permitted,
-   * and it is what {@link #maxPrefixSumFromSharedFraction} already returns for a measure that can
-   * oblige a candidate to share none of the keys.
+   * and it is what {@link #maxPrefixSumFromSharedFraction maxPrefixSumFromSharedFraction()}
+   * already returns for a measure that can oblige a candidate to share none of the keys.
    */
   protected abstract double getMaxPrefixSumForTermsAndValuesInternal(
       double uniValue, double comparatorValue);
@@ -203,7 +203,7 @@ public abstract class Comparator implements Serializable {
   /**
    * Returns every {@link RecordType} this comparator can read, which decides the searchable
    * structures it can be paired with. An index holds a type that both the comparator and the
-   * structure support, so a pairing whose sets are disjoint is a config violation; see
+   * structure support, so a pairing whose sets are disjoint is a config violation. See
    * {@code IndexType.resolveRecordTypes}.
    */
   public abstract Set<RecordType> getSupportedRecordTypes();

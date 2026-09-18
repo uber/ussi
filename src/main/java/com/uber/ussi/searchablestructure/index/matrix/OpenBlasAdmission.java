@@ -25,12 +25,13 @@ final class OpenBlasAdmission {
    * Applied when the loaded binary does not report a number. Every binary observed so far retains
    * at least this many buffers, so a machine whose number cannot be read remains limited.
    */
-  private static final int FALLBACK_MAX_CONCURRENT_CALLERS = 64;
+  private static final int FALLBACK_MAX_NUM_CONCURRENT_CALLERS = 64;
 
-  private static final int MAX_CONCURRENT_CALLERS =
+  private static final int MAX_NUM_CONCURRENT_CALLERS =
       Math.min(Math.max(1, Runtime.getRuntime().availableProcessors()), readMaxNumThreads());
 
-  private static final Semaphore PERMITS = new Semaphore(MAX_CONCURRENT_CALLERS, /* fair */ true);
+  private static final Semaphore PERMITS =
+      new Semaphore(MAX_NUM_CONCURRENT_CALLERS, /* fair */ true);
 
   private OpenBlasAdmission() {}
 
@@ -48,12 +49,12 @@ final class OpenBlasAdmission {
     PERMITS.release();
   }
 
-  static int maxConcurrentCallers() {
-    return MAX_CONCURRENT_CALLERS;
+  static int getMaxNumConcurrentCallers() {
+    return MAX_NUM_CONCURRENT_CALLERS;
   }
 
   /** Callers awaiting a buffer. An estimate, read to observe that the limit holds. */
-  static int waitingCallers() {
+  static int getNumWaitingCallers() {
     return PERMITS.getQueueLength();
   }
 
@@ -72,9 +73,9 @@ final class OpenBlasAdmission {
       if (configuredNumThreads > 0) {
         CachedBlasThreadCountSetter.setNumThreads(configuredNumThreads);
       }
-      return maxNumThreads > 0 ? maxNumThreads : FALLBACK_MAX_CONCURRENT_CALLERS;
+      return maxNumThreads > 0 ? maxNumThreads : FALLBACK_MAX_NUM_CONCURRENT_CALLERS;
     } catch (LinkageError | RuntimeException e) {
-      return FALLBACK_MAX_CONCURRENT_CALLERS;
+      return FALLBACK_MAX_NUM_CONCURRENT_CALLERS;
     }
   }
 }

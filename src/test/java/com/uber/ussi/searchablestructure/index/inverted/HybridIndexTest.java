@@ -169,7 +169,7 @@ class HybridIndexTest {
   @Test
   void discardsPopularTermsInTheExactHalfOnlyAndCountsThemOverItsRows() {
     // Term 1 is in three of the four term-keyed rows, which is over half of them, and in none of
-    // the signature-keyed rows. Counted over the term-keyed rows it is popular; counted over all
+    // the signature-keyed rows. Counted over the term-keyed rows it is popular. Counted over all
     // six it is not, so what the exact half discards also shows which rows it counted.
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
     rows.put(1, jaccard(new long[] {1, 10}));

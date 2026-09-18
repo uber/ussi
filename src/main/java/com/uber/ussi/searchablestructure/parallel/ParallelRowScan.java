@@ -1,10 +1,11 @@
 /* AUTHOR: Ahmed Metwally (ametwally@uber.com) */
-package com.uber.ussi.searchablestructure;
+package com.uber.ussi.searchablestructure.parallel;
 
 import com.carrotsearch.hppc.LongHashSet;
 import com.carrotsearch.hppc.LongObjectHashMap;
 import com.carrotsearch.hppc.cursors.LongCursor;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
+import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
 import java.util.List;
 
@@ -14,36 +15,36 @@ import java.util.List;
  * <p>This is the counterpart of {@link ParallelShardSearch}, which runs one complete search per
  * shard. Here there is one structure and one scan, and what the threads divide is its rows.
  *
- * <p>Rows score independently and only the best few survive, so parts of the rows can be scanned at
- * the same time: each part keeps its own heap and the heaps merge once the parts finish, a merge of
- * the part count multiplied by the result count. Both the rows a structure holds and a set of
- * candidate rows a metadata filter produced are scanned this way.
+ * <p>Rows score independently and only the best few survive, so ranges of the rows can be scanned
+ * at the same time. Each range keeps its own heap, and the heaps merge once the ranges finish, a
+ * merge of the range count multiplied by the result count. Both the rows a structure holds and a
+ * set of candidate rows a metadata filter produced are scanned this way.
  *
  * <p>Only a scan whose rows all score against the same minimum similarity belongs here. A scan that
  * raises its minimum similarity as its heap fills prunes using what it has already scored, and
- * parts each raising a minimum similarity from their own heap would prune less than the whole scan
- * does, so such a scan keeps its single heap and its pruning instead. How much pruning it would
- * lose depends on the data, so no measurement would settle it.
+ * ranges each raising a minimum similarity from their own heap would prune less than the whole
+ * scan does, so such a scan keeps its single heap and its pruning instead. How much pruning it
+ * would lose depends on the data, so no measurement would settle it.
  *
- * <p>Whether to split at all is worth deciding, because a scan can be short enough that handing its
- * parts out costs more than the scan; how finely to split is not, because that cost does not grow
- * with the number of parts enough to matter. So a scan below a minimum amount of work runs on the
- * calling thread and a scan above it uses every thread it may.
+ * <p>Whether to divide the scan at all is worth deciding, because a scan can be short enough that
+ * submitting its ranges costs more than the scan. How finely to divide it is not, because that
+ * cost does not grow with the number of ranges enough to matter. A scan below a minimum amount of
+ * work therefore runs on the calling thread, and a scan above it uses every thread it may.
  *
- * <p>The minimum earns its place at high query rates rather than on an idle machine: the budget is
- * derived from the searches observed in flight, and searches short enough to leave the cores idle
- * between them read as lower concurrency than they impose, so the budget can sit above one thread
- * while a small cache is serving hundreds of thousands of searches a second. Handing out parts for
- * each of them costs far more than it saves.
+ * <p>The minimum earns its place at high query rates rather than on an idle machine. The budget is
+ * derived from the concurrent searches observed, and searches short enough to leave the cores idle
+ * between them are counted as fewer concurrent searches than they impose, so the budget can stand
+ * above one thread while a small cache serves hundreds of thousands of searches a second.
+ * Submitting ranges for each of those searches costs far more than it saves.
  */
 public final class ParallelRowScan {
 
   /**
-   * Row visits below which a scan is not worth handing to other threads, where a visit is one row
-   * element compared. Measured as the point at which splitting stops losing, on record lengths an
+   * Row visits below which a scan is not worth dividing between threads, where a visit is one row
+   * element compared. Measured as the point at which dividing stops losing, on record lengths an
    * order of magnitude apart and on machines with a core count apart.
    */
-  private static final int MIN_ROW_VISITS_TO_SPLIT = 4_096;
+  private static final int MIN_NUM_ROW_VISITS_TO_DIVIDE = 4_096;
 
   private ParallelRowScan() {}
 
@@ -75,9 +76,9 @@ public final class ParallelRowScan {
 
   /**
    * The best {@code maxResults} rows of {@code rowNumToTermsAndValuesMap} by {@code scorer},
-   * scanned in at most {@code parallelism} parts.
+   * scanned in at most {@code numThreads} ranges.
    *
-   * <p>The result is the result of scanning sequentially. Parts see disjoint rows and share
+   * <p>The result is the result of scanning sequentially. Ranges see disjoint rows and share
    * nothing, and the heap order is total, so the merged heap holds what a single heap would hold.
    *
    * <p>Callers hold the map still for the duration, as they do for a sequential scan.
@@ -85,12 +86,12 @@ public final class ParallelRowScan {
   public static List<RowNumAndSimilarity> search(
       LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
       LongTermsAndValues record,
-      int parallelism,
+      int numThreads,
       int maxResults,
       float minSimilarity,
       RowScorer scorer) {
     return scanInRanges(
-        numRangesFor(rowNumToTermsAndValuesMap.size(), rowVisitCost(record), parallelism),
+        getNumRanges(rowNumToTermsAndValuesMap.size(), numVisitsPerRow(record), numThreads),
         rowNumToTermsAndValuesMap.keys.length,
         maxResults,
         minSimilarity,
@@ -102,19 +103,19 @@ public final class ParallelRowScan {
 
   /**
    * The best {@code maxResults} of {@code candidateRowNums} by {@code scorer}, scanned in at most
-   * {@code parallelism} parts. As with a scan of held rows, the result is the result of scanning
+   * {@code numThreads} ranges. As with a scan of held rows, the result is the result of scanning
    * sequentially, and the caller holds the rows still for the duration.
    */
   public static List<RowNumAndSimilarity> searchCandidates(
       LongHashSet candidateRowNums,
       LongTermsAndValues record,
-      int parallelism,
+      int numThreads,
       int maxResults,
       float minSimilarity,
       CandidateScorer scorer) {
-    int numRanges = numRangesFor(candidateRowNums.size(), rowVisitCost(record), parallelism);
+    int numRanges = getNumRanges(candidateRowNums.size(), numVisitsPerRow(record), numThreads);
     if (numRanges == 1) {
-      // Scanned where they lie, so a scan not worth splitting does not pay to copy them out. One
+      // Scanned where they lie, so a scan not worth dividing does not pay to copy them out. One
       // range shares its minimum similarity with nobody, and raises it from its own heap alone.
       BoundedSizeMaxHeap<RowNumAndSimilarity> rows = newTopResultsHeap(maxResults);
       SharedMinSimilarity sharedMinSimilarity = new SharedMinSimilarity(minSimilarity);
@@ -126,7 +127,7 @@ public final class ParallelRowScan {
     // A set cannot be divided into slot ranges the way the row map can. The map marks an empty slot
     // by holding no value in it, whereas a set holds only keys and keeps the zero key outside its
     // slots without exposing whether it is there, so a slot range cannot tell row zero from an
-    // empty slot. Copying the candidates out gives parts something they can index.
+    // empty slot. Copying the candidates out gives the ranges something they can index.
     long[] rowNums = candidateRowNums.toArray();
     return scanInRanges(
         numRanges,
@@ -139,13 +140,13 @@ public final class ParallelRowScan {
 
   /**
    * Ranges to scan {@code numRows} in: every thread this search may use once the scan is worth
-   * splitting, and one before that. No range is without a row in it.
+   * dividing, and one before that. No range is without a row in it.
    */
-  static int numRangesFor(int numRows, int rowVisitCost, int parallelism) {
-    if ((long) numRows * rowVisitCost < MIN_ROW_VISITS_TO_SPLIT) {
+  static int getNumRanges(int numRows, int numVisitsPerRow, int numThreads) {
+    if ((long) numRows * numVisitsPerRow < MIN_NUM_ROW_VISITS_TO_DIVIDE) {
       return 1;
     }
-    return Math.max(1, Math.min(parallelism, numRows));
+    return Math.max(1, Math.min(numThreads, numRows));
   }
 
   /**
@@ -158,7 +159,7 @@ public final class ParallelRowScan {
       float minSimilarity,
       RangeScorer rangeScorer) {
     int indexesPerRange = (numIndexes + numRanges - 1) / numRanges;
-    return ParallelSearch.searchInParallel(
+    return ParallelSearch.searchAndMerge(
         numRanges,
         maxResults,
         minSimilarity,
@@ -172,10 +173,10 @@ public final class ParallelRowScan {
   }
 
   /**
-   * Row elements a comparison visits, used only to decide whether to split. Either array is empty
+   * Row elements a comparison visits, used only to decide whether to divide. Either array is empty
    * when the record carries the other alone, and they match in length when it carries both.
    */
-  private static int rowVisitCost(LongTermsAndValues record) {
+  private static int numVisitsPerRow(LongTermsAndValues record) {
     return Math.max(1, Math.max(record.getTerms().length, record.getValues().length));
   }
 

@@ -37,7 +37,7 @@ class IndexPairingMatrixTest {
 
   /**
    * Why a cell is invalid, or {@link #VALID} when it is not. Every inverted structure stores both
-   * record types that have terms, so no cell here fails for want of a shared record type; only the
+   * record types that have terms, so no cell here fails for want of a shared record type. Only the
    * matrix structure leaves that gap, and it keeps no lists for a generator to walk.
    */
   private enum Expectation {
@@ -254,7 +254,7 @@ class IndexPairingMatrixTest {
    *
    * <p>Order is deliberately not asserted. A structure returns results unordered because
    * {@code NearestNeighborSearchIndex} merges every structure's results with the cache's and sorts
-   * the union once; sorting per structure would be work thrown away.
+   * the union once. Sorting per structure would be work thrown away.
    */
   @Test
   void everyValidPairingScoresWhateverItReturns() {

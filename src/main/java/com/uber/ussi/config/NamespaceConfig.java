@@ -14,7 +14,7 @@ import javax.annotation.Nullable;
 /**
  * Platform-agnostic USSI namespace configuration.
  *
- * <p>This class checks the structural invariants it can see on its own; each layer contributes a
+ * <p>This class checks the structural invariants it can see on its own. Each layer contributes a
  * {@link NamespaceConfigValidator} for the params and cross-field rules only that layer knows.
  */
 public final class NamespaceConfig {

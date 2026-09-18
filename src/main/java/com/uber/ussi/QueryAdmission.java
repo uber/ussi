@@ -25,16 +25,16 @@ final class QueryAdmission {
   private static final QueryAdmission SHARED =
       new QueryAdmission(Math.max(1, Runtime.getRuntime().availableProcessors()));
 
-  private final int maxConcurrentSearches;
+  private final int maxNumConcurrentSearches;
   private final Semaphore permits;
-  private final AtomicInteger peakInFlight = new AtomicInteger();
+  private final AtomicInteger peakNumConcurrentSearches = new AtomicInteger();
 
-  QueryAdmission(int maxConcurrentSearches) {
-    if (maxConcurrentSearches < 1) {
-      throw new IllegalArgumentException("maxConcurrentSearches must be >= 1.");
+  QueryAdmission(int maxNumConcurrentSearches) {
+    if (maxNumConcurrentSearches < 1) {
+      throw new IllegalArgumentException("maxNumConcurrentSearches must be >= 1.");
     }
-    this.maxConcurrentSearches = maxConcurrentSearches;
-    this.permits = new Semaphore(maxConcurrentSearches, /* fair */ true);
+    this.maxNumConcurrentSearches = maxNumConcurrentSearches;
+    this.permits = new Semaphore(maxNumConcurrentSearches, /* fair */ true);
   }
 
   static QueryAdmission shared() {
@@ -49,47 +49,49 @@ final class QueryAdmission {
       Thread.currentThread().interrupt();
       throw new IllegalStateException("Interrupted while waiting to run a search.", e);
     }
-    peakInFlight.accumulateAndGet(inFlight(), Math::max);
+    peakNumConcurrentSearches.accumulateAndGet(getNumConcurrentSearches(), Math::max);
   }
 
   void release() {
     permits.release();
   }
 
-  int maxConcurrentSearches() {
-    return maxConcurrentSearches;
+  int getMaxNumConcurrentSearches() {
+    return maxNumConcurrentSearches;
   }
 
   /** Searches admitted and not yet finished. */
-  int inFlight() {
-    return maxConcurrentSearches - permits.availablePermits();
+  int getNumConcurrentSearches() {
+    return maxNumConcurrentSearches - permits.availablePermits();
   }
 
   /** Searches waiting for a turn. An estimate, used to observe that the bound is holding. */
-  int waiting() {
+  int getNumWaitingSearches() {
     return permits.getQueueLength();
   }
 
   /**
-   * The most searches in flight at once since this was last called.
+   * The most concurrent searches since this was last called.
    *
-   * <p>In flight only rises when a search is admitted, so sampling it on admission catches every
-   * peak within an interval. The next interval is seeded with what is in flight now, because a
+   * <p>The number rises only when a search is admitted, so sampling it on admission catches every
+   * peak within an interval. The next interval is seeded with the number running now, because a
    * search outlasting its interval is already running when the next one opens and would otherwise
    * go uncounted until it finished.
    */
-  int takePeakInFlight() {
-    return peakInFlight.getAndSet(inFlight());
+  int takePeakNumConcurrentSearches() {
+    return peakNumConcurrentSearches.getAndSet(getNumConcurrentSearches());
   }
 
-  /** Runs the task with no search in flight. Admission is fair, so this waits for at most the
-   * searches already running. */
+  /**
+   * Runs the task with no search running. Admission is fair, so this waits for at most the searches
+   * already running.
+   */
   void runExclusively(Runnable task) {
-    permits.acquireUninterruptibly(maxConcurrentSearches);
+    permits.acquireUninterruptibly(maxNumConcurrentSearches);
     try {
       task.run();
     } finally {
-      permits.release(maxConcurrentSearches);
+      permits.release(maxNumConcurrentSearches);
     }
   }
 }

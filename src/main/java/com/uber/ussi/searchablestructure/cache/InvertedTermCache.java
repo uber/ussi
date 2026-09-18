@@ -11,11 +11,11 @@ import com.uber.ussi.config.NamespaceConfig.PopularTermDiscardScope;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
-import com.uber.ussi.searchablestructure.SharedMinSimilarity;
 import com.uber.ussi.searchablestructure.TopResults;
-import com.uber.ussi.searchablestructure.ParallelRowScan;
 import com.uber.ussi.searchablestructure.inverted.KeyAndPrefixFilteringData;
 import com.uber.ussi.searchablestructure.metadata.PreFilteringResult;
+import com.uber.ussi.searchablestructure.parallel.ParallelRowScan;
+import com.uber.ussi.searchablestructure.parallel.SharedMinSimilarity;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
 import com.uber.ussi.utils.ConfigKeys;
 import com.uber.ussi.utils.MathUtils;
@@ -35,7 +35,7 @@ import javax.annotation.Nullable;
  * sample rather than a complete dataset, so each cached row is a Bernoulli trial for containing a
  * term, and a term is excluded from comparisons when the upper bound of the one-sided confidence
  * interval of its true popularity exceeds max_fraction_ids_per_term. Decisions are reversible,
- * since lists and stored rows retain all terms; they are updated incrementally after mutations and
+ * since lists and stored rows retain all terms. They are updated incrementally after mutations and
  * fully reevaluated once the cache shrinks enough for the lower denominator to matter.
  */
 public final class InvertedTermCache extends Cache {
@@ -141,7 +141,7 @@ public final class InvertedTermCache extends Cache {
       return Collections.emptyList();
     }
     // Score the query in whichever form the rows are scored in, so both sides of a comparison
-    // carry the same terms; candidates always come from the discarded-term-free form.
+    // carry the same terms. Candidates always come from the discarded-term-free form.
     LongTermsAndValues verificationQuery =
         popularTermDiscardScope == PopularTermDiscardScope.CANDIDATES_ONLY
             ? record

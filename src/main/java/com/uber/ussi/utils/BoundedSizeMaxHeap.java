@@ -57,7 +57,10 @@ public final class BoundedSizeMaxHeap<T> {
     return priorityQueue.toArray(emptyTypeArray);
   }
 
-  /** Returns the retained elements unordered; use {@link #toSortedList} when order matters. */
+  /**
+   * Returns the retained elements unordered. Use {@link #toSortedList toSortedList()} when order
+   * matters.
+   */
   public List<T> toList() {
     if (priorityQueue.isEmpty()) {
       return List.copyOf(unsortedCollection);

@@ -66,7 +66,7 @@ public final class Utils {
         .asLong();
   }
 
-  /** Fingerprints a boxed primitive or a String; any other type is rejected. */
+  /** Fingerprints a boxed primitive or a String. Any other type is rejected. */
   public static <T> long longHashCode(T t) {
     if (t instanceof Long) {
       return (long) t;

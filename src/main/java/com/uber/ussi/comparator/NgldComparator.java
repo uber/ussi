@@ -38,10 +38,10 @@ public class NgldComparator extends BaseSequenceComparator {
 
   /**
    * Returns the largest raw distance whose normalized distance still clears {@code
-   * maxNormalizedDistance}, the inverse of {@link #getNormalizedDistance}. The budget has to be in
-   * [0.0, 1.0], since only those have an inverse.
+   * maxNormalizedDistance}, the inverse of {@link #getNormalizedDistance getNormalizedDistance()}.
+   * The budget has to be in [0.0, 1.0], since only those have an inverse.
    *
-   * <p>Distances are integer-valued, so the budget is floored; the epsilon keeps one that should
+   * <p>Distances are integer-valued, so the budget is floored. The epsilon keeps one that should
    * land exactly on an integer from being floored down by representation error. That tolerance is
    * absolute on a budget that grows with the sequences, so it stops covering the error once the
    * combined length reaches the low tens of thousands of terms.
@@ -98,8 +98,8 @@ public class NgldComparator extends BaseSequenceComparator {
   /**
    * Caps a distance budget at {@link #MAX_NORMALIZED_DISTANCE}. A normalizer may map zero
    * similarity to an unbounded distance, which lies outside the range a normalized distance can
-   * take; any budget at or above the maximum admits every pair, so capping changes no result and
-   * keeps the conversions above from being handed a value they have no inverse for.
+   * take. Any budget at or above the maximum admits every pair, so capping changes no result and
+   * keeps the conversions above from being given a value they have no inverse for.
    */
   private static double getBoundedComparatorValue(double comparatorValue) {
     if (comparatorValue < 0.0) {

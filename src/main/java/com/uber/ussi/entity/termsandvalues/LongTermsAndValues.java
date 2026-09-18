@@ -19,7 +19,7 @@ public final class LongTermsAndValues {
 
   private final long[] terms;
   private final float[] values;
-  // Comparator-specific summary value used for pruning; for L2 this is the squared vector norm.
+  // Comparator-specific summary value used for pruning. For L2 this is the squared vector norm.
   private final double uniValue;
 
   /** Trusted construction path for canonical terms and a comparator-derived uniValue. */

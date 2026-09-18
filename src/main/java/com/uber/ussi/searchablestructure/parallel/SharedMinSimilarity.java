@@ -1,5 +1,5 @@
 /* AUTHOR: Ahmed Metwally (ametwally@uber.com) */
-package com.uber.ussi.searchablestructure;
+package com.uber.ussi.searchablestructure.parallel;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  *
  * <p>This only rises, and it is one value rather than a structure, so it needs no lock. The
  * keep
- * their own heaps; nothing but this scalar is shared.
+ * their own heaps. Nothing but this scalar is shared.
  */
 public final class SharedMinSimilarity {
 

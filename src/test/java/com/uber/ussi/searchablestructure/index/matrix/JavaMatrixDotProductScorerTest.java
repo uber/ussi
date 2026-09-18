@@ -11,7 +11,7 @@ class JavaMatrixDotProductScorerTest {
   @Test
   void rowRangesScoreWhatTheWholeMatrixScores() {
     // Chunks are sized so that some shapes hold their rows in one chunk and others across several,
-    // since a range of rows handed to a thread need not lie in the chunk the next range does.
+    // since a range of rows submitted to a thread need not lie in the chunk the next range does.
     int[][] rowsAndDimensions = {
       {1, 1}, {1, 64}, {7, 3}, {64, 16}, {100, 128}, {257, 33}, {1_000, 64},
     };
@@ -34,13 +34,13 @@ class JavaMatrixDotProductScorerTest {
 
   @Test
   void takesOneRangePerThreadOnlyOnceTheMultiplyIsWorthIt() {
-    assertEquals(1, JavaMatrixDotProductScorer.numRangesFor(1, 1, 8), "one multiply-add");
-    assertEquals(1, JavaMatrixDotProductScorer.numRangesFor(64, 63, 8), "just under the minimum");
-    assertEquals(8, JavaMatrixDotProductScorer.numRangesFor(64, 64, 8), "at the minimum");
+    assertEquals(1, JavaMatrixDotProductScorer.getNumRanges(1, 1, 8), "one multiply-add");
+    assertEquals(1, JavaMatrixDotProductScorer.getNumRanges(64, 63, 8), "just under the minimum");
+    assertEquals(8, JavaMatrixDotProductScorer.getNumRanges(64, 64, 8), "at the minimum");
     assertEquals(
-        4, JavaMatrixDotProductScorer.numRangesFor(4, 4_096, 8), "no range is without a row in it");
+        4, JavaMatrixDotProductScorer.getNumRanges(4, 4_096, 8), "no range is without a row in it");
     assertEquals(
-        1, JavaMatrixDotProductScorer.numRangesFor(10_000, 1_000, 1), "a search with one thread");
+        1, JavaMatrixDotProductScorer.getNumRanges(10_000, 1_000, 1), "a search with one thread");
   }
 
   /** The dot products one thread over the whole matrix produces, computed row by row. */

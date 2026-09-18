@@ -22,7 +22,7 @@ class QueryAdmissionTest {
   void theSharedBoundIsTheCoreCount() {
     assertEquals(
         Math.max(1, Runtime.getRuntime().availableProcessors()),
-        QueryAdmission.shared().maxConcurrentSearches());
+        QueryAdmission.shared().getMaxNumConcurrentSearches());
   }
 
   @Test
@@ -31,7 +31,7 @@ class QueryAdmissionTest {
     admission.acquire();
     admission.acquire();
 
-    assertEquals(2, admission.inFlight());
+    assertEquals(2, admission.getNumConcurrentSearches());
 
     CountDownLatch admitted = new CountDownLatch(1);
     Thread third = startAcquirer(admission, admitted, new ConcurrentLinkedQueue<>(), "third");
@@ -56,11 +56,11 @@ class QueryAdmissionTest {
   void releasingReturnsCapacity() {
     QueryAdmission admission = new QueryAdmission(1);
     admission.acquire();
-    assertEquals(1, admission.inFlight());
+    assertEquals(1, admission.getNumConcurrentSearches());
 
     admission.release();
 
-    assertEquals(0, admission.inFlight());
+    assertEquals(0, admission.getNumConcurrentSearches());
   }
 
   /**
@@ -114,8 +114,8 @@ class QueryAdmissionTest {
     admission.release();
     admission.release();
 
-    assertEquals(3, admission.takePeakInFlight());
-    assertEquals(0, admission.takePeakInFlight(), "the peak covers one interval only");
+    assertEquals(3, admission.takePeakNumConcurrentSearches());
+    assertEquals(0, admission.takePeakNumConcurrentSearches(), "the peak covers one interval only");
   }
 
   @Test
@@ -125,19 +125,24 @@ class QueryAdmissionTest {
     admission.acquire();
     admission.acquire();
 
-    assertEquals(3, admission.takePeakInFlight(), "the interval they started in sees them");
+    assertEquals(
+        3, admission.takePeakNumConcurrentSearches(), "the interval they started in sees them");
 
     // A search can outlast the interval it arrived in, so later intervals must still count it
-    // rather than concluding the engine is idle and handing out every core.
-    assertEquals(3, admission.takePeakInFlight(), "later intervals still see them");
+    // rather than concluding the engine is idle and budgeting every core to one search.
+    assertEquals(3, admission.takePeakNumConcurrentSearches(), "later intervals still see them");
 
     admission.release();
     admission.release();
     admission.release();
 
     // They were running when this interval opened, so its peak is still three.
-    assertEquals(3, admission.takePeakInFlight(), "the interval they finished in still sees them");
-    assertEquals(0, admission.takePeakInFlight(), "the interval after they finish sees none");
+    assertEquals(
+        3,
+        admission.takePeakNumConcurrentSearches(),
+        "the interval they finished in still sees them");
+    assertEquals(
+        0, admission.takePeakNumConcurrentSearches(), "the interval after they finish sees none");
   }
 
   @Test
@@ -150,7 +155,7 @@ class QueryAdmissionTest {
     Thread exclusive =
         new Thread(
             () -> {
-              admission.runExclusively(() -> events.add("ran with inFlight=" + admission.inFlight()));
+              admission.runExclusively(() -> events.add("ran with inFlight=" + admission.getNumConcurrentSearches()));
               ran.countDown();
             });
     exclusive.setDaemon(true);
@@ -158,7 +163,7 @@ class QueryAdmissionTest {
     try {
       awaitWaiting(admission, 1, () -> ran.getCount() == 0);
 
-      assertEquals(1, ran.getCount(), "exclusive work must wait for the search in flight");
+      assertEquals(1, ran.getCount(), "exclusive work must wait for the running search");
 
       admission.release();
       ran.await();
@@ -172,7 +177,7 @@ class QueryAdmissionTest {
   /**
    * A search arriving while another is already waiting must not overtake it. This is distinct from
    * the ordering above: waiting searches are woken in turn regardless, and it is only a newly
-   * arriving search that can jump the queue. Repeated because the arrival races the release; an
+   * arriving search that can jump the queue. Repeated because the arrival races the release. An
    * ordered admission wins every race, so a passing run is not luck.
    */
   @Test
@@ -270,11 +275,11 @@ class QueryAdmissionTest {
   /** Spins rather than sleeping, so nothing here depends on a timeout that CI load could blow. */
   private static void awaitWaiting(
       QueryAdmission admission, int expected, BooleanSupplier boundViolated) {
-    while (admission.waiting() < expected && !boundViolated.getAsBoolean()) {
+    while (admission.getNumWaitingSearches() < expected && !boundViolated.getAsBoolean()) {
       Thread.onSpinWait();
     }
     assertTrue(
-        admission.waiting() >= expected,
-        "expected " + expected + " search(es) waiting, saw " + admission.waiting());
+        admission.getNumWaitingSearches() >= expected,
+        "expected " + expected + " search(es) waiting, saw " + admission.getNumWaitingSearches());
   }
 }

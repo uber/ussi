@@ -5,8 +5,8 @@ import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
-import com.uber.ussi.searchablestructure.ParallelRowScan;
 import com.uber.ussi.searchablestructure.TopResults;
+import com.uber.ussi.searchablestructure.parallel.ParallelRowScan;
 import java.util.Collections;
 import java.util.List;
 

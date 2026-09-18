@@ -1,5 +1,5 @@
 /* AUTHOR: Ahmed Metwally (ametwally@uber.com) */
-package com.uber.ussi.searchablestructure;
+package com.uber.ussi.searchablestructure.parallel;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -13,8 +13,8 @@ import java.util.stream.Stream;
  * The cores of one processor socket, and no more of them than this process may run on.
  *
  * <p>Two hardware threads of one core share that core's execution units, and a socket reaches the
- * memory attached to another socket over a link. The cores of one socket are the threads one piece
- * of work gains from.
+ * memory attached to another socket over a link. The cores of one socket are the threads one work
+ * unit gains from.
  *
  * <p>A socket's cores are counted from the whole machine, and the processors this process may run
  * on bound the result rather than dividing it. A process is held to a share of a machine by a
@@ -111,13 +111,13 @@ final class ProcessorTopology {
   }
 
   /**
-   * The processors a kernel processor list names, whose parts are either single numbers or
+   * The processors a kernel processor list names. Its elements are either single numbers or
    * inclusive ranges, as in {@code 0,48} and {@code 0-23}.
    */
   static Set<Integer> getProcessorNumsInList(String processorList) {
     Set<Integer> processorNums = new TreeSet<>();
-    for (String part : processorList.split(",")) {
-      String trimmed = part.trim();
+    for (String element : processorList.split(",")) {
+      String trimmed = element.trim();
       if (trimmed.isEmpty()) {
         continue;
       }

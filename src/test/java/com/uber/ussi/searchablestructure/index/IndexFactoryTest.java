@@ -45,7 +45,7 @@ class IndexFactoryTest {
     assertInstanceOf(TermIndex.class, index);
   }
 
-  /** A structure names how an index is keyed; the type it stores comes from the comparator. */
+  /** A structure names how an index is keyed. The type it stores comes from the comparator. */
   @Test
   void createIndexCreatesTermIndexForSequenceComparators() {
     Index index =

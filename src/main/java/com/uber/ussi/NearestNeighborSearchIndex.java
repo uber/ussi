@@ -12,9 +12,7 @@ import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.TermsAndValues;
-import com.uber.ussi.searchablestructure.ParallelismBudget;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
-import com.uber.ussi.searchablestructure.SearchThreads;
 import com.uber.ussi.searchablestructure.cache.Cache;
 import com.uber.ussi.searchablestructure.cache.CacheConfigValidator;
 import com.uber.ussi.searchablestructure.cache.CacheFactory;
@@ -22,6 +20,8 @@ import com.uber.ussi.searchablestructure.index.Index;
 import com.uber.ussi.searchablestructure.index.IndexConfigValidator;
 import com.uber.ussi.searchablestructure.index.IndexFactory;
 import com.uber.ussi.searchablestructure.TopResults;
+import com.uber.ussi.searchablestructure.parallel.ParallelismBudget;
+import com.uber.ussi.searchablestructure.parallel.SearchThreads;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -61,7 +61,7 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
   private Cache cache;
   private long nextRowNum;
   private int nextStructureGeneration;
-  private boolean consolidationInFlight;
+  private boolean consolidationInProgress;
   private boolean closed;
 
   public NearestNeighborSearchIndex(NamespaceConfig namespaceConfig) {
@@ -89,10 +89,10 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
     // Composition lives here: admission counts the searches and can quiet them, the budget decides
     // what that concurrency is worth, and neither needs to know about the other.
     ParallelismBudget.shared()
-        .attach(queryAdmission::takePeakInFlight, queryAdmission::runExclusively);
+        .attach(queryAdmission::takePeakNumConcurrentSearches, queryAdmission::runExclusively);
     this.nextRowNum = 0;
     this.nextStructureGeneration = 0;
-    this.consolidationInFlight = false;
+    this.consolidationInProgress = false;
     this.closed = false;
   }
 
@@ -420,8 +420,9 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
   /**
    * Merges the indexes when there are too many searchable structures: snapshot under the read
    * lock, build off-lock, swap under the write lock, then close the old indexes outside the lock.
-   * Deletes that race the build are tombstoned (see {@link #deleteInternalLocked}) and replayed at
-   * swap time, so the write-lock window is O(deletes-during-build) rather than O(total rows).
+   * Deletes that race the build are tombstoned (see {@link #deleteInternalLocked
+   * deleteInternalLocked()}) and replayed at swap time, so the write-lock window is
+   * O(deletes-during-build) rather than O(total rows).
    */
   private void consolidateIndexesIfNeeded() {
     List<Index> oldIndexes;
@@ -429,7 +430,7 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
     LongHashSet tombstones = new LongHashSet();
     lock.writeLock().lock();
     try {
-      if (consolidationInFlight
+      if (consolidationInProgress
           || getNumSearchableStructuresLocked() < namespaceConfig.getMaxNumSearchableStructures()) {
         return;
       }
@@ -439,7 +440,7 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
       }
       consolidatedGeneration = getLatestIndexGenerationLocked(oldIndexes);
       // Route deletes into the tombstone set before snapshotting, so no racing delete is missed.
-      consolidationInFlight = true;
+      consolidationInProgress = true;
       consolidationDeletes = tombstones;
     } finally {
       lock.writeLock().unlock();
@@ -512,7 +513,7 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
       if (consolidationDeletes == tombstones) {
         consolidationDeletes = null;
       }
-      consolidationInFlight = false;
+      consolidationInProgress = false;
     } finally {
       lock.writeLock().unlock();
     }
@@ -546,7 +547,7 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
   /**
    * Deletes from the active cache if present, otherwise scans searchable structures newest to
    * oldest and tombstones the first match, since each rowNum lives in exactly one structure. A
-   * delete against a structure whose build is in flight is also recorded in {@link
+   * delete against a structure whose build is in progress is also recorded in {@link
    * #graduationDeletes} or {@link #consolidationDeletes} for replay at swap time. Must hold the
    * write lock.
    */
@@ -564,7 +565,7 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
           return true;
         }
       } else if (structure.index != null && structure.index.delete(rowNum)) {
-        // Indexes are delete-only; tombstoning hides rows that have already graduated.
+        // Indexes are delete-only. Tombstoning hides rows that have already graduated.
         if (consolidationDeletes != null) {
           consolidationDeletes.add(rowNum);
         }
@@ -590,7 +591,7 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
   }
 
   private List<Index> getConsolidatableIndexPrefixLocked() {
-    // Only consolidate indexes older than the oldest graduating cache; newer ones may interleave
+    // Only consolidate indexes older than the oldest graduating cache. Newer ones may interleave
     // with caches whose builds are unfinished, and that order is what makes the newest win.
     int oldestGraduatingCacheGeneration = getOldestGraduatingCacheGenerationLocked();
     List<Index> prefix = new ArrayList<>();

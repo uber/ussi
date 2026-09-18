@@ -13,7 +13,7 @@ import java.util.Set;
  * store.
  *
  * <p>A namespace names only the structure: the record type is the one the structure stores and the
- * configured comparator reads; see {@link #resolveRecordTypes}.
+ * configured comparator reads. See {@link #resolveRecordTypes resolveRecordTypes()}.
  */
 public enum IndexType implements ConfigVocabulary {
   /**
@@ -68,7 +68,7 @@ public enum IndexType implements ConfigVocabulary {
   /**
    * Returns whether this structure scores every row by one dot product rather than by passing
    * candidates to the comparator, so it has to be configured with a comparator whose similarity a
-   * dot product determines; see {@link DotProductScored}.
+   * dot product determines. See {@link DotProductScored}.
    */
   public boolean scoresByDotProducts() {
     return this == MATRIX;
@@ -86,7 +86,7 @@ public enum IndexType implements ConfigVocabulary {
 
   /**
    * Returns whether the conjunction a merge accumulates is a candidate's similarity rather than a
-   * bound on it. It is only when the lists carry a record's own terms and values; a sequence's
+   * bound on it. It is only when the lists carry a record's own terms and values. A sequence's
    * terms are keyed without the order its similarity depends on, so they only bound it.
    */
   public boolean conjunctionDeterminesSimilarity(RecordType recordType) {

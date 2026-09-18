@@ -52,8 +52,8 @@ public final class ConfigViolations {
 
   /**
    * Checks that every key in {@code params} is one {@code recognizedKeys} names. A key is matched
-   * the way {@link NamespaceConfigParams#getParam} matches it, so a key reported here is one no
-   * layer would have read, and a key accepted here is one some layer reads.
+   * the way {@link NamespaceConfigParams#getParam getParam()} matches it, so a key reported here
+   * is one no layer would have read, and a key accepted here is one some layer reads.
    */
   public static void checkNoUnknownKeys(
       List<String> violations,

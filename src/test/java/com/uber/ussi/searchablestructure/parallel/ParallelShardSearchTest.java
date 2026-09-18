@@ -1,10 +1,11 @@
-package com.uber.ussi.searchablestructure;
+package com.uber.ussi.searchablestructure.parallel;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -57,15 +58,18 @@ class ParallelShardSearchTest {
   }
 
   @Test
-  void handsOutEveryShardAtOnceEvenWhenTheBudgetIsOneThread() {
-    // A pool of one thread runs one shard at a time whatever it is handed.
+  void submitsEveryShardAtOnceEvenWhenTheBudgetIsOneThread() {
+    // A pool of one thread runs one shard at a time whatever it is submitted.
     assumeTrue(Runtime.getRuntime().availableProcessors() > 1, "needs more than one processor");
     int numShards = 4;
     AtomicInteger numShardsRunning = new AtomicInteger();
     AtomicInteger maxNumShardsRunningAtOnce = new AtomicInteger();
     ParallelismBudget.shared().update(Integer.MAX_VALUE);
     try {
-      assertEquals(1, ParallelismBudget.shared().budget(), "the budget under this concurrency");
+      assertEquals(
+          1,
+          ParallelismBudget.shared().getNumThreadsPerSearch(),
+          "the budget at this number of concurrent searches");
 
       ParallelShardSearch.search(
           numShards,
@@ -135,7 +139,7 @@ class ParallelShardSearchTest {
                 0.0f,
                 (shard, min) -> {
                   if (shard == 1) {
-                    throw new IllegalStateException("the first handed-off shard failed");
+                    throw new IllegalStateException("the first submitted shard failed");
                   }
                   numShardsRunning.incrementAndGet();
                   try {

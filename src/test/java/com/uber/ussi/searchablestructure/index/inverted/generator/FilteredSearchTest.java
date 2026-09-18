@@ -1,6 +1,5 @@
 package com.uber.ussi.searchablestructure.index.inverted.generator;
 
-import com.uber.ussi.searchablestructure.SharedMinSimilarity;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -13,6 +12,7 @@ import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.inverted.KeyAndPrefixFilteringData;
+import com.uber.ussi.searchablestructure.parallel.SharedMinSimilarity;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -145,7 +145,7 @@ class FilteredSearchTest {
             0.0);
 
     // Drains the first key, then one row of the second, whose prefix cost is the first's
-    // uni-transformed value; row 6 is left pending.
+    // uni-transformed value. Row 6 is left pending.
     assertEquals(List.of(1L, 5L), List.of(iterator.next(), iterator.next()));
 
     iterator.setMinSimilarity(0.9);

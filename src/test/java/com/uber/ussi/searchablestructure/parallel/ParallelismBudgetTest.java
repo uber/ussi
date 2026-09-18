@@ -1,4 +1,4 @@
-package com.uber.ussi.searchablestructure;
+package com.uber.ussi.searchablestructure.parallel;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -59,30 +59,30 @@ class ParallelismBudgetTest {
 
   @Test
   void oneSearchGetsEveryThread() {
-    assertEquals(CORES, new ParallelismBudget(CORES, CORES).budgetFor(1));
+    assertEquals(CORES, new ParallelismBudget(CORES, CORES).getNumThreadsPerSearchFor(1));
   }
 
   @Test
   void concurrencyAtOrAboveTheBoundGetsOneThread() {
     ParallelismBudget budget = new ParallelismBudget(CORES, CORES);
 
-    assertEquals(1, budget.budgetFor(CORES));
-    assertEquals(1, budget.budgetFor(CORES + 1));
-    assertEquals(1, budget.budgetFor(Integer.MAX_VALUE));
+    assertEquals(1, budget.getNumThreadsPerSearchFor(CORES));
+    assertEquals(1, budget.getNumThreadsPerSearchFor(CORES + 1));
+    assertEquals(1, budget.getNumThreadsPerSearchFor(Integer.MAX_VALUE));
   }
 
   @Test
   void noSearchesGetsEveryThreadRatherThanDividingByZero() {
     ParallelismBudget budget = new ParallelismBudget(CORES, CORES);
 
-    assertEquals(CORES, budget.budgetFor(0));
-    assertEquals(CORES, budget.budgetFor(-1));
+    assertEquals(CORES, budget.getNumThreadsPerSearchFor(0));
+    assertEquals(CORES, budget.getNumThreadsPerSearchFor(-1));
   }
 
   @Test
   void roundsDownRatherThanUp() {
     // Seven searches on 48 cores get 6 threads each, not 7, which would oversubscribe.
-    assertEquals(6, new ParallelismBudget(CORES, CORES).budgetFor(7));
+    assertEquals(6, new ParallelismBudget(CORES, CORES).getNumThreadsPerSearchFor(7));
   }
 
   /** The invariant the budget exists to hold. */
@@ -90,7 +90,7 @@ class ParallelismBudgetTest {
   void budgetTimesConcurrencyStaysWithinTheBound() {
     ParallelismBudget budget = new ParallelismBudget(CORES, CORES);
     for (int concurrency = 1; concurrency <= CORES; concurrency++) {
-      int threads = budget.budgetFor(concurrency);
+      int threads = budget.getNumThreadsPerSearchFor(concurrency);
       assertTrue(
           (long) threads * concurrency <= CORES,
           "threads " + threads + " times concurrency " + concurrency + " exceeds " + CORES);
@@ -99,7 +99,7 @@ class ParallelismBudgetTest {
 
   @Test
   void startsAtTheFullBoundSoAnIdleEngineUsesEveryCore() {
-    assertEquals(CORES, new ParallelismBudget(CORES, CORES).budget());
+    assertEquals(CORES, new ParallelismBudget(CORES, CORES).getNumThreadsPerSearch());
   }
 
   /** A structure can be built while other searches run, so registering must also be exclusive. */
@@ -119,8 +119,11 @@ class ParallelismBudgetTest {
     assertEquals(List.of("entered", "applied " + CORES), exclusiveCalls);
   }
 
-  /** Attaches to install the runner, then stops the interval work so the test drives update itself. */
-  private static void attachThen(ParallelismBudget budget, java.util.function.Consumer<Runnable> exclusively) {
+  /**
+   * Attaches to install the runner, then stops the interval work so the test drives update itself.
+   */
+  private static void attachThen(
+      ParallelismBudget budget, java.util.function.Consumer<Runnable> exclusively) {
     budget.attach(() -> 0, exclusively);
     budget.detach();
   }
@@ -154,11 +157,11 @@ class ParallelismBudgetTest {
     budget.update(CORES);
 
     assertEquals(List.of(1), applied);
-    assertEquals(1, budget.budget());
+    assertEquals(1, budget.getNumThreadsPerSearch());
     assertEquals(
         List.of("entered", "left"),
         exclusiveCalls,
-        "a process-global count must only change with no search in flight");
+        "a process-global count must only change with no search running");
   }
 
   @Test
@@ -170,7 +173,7 @@ class ParallelismBudgetTest {
     List<String> exclusiveCalls = new ArrayList<>();
     attachThen(budget, task -> exclusiveCalls.add("entered"));
 
-    // One search in flight wants the full bound, which is where the budget already is.
+    // One concurrent search wants the full bound, which is where the budget already is.
     budget.update(1);
 
     assertEquals(List.of(), applied);
@@ -184,18 +187,18 @@ class ParallelismBudgetTest {
     budget.attach(() -> 1, Runnable::run);
     budget.attach(() -> 1, Runnable::run);
 
-    assertEquals(2, budget.attachments());
+    assertEquals(2, budget.getNumAttachments());
     assertTrue(budget.isRebudgeting());
 
     // One engine closing must not stop the other engine's budget.
     budget.detach();
 
-    assertEquals(1, budget.attachments());
+    assertEquals(1, budget.getNumAttachments());
     assertTrue(budget.isRebudgeting());
 
     budget.detach();
 
-    assertEquals(0, budget.attachments());
+    assertEquals(0, budget.getNumAttachments());
     assertFalse(budget.isRebudgeting(), "the last engine detaching stops the work");
   }
 
@@ -208,7 +211,7 @@ class ParallelismBudgetTest {
     budget.detach();
     budget.detach();
 
-    assertEquals(0, budget.attachments());
+    assertEquals(0, budget.getNumAttachments());
     assertFalse(budget.isRebudgeting());
   }
 
@@ -217,7 +220,7 @@ class ParallelismBudgetTest {
     ParallelismBudget budget = new ParallelismBudget(CORES, CORES);
 
     assertFalse(budget.isRebudgeting());
-    assertEquals(CORES, budget.budget());
+    assertEquals(CORES, budget.getNumThreadsPerSearch());
   }
 
   @Test

@@ -1,6 +1,5 @@
 package com.uber.ussi.searchablestructure.index.inverted.generator;
 
-import com.uber.ussi.searchablestructure.SharedMinSimilarity;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -10,6 +9,7 @@ import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
 import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
+import com.uber.ussi.searchablestructure.parallel.SharedMinSimilarity;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;

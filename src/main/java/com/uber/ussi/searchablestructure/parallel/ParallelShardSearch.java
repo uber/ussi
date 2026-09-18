@@ -1,6 +1,7 @@
 /* AUTHOR: Ahmed Metwally (ametwally@uber.com) */
-package com.uber.ussi.searchablestructure;
+package com.uber.ussi.searchablestructure.parallel;
 
+import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
 import java.util.List;
 
 /**
@@ -15,10 +16,10 @@ import java.util.List;
  * <p>Each shard search is complete in itself, with its own heap and its own tightened, so each
  * prunes from the rows it has seen rather than from the answer as a whole.
  *
- * <p>This returns only once every shard it handed off has finished. Callers search under the
- * engine's read lock, which excludes writers from the shards for exactly as long as the search
- * holds it. A handed-off shard that outlived the call could therefore read a structure a writer had
- * begun to change, or an index that consolidation had closed.
+ * <p>This returns only once every shard it submitted has finished. Callers search under a read
+ * lock that excludes writers from the shards for exactly as long as the search holds it. A
+ * submitted shard outliving the call could therefore read a structure a writer had begun to
+ * change, or an index that consolidation had closed.
  */
 public final class ParallelShardSearch {
 
@@ -32,7 +33,7 @@ public final class ParallelShardSearch {
       int numShards,
       int maxResults,
       float minSimilarity,
-      ParallelSearch.Searcher searchShard) {
-    return ParallelSearch.searchInParallel(numShards, maxResults, minSimilarity, searchShard);
+      WorkUnitSearcher searchShard) {
+    return ParallelSearch.searchAndMerge(numShards, maxResults, minSimilarity, searchShard);
   }
 }

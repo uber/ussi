@@ -8,7 +8,7 @@ package com.uber.ussi.comparator.sequencedistance;
  * {@code length1 + length2 - 2 * lcsLength}.
  *
  * <p>Without substitution, rewriting a term costs a deletion and an insertion, so this is
- * never below the Levenshtein distance; in exchange each edit moves exactly one term into or
+ * never below the Levenshtein distance. In exchange each edit moves exactly one term into or
  * out of one multiset, which halves the L1 bound.
  */
 final class LcsDistance extends SequenceDistance {

@@ -1,18 +1,18 @@
 /* AUTHOR: Shijie Lu (shijie@uber.com), Shalini Kedlaya (skedlaya@uber.com), Ahmed Metwally (ametwally@uber.com) */
 package com.uber.ussi.searchablestructure.index.matrix;
 
-import com.uber.ussi.searchablestructure.ParallelismBudget;
-import com.uber.ussi.searchablestructure.SearchThreads;
+import com.uber.ussi.searchablestructure.parallel.ParallelismBudget;
+import com.uber.ussi.searchablestructure.parallel.SearchThreads;
 
 /**
  * Pure Java dense matrix-vector dot-product scorer.
  *
- * <p>The multiply is multi-threaded over the threads one search may use, each thread taking a range
+ * <p>The multiply runs in parallel over the threads one search may use, each thread taking a range
  * of the matrix's rows. The ranges do not overlap, so the threads write disjoint stretches of the
  * dot products and need nothing to coordinate them beyond waiting for all of them to finish.
  *
- * <p>The ranges run on the threads every other search runs on, so that the threads in flight for
- * one search stay within its budget and the searches in flight together stay within the cores.
+ * <p>The ranges run on the threads every other search runs on, so that the threads of one search
+ * stay within its budget and the concurrent searches together stay within the cores.
  *
  * <p>The OpenBLAS scorer is threaded by OpenBLAS itself, from the same budget. This scorer is what
  * runs where that one is unavailable.
@@ -20,12 +20,13 @@ import com.uber.ussi.searchablestructure.SearchThreads;
 final class JavaMatrixDotProductScorer implements MatrixDotProductScorer {
 
   /**
-   * Multiply-adds a score must do before its rows are worth multi-threading. Below this the
-   * hand-off costs more than the multiply it shortens.
+   * Multiply-adds a score must do before its rows are worth dividing between threads. Below this,
+   * submitting the ranges costs more than the multiply it shortens.
    *
-   * <p>Carried over from the row-visit minimum a split scan uses, and unmeasured for this multiply.
+   * <p>Carried over from the row-visit minimum a divided scan uses, and unmeasured for this
+   * multiply.
    */
-  private static final long MIN_MULTIPLY_ADDS_TO_SPLIT = 4_096;
+  private static final long MIN_NUM_MULTIPLY_ADDS_TO_DIVIDE = 4_096;
 
   private final DenseMatrix matrix;
 
@@ -37,7 +38,9 @@ final class JavaMatrixDotProductScorer implements MatrixDotProductScorer {
   public void score(float[] queryValues, float[] dotProducts) {
     MatrixDotProductScorers.validateScoreInputs(matrix, queryValues, dotProducts);
     int numRows = matrix.numRows();
-    int numRanges = numRangesFor(numRows, matrix.dimension(), ParallelismBudget.shared().budget());
+    int numRanges =
+        getNumRanges(
+            numRows, matrix.dimension(), ParallelismBudget.shared().getNumThreadsPerSearch());
     int rowsPerRange = (numRows + numRanges - 1) / numRanges;
     SearchThreads.runInParallel(
         numRanges,
@@ -52,13 +55,13 @@ final class JavaMatrixDotProductScorer implements MatrixDotProductScorer {
 
   /**
    * Ranges to divide {@code numRows} into: one per thread this search may use once the multiply is
-   * worth multi-threading, and one range before that. No range is without a row in it.
+   * worth dividing between threads, and one range before that. No range is without a row in it.
    */
-  static int numRangesFor(int numRows, int dimension, int parallelism) {
-    if ((long) numRows * dimension < MIN_MULTIPLY_ADDS_TO_SPLIT) {
+  static int getNumRanges(int numRows, int dimension, int numThreads) {
+    if ((long) numRows * dimension < MIN_NUM_MULTIPLY_ADDS_TO_DIVIDE) {
       return 1;
     }
-    return Math.max(1, Math.min(parallelism, numRows));
+    return Math.max(1, Math.min(numThreads, numRows));
   }
 
   /** Scores the rows of one range, which lie in one chunk of the matrix or across several. */

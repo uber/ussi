@@ -146,7 +146,7 @@ class TermIndexOnSequencesTest {
     List<RowNumAndSimilarity> results = index.getSimilarRowNums(0.0f, sequence(1, 2, 3, 4), null);
 
     assertEquals(2, results.size(), results.toString());
-    // Identical multisets, so a multiset measure would score these two alike; the order does not.
+    // Identical multisets, so a multiset measure would score these two alike. The order does not.
     assertEquals(1.0f, similarityOf(results, 1), DELTA);
     assertTrue(
         similarityOf(results, 2) < 1.0f,

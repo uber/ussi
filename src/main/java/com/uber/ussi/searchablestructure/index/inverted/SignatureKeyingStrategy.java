@@ -17,11 +17,11 @@ import java.util.Objects;
  *
  * <p>Parallel to {@link RecordIndexingStrategy}, which says how a record type presents itself: a
  * structure composes one of each rather than asking its comparator. A structure that keys by
- * signatures cannot be built without this, which is why {@link #create} throws rather than
+ * signatures cannot be built without this, which is why {@link #create create()} throws rather than
  * reporting an absent generator to every caller that has to check.
  *
  * <p>It pairs the two halves the bound needs and neither one owns. The generator knows how closely
- * its collision rate estimates a similarity; only the measure knows which similarity that is.
+ * its collision rate estimates a similarity. Only the measure knows which similarity that is.
  */
 final class SignatureKeyingStrategy {
 
@@ -69,7 +69,7 @@ final class SignatureKeyingStrategy {
    * from the same shape over terms. A generator only estimates the similarity its signatures
    * collide at, so the share is relaxed by its safety margin first, which lengthens the prefix and
    * buys back the recall the estimate would otherwise cost. And a prefix is rounded up to whole
-   * signatures, since half a draw cannot be visited; rounding cannot overrun {@code numSignatures}
+   * signatures, since half a draw cannot be visited. Rounding cannot overrun {@code numSignatures}
    * because the shape caps the prefix at the Uni value it is given.
    */
   double getMaxPrefixSumForSignatures(

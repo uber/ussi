@@ -15,18 +15,56 @@ class ParallelismBudgetTest {
 
   @Test
   void rejectsANonPositiveBound() {
-    assertThrows(IllegalArgumentException.class, () -> new ParallelismBudget(0));
-    assertThrows(IllegalArgumentException.class, () -> new ParallelismBudget(-1));
+    assertThrows(IllegalArgumentException.class, () -> new ParallelismBudget(0, 0));
+    assertThrows(IllegalArgumentException.class, () -> new ParallelismBudget(-1, -1));
+  }
+
+  @Test
+  void rejectsMoreSharedThreadsThanThreadsPerSearch() {
+    assertThrows(IllegalArgumentException.class, () -> new ParallelismBudget(CORES, CORES + 1));
+    assertThrows(IllegalArgumentException.class, () -> new ParallelismBudget(CORES, 0));
+  }
+
+  @Test
+  void dividesTheSharedThreadsOutOfOneSocketsCores() {
+    int numCoresPerSocket = CORES / 4;
+    int[][] concurrencyAndNumThreads = {
+      {1, numCoresPerSocket},
+      {2, numCoresPerSocket / 2},
+      {4, numCoresPerSocket / 4},
+      {numCoresPerSocket, 1},
+      {CORES, 1},
+      {0, numCoresPerSocket},
+      {-1, numCoresPerSocket},
+    };
+    ParallelismBudget budget = new ParallelismBudget(CORES, numCoresPerSocket);
+    for (int[] testCase : concurrencyAndNumThreads) {
+      assertEquals(
+          testCase[1],
+          budget.getNumSharedThreadsFor(testCase[0]),
+          "concurrency " + testCase[0]);
+    }
+  }
+
+  @Test
+  void appliesTheSharedThreadsAndNotTheBudgetOnRegistration() {
+    int numCoresPerSocket = CORES / 4;
+    ParallelismBudget budget = new ParallelismBudget(CORES, numCoresPerSocket);
+    int[] appliedNumThreads = new int[1];
+
+    budget.onChange(threads -> appliedNumThreads[0] = threads);
+
+    assertEquals(numCoresPerSocket, appliedNumThreads[0]);
   }
 
   @Test
   void oneSearchGetsEveryThread() {
-    assertEquals(CORES, new ParallelismBudget(CORES).budgetFor(1));
+    assertEquals(CORES, new ParallelismBudget(CORES, CORES).budgetFor(1));
   }
 
   @Test
   void concurrencyAtOrAboveTheBoundGetsOneThread() {
-    ParallelismBudget budget = new ParallelismBudget(CORES);
+    ParallelismBudget budget = new ParallelismBudget(CORES, CORES);
 
     assertEquals(1, budget.budgetFor(CORES));
     assertEquals(1, budget.budgetFor(CORES + 1));
@@ -35,7 +73,7 @@ class ParallelismBudgetTest {
 
   @Test
   void noSearchesGetsEveryThreadRatherThanDividingByZero() {
-    ParallelismBudget budget = new ParallelismBudget(CORES);
+    ParallelismBudget budget = new ParallelismBudget(CORES, CORES);
 
     assertEquals(CORES, budget.budgetFor(0));
     assertEquals(CORES, budget.budgetFor(-1));
@@ -44,13 +82,13 @@ class ParallelismBudgetTest {
   @Test
   void roundsDownRatherThanUp() {
     // Seven searches on 48 cores get 6 threads each, not 7, which would oversubscribe.
-    assertEquals(6, new ParallelismBudget(CORES).budgetFor(7));
+    assertEquals(6, new ParallelismBudget(CORES, CORES).budgetFor(7));
   }
 
   /** The invariant the budget exists to hold. */
   @Test
   void budgetTimesConcurrencyStaysWithinTheBound() {
-    ParallelismBudget budget = new ParallelismBudget(CORES);
+    ParallelismBudget budget = new ParallelismBudget(CORES, CORES);
     for (int concurrency = 1; concurrency <= CORES; concurrency++) {
       int threads = budget.budgetFor(concurrency);
       assertTrue(
@@ -61,13 +99,13 @@ class ParallelismBudgetTest {
 
   @Test
   void startsAtTheFullBoundSoAnIdleEngineUsesEveryCore() {
-    assertEquals(CORES, new ParallelismBudget(CORES).budget());
+    assertEquals(CORES, new ParallelismBudget(CORES, CORES).budget());
   }
 
   /** A structure can be built while other searches run, so registering must also be exclusive. */
   @Test
   void registeringAppliesTheBudgetExclusively() {
-    ParallelismBudget budget = new ParallelismBudget(CORES);
+    ParallelismBudget budget = new ParallelismBudget(CORES, CORES);
     List<String> exclusiveCalls = new ArrayList<>();
     attachThen(
         budget,
@@ -89,7 +127,7 @@ class ParallelismBudgetTest {
 
   @Test
   void registeringAppliesTheCurrentBudgetImmediately() {
-    ParallelismBudget budget = new ParallelismBudget(CORES);
+    ParallelismBudget budget = new ParallelismBudget(CORES, CORES);
     List<Integer> applied = new ArrayList<>();
 
     budget.onChange(applied::add);
@@ -99,7 +137,7 @@ class ParallelismBudgetTest {
 
   @Test
   void updateAppliesANewBudgetExclusively() {
-    ParallelismBudget budget = new ParallelismBudget(CORES);
+    ParallelismBudget budget = new ParallelismBudget(CORES, CORES);
     List<String> exclusiveCalls = new ArrayList<>();
     attachThen(
         budget,
@@ -125,7 +163,7 @@ class ParallelismBudgetTest {
 
   @Test
   void updateLeavesAnUnchangedBudgetAlone() {
-    ParallelismBudget budget = new ParallelismBudget(CORES);
+    ParallelismBudget budget = new ParallelismBudget(CORES, CORES);
     List<Integer> applied = new ArrayList<>();
     budget.onChange(applied::add);
     applied.clear();
@@ -141,7 +179,7 @@ class ParallelismBudgetTest {
 
   @Test
   void rebudgetsWhileAtLeastOneEngineIsAttached() {
-    ParallelismBudget budget = new ParallelismBudget(CORES);
+    ParallelismBudget budget = new ParallelismBudget(CORES, CORES);
 
     budget.attach(() -> 1, Runnable::run);
     budget.attach(() -> 1, Runnable::run);
@@ -163,7 +201,7 @@ class ParallelismBudgetTest {
 
   @Test
   void detachingMoreOftenThanAttachingDoesNothing() {
-    ParallelismBudget budget = new ParallelismBudget(CORES);
+    ParallelismBudget budget = new ParallelismBudget(CORES, CORES);
 
     budget.detach();
     budget.attach(() -> 1, Runnable::run);
@@ -176,7 +214,7 @@ class ParallelismBudgetTest {
 
   @Test
   void anUnattachedBudgetStaysAtItsFullValue() {
-    ParallelismBudget budget = new ParallelismBudget(CORES);
+    ParallelismBudget budget = new ParallelismBudget(CORES, CORES);
 
     assertFalse(budget.isRebudgeting());
     assertEquals(CORES, budget.budget());
@@ -184,7 +222,7 @@ class ParallelismBudgetTest {
 
   @Test
   void updateTracksConcurrencyUpAndBackDown() {
-    ParallelismBudget budget = new ParallelismBudget(CORES);
+    ParallelismBudget budget = new ParallelismBudget(CORES, CORES);
     List<Integer> applied = new ArrayList<>();
     budget.onChange(applied::add);
     applied.clear();

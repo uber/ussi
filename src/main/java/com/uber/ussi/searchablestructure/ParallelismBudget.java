@@ -21,15 +21,25 @@ import javax.annotation.Nullable;
  * whose thread count is a process-global setting cannot, because such a setting is shared by every
  * search in flight and is expensive to change; it registers with {@link #onChange} instead and is
  * called while no search is running.
+ *
+ * <p>The two counts are divided out of different numbers of cores. Work handed to {@link
+ * SearchThreads} waits in a queue between its turns and spreads over every core the machine has. A
+ * process-global thread count belongs to a library holding threads of its own, which occupy their
+ * cores for as long as the setting stands, and such threads gain nothing past the cores of one
+ * socket that {@link ProcessorTopology} reports.
  */
 public final class ParallelismBudget {
 
   private static final long REBUDGET_INTERVAL_MILLIS = 1_000;
 
   private static final ParallelismBudget SHARED =
-      new ParallelismBudget(Math.max(1, Runtime.getRuntime().availableProcessors()));
+      new ParallelismBudget(
+          Math.max(1, Runtime.getRuntime().availableProcessors()),
+          ProcessorTopology.getNumCoresPerSocket());
 
   private final int maxThreadsPerSearch;
+  private final int maxNumSharedThreads;
+  private volatile int numSharedThreads;
   private volatile int budget;
   private volatile IntConsumer onChange = threads -> {};
   // Until an engine attaches there are no searches, so running a change inline is already
@@ -38,12 +48,18 @@ public final class ParallelismBudget {
   private int attachments;
   @Nullable private ScheduledExecutorService rebudgeter;
 
-  ParallelismBudget(int maxThreadsPerSearch) {
+  ParallelismBudget(int maxThreadsPerSearch, int maxNumSharedThreads) {
     if (maxThreadsPerSearch < 1) {
       throw new IllegalArgumentException("maxThreadsPerSearch must be >= 1.");
     }
+    if (maxNumSharedThreads < 1 || maxNumSharedThreads > maxThreadsPerSearch) {
+      throw new IllegalArgumentException(
+          "maxNumSharedThreads must be >= 1 and <= maxThreadsPerSearch.");
+    }
     this.maxThreadsPerSearch = maxThreadsPerSearch;
+    this.maxNumSharedThreads = maxNumSharedThreads;
     this.budget = maxThreadsPerSearch;
+    this.numSharedThreads = maxNumSharedThreads;
   }
 
   public static ParallelismBudget shared() {
@@ -67,7 +83,7 @@ public final class ParallelismBudget {
     exclusively.accept(
         () -> {
           this.onChange = applier;
-          applier.accept(budget);
+          applier.accept(numSharedThreads);
         });
   }
 
@@ -125,16 +141,23 @@ public final class ParallelismBudget {
     return Math.max(1, maxThreadsPerSearch / Math.max(1, concurrency));
   }
 
-  /** Re-derives the budget from the concurrency just observed. */
+  /** Process-global threads for the given number of concurrent searches. */
+  int getNumSharedThreadsFor(int concurrency) {
+    return Math.max(1, maxNumSharedThreads / Math.max(1, concurrency));
+  }
+
+  /** Re-derives both counts from the concurrency just observed. */
   void update(int concurrency) {
-    int updated = budgetFor(concurrency);
-    if (updated == budget) {
+    int updatedBudget = budgetFor(concurrency);
+    int updatedNumSharedThreads = getNumSharedThreadsFor(concurrency);
+    if (updatedBudget == budget && updatedNumSharedThreads == numSharedThreads) {
       return;
     }
     exclusively.accept(
         () -> {
-          onChange.accept(updated);
-          budget = updated;
+          onChange.accept(updatedNumSharedThreads);
+          budget = updatedBudget;
+          numSharedThreads = updatedNumSharedThreads;
         });
   }
 }

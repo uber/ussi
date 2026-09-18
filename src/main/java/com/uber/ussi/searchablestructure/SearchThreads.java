@@ -17,17 +17,14 @@ import java.util.function.IntConsumer;
 /**
  * The threads one search may use, and the order they are given out in.
  *
- * <p>Every structure that divides a search hands its work units here, so that the threads in flight
- * for
- * one search stay within the budget {@link ParallelismBudget} allows it and the searches in flight
- * together stay within the cores. A structure holding threads of its own would spend a budget the
- * others had already been promised.
+ * <p>Every structure that divides a search hands its work units here, so that the searches in
+ * flight together stay within the cores. A structure holding threads of its own would spend cores
+ * the others had already been promised.
  *
- * <p>A search runs as many pieces at a time as its budget allows and the rest wait their turn.
- * Waiting in turn would otherwise cost a search its place, since one returning for its next work
- * units
- * would queue behind every search that arrived in the meantime, so the pool serves by the ticket a
- * search takes once rather than by the order work units were submitted.
+ * <p>A search hands out every work unit it has. The pool holds one thread per core, so work units
+ * wait in it while the cores are busy, and it serves them by the ticket a search takes once rather
+ * than by the order they were submitted. A search therefore keeps its place while it is being
+ * served, instead of queueing behind the searches that arrived in the meantime.
  *
  * <p>The calling thread runs one work unit of every turn rather than only waiting. This uses the
  * thread
@@ -91,17 +88,13 @@ public final class SearchThreads {
     }
     Long queryTicket = CURRENT_TICKET.get();
     long ticket = queryTicket != null ? queryTicket : NEXT_TICKET.getAndIncrement();
-    int numAtOnce = Math.max(1, Math.min(numWorkUnits, ParallelismBudget.shared().budget()));
-    for (int firstOfTurn = 0; firstOfTurn < numWorkUnits; firstOfTurn += numAtOnce) {
-      int afterTurn = Math.min(numWorkUnits, firstOfTurn + numAtOnce);
-      List<Future<?>> handedOff = new ArrayList<>(afterTurn - firstOfTurn - 1);
-      for (int workUnitNumber = firstOfTurn + 1; workUnitNumber < afterTurn; workUnitNumber++) {
-        int handedOffWorkUnit = workUnitNumber;
-        handedOff.add(submitWorkUnit(ticket, () -> workUnit.accept(handedOffWorkUnit)));
-      }
-      workUnit.accept(firstOfTurn);
-      awaitWorkUnits(handedOff);
+    List<Future<?>> handedOff = new ArrayList<>(numWorkUnits - 1);
+    for (int workUnitNumber = 1; workUnitNumber < numWorkUnits; workUnitNumber++) {
+      int handedOffWorkUnit = workUnitNumber;
+      handedOff.add(submitWorkUnit(ticket, () -> workUnit.accept(handedOffWorkUnit)));
     }
+    workUnit.accept(0);
+    awaitWorkUnits(handedOff);
   }
 
   /** Queues a work unit to be served at its search's ticket rather than at its own submission. */

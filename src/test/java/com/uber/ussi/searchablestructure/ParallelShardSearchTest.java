@@ -3,6 +3,7 @@ package com.uber.ussi.searchablestructure;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -53,6 +54,41 @@ class ParallelShardSearchTest {
             1, numSearchesByShard.get(shard), "numShards=" + numShards + " shard=" + shard);
       }
     }
+  }
+
+  @Test
+  void handsOutEveryShardAtOnceEvenWhenTheBudgetIsOneThread() {
+    // A pool of one thread runs one shard at a time whatever it is handed.
+    assumeTrue(Runtime.getRuntime().availableProcessors() > 1, "needs more than one processor");
+    int numShards = 4;
+    AtomicInteger numShardsRunning = new AtomicInteger();
+    AtomicInteger maxNumShardsRunningAtOnce = new AtomicInteger();
+    ParallelismBudget.shared().update(Integer.MAX_VALUE);
+    try {
+      assertEquals(1, ParallelismBudget.shared().budget(), "the budget under this concurrency");
+
+      ParallelShardSearch.search(
+          numShards,
+          ROWS_PER_SHARD,
+          0.0f,
+          (shard, min) -> {
+            maxNumShardsRunningAtOnce.accumulateAndGet(
+                numShardsRunning.incrementAndGet(), Math::max);
+            try {
+              Thread.sleep(SLOW_SHARD_MILLIS);
+            } catch (InterruptedException e) {
+              Thread.currentThread().interrupt();
+            }
+            numShardsRunning.decrementAndGet();
+            return rowsOfShard(shard, numShards);
+          });
+    } finally {
+      ParallelismBudget.shared().update(1);
+    }
+
+    assertTrue(
+        maxNumShardsRunningAtOnce.get() > 1,
+        "ran " + maxNumShardsRunningAtOnce.get() + " shards at once under a budget of one thread");
   }
 
   @Test

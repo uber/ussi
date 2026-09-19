@@ -88,10 +88,10 @@ enough of, and may decline to score any row beneath it: once the merge holds its
 full complement of results, a weaker row cannot reach the answer, so scoring it
 is wasted work. That minimum similarity starts at whatever the caller asked for,
 rises as structures return results, and never falls, which is what lets a
-structure treat it as a bound rather than a hint. It sits one step below the
+structure treat it as a bound rather than a hint. It is one step below the
 weakest result held, so a row scoring exactly as well still qualifies. Passing
-it costs nothing to add, because every structure already prunes on a minimum
-similarity to answer a minimum similarity search. A nearest-neighbour search
+it requires no additional mechanism, because every structure already prunes on
+a minimum similarity to answer a minimum similarity search. A nearest-neighbour search
 used to pass zero.
 
 Order therefore matters, and the structures are visited oldest first. Caches
@@ -205,24 +205,25 @@ they govern differs:
   first one gets, and a host of one socket of single-threaded cores gives the
   two counts the same number.
 
-Only the second count costs anything to move. OpenBLAS deadlocks or corrupts
+Only the second count is expensive to modify. OpenBLAS deadlocks or corrupts
 memory when such a setting changes while a call is dispatching work, so it is
-applied with no search running, which means waiting for the searches in flight
-to finish and holding back those arriving behind them. Those searches are every
+applied with no search running, which requires draining the concurrent searches
+and admitting none behind them until it is applied. Those searches are every
 search in the process, including searches of structures holding no such count
-of their own, so three things keep it rare. A process where no structure holds
-a process-global count never reaches that moment at all, which covers every
-engine built without a dense index. It is otherwise applied only when it
-differs from the count in force, so the many concurrency changes that move the
-first count and not the second cost nothing. And the searches in flight are
-read once a second but averaged over ten
-readings before either count moves, which bounds how often a change can arrive
-and smooths a workload whose searches overlap only occasionally.
+of their own, so three conditions make the drain rare. A process in which no
+structure holds a process-global count is never drained at all, which covers
+every engine built without a dense index. Otherwise the count is applied only
+when it differs from the one in effect, so the many concurrency changes that
+move the first count and not the second incur no cost. And the concurrent
+searches are sampled once a second but averaged over ten samples before either
+count changes, which bounds the update rate and attenuates the variance of a
+workload whose searches overlap only occasionally.
 
-Averaging rather than taking the highest reading is what makes that window
-safe. A maximum grows with the window it is taken over, so a ten-second maximum
-would read a machine serving one long search at a time as though it served
-several, and would divide the machine among searches that never ran together.
+Averaging rather than taking the maximum is what makes that window sound. The
+maximum over an interval increases with the length of the interval, so a
+ten-second maximum would estimate several concurrent searches on a process
+serving one long search at a time, and would divide the machine among searches
+that were never concurrent.
 
 A scan is the search that divides most readily, since rows score independently
 and only the best few survive. `ParallelRowScan` gives each range of the row

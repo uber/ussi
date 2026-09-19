@@ -94,7 +94,7 @@ public final class ParallelismBudget {
    *
    * <p>Applied with no search running, because registration happens whenever a structure is built
    * and a structure can be built while other searches are running. Such a setting is shared by
-   * every concurrent search, so changing it underneath one is not safe.
+   * every concurrent search, so modifying it during one is unsafe.
    */
   public synchronized void onChange(IntConsumer applier) {
     exclusively.accept(
@@ -167,13 +167,14 @@ public final class ParallelismBudget {
   }
 
   /**
-   * Takes one reading of the searches in flight, and re-derives both counts once {@link
+   * Takes one reading of the concurrent searches, and re-derives both counts once {@link
    * #NUM_SAMPLES_PER_UPDATE} readings are in.
    *
-   * <p>The readings are averaged rather than maximised. A maximum is biased upward by however long
-   * it is taken over, so averaging keeps the window a question of cost rather than of what is
-   * being measured: a machine serving one long search at a time reads as one search, however many
-   * readings go into the average.
+   * <p>The readings are averaged rather than maximised. A maximum over an interval is biased
+   * upward by the length of that interval, so the estimate it yields depends on the sampling
+   * window rather than on the load. The mean is invariant to the window: a process serving one
+   * long search at a time estimates one concurrent search under any number of readings, so the
+   * window is chosen for the cost of updating alone.
    */
   void sample(int numConcurrentSearches) {
     numConcurrentSearchesSampled += Math.max(0, numConcurrentSearches);
@@ -192,14 +193,14 @@ public final class ParallelismBudget {
    *
    * <p>The threads one search may use is read by each search for itself, so it is assigned here
    * and needs no moment without searches. A process-global thread count is one setting every
-   * search in flight shares, and a library holding one may deadlock or corrupt memory when it
-   * moves while a call is dispatching work, so it is applied with no search running and only when
-   * it differs from the count already in force.
+   * concurrent search shares, and a library holding one may deadlock or corrupt memory when it is
+   * modified while a call is dispatching work, so it is applied with no search running and only
+   * when it differs from the count already in effect.
    *
-   * <p>A moment without searches stops every search in the process, including those of structures
-   * holding no process-global count of their own. It is therefore reached only when a count is
-   * registered to apply and its value has moved. A process where nothing registers one, and a
-   * process whose load leaves the count where it stands, never stop.
+   * <p>Reaching a moment without searches suspends every search in the process, including those
+   * of structures holding no process-global count of their own. It is therefore reached only when
+   * such a count is registered and its value has changed. A process in which none is registered,
+   * and a process whose load leaves the count unchanged, are never suspended.
    */
   void update(int numConcurrentSearches) {
     numThreadsPerSearch = getNumThreadsPerSearchFor(numConcurrentSearches);

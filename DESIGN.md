@@ -160,9 +160,9 @@ from the record it has already read rather than from a second lookup.
 `RowStoringIndex.isDeleted()` recognises a tombstone. A structure holding its
 own form of a row records the tombstone there too: the matrix index in the
 unilateral values it scores against, and an inverted index in the indexed form
-verification reads. The unilateral values an inverted index orders its lists by are left
-alone, since candidate generation prunes against them and an order it cannot
-compare would stop pruning working.
+verification reads. The unilateral values an inverted index orders its lists by
+are left alone, since candidate generation prunes against them and an order it
+cannot compare would stop pruning working.
 
 An update is a delete of the old version followed by an insert of the new one
 under the same `rowNum`, so the active cache always holds the latest version.

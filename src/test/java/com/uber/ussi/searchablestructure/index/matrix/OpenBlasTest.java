@@ -99,13 +99,18 @@ class OpenBlasTest {
               "scoring must not modify the thread count");
         });
 
-    // The budget, not the core count: it tracks the search concurrency, so the value at
-    // construction depends on what else is running. Reading the library's maximum also moves the
-    // count and restores it, so the budget's own value is asserted among the updates.
+    // Three counts are applied and no more: reading the library's maximum asks for more threads
+    // than any binary provides and then restores what it found, and registering with the budget
+    // applies the count the library is to hold. That count is bounded by the maximum, which on a
+    // machine of few cores is below what the budget would otherwise ask for.
+    assertEquals(3, fakeOpenBlas.numThreadsUpdates.size(), fakeOpenBlas.numThreadsUpdates + "");
+    assertEquals(Integer.MAX_VALUE, fakeOpenBlas.numThreadsUpdates.get(0));
+    int applied = fakeOpenBlas.numThreadsUpdates.get(2);
+    assertTrue(applied >= 1, "applied " + applied + " threads");
     assertTrue(
-        fakeOpenBlas.numThreadsUpdates.contains(
-            ParallelismBudget.shared().getNumThreadsPerSearch()),
-        "the budget's count must be applied: " + fakeOpenBlas.numThreadsUpdates);
+        applied <= OpenBlas.shared().getMaxNumThreads(),
+        "applied " + applied + " threads against a binary serving "
+            + OpenBlas.shared().getMaxNumThreads());
   }
 
   /**

@@ -175,10 +175,9 @@ check before using: OpenBLAS keeps one memory buffer per thread inside the
 library, and past that count its allocator faults rather than failing, so enough
 concurrent dense searches abort the process rather than merely slowing it down.
 The supply the shipped binaries are built with is above the core count on the
-machines tested, so a bound of the cores keeps them inside it. That is not
-relied upon: `NativeBlasAdmission` bounds the callers of a native library by
-the lesser of the cores and what the loaded binary reports, so a machine whose
-cores outnumber the supply is bounded by the supply.
+machines tested, so a bound of the cores keeps them inside it. The dense scorer
+does not rely on that either, since it serializes its calls into the library
+and only one thread is ever inside it.
 
 ### Threads Within One Search
 
@@ -197,9 +196,10 @@ they govern differs:
   are busy and spreads over every core, so every core it may use is worth
   having. Every structure that divides its own search reads this one.
 - **A process-global thread count**, held by a native library rather than by
-  any one structure, takes the cores of *one socket*, divided by the concurrent
-  searches. Such a library keeps threads of its own and occupies its
-  cores for as long as the setting stands, and those threads gain nothing past
+  any one structure, takes the cores of *one socket* and is not divided at all.
+  Such a library serializes its callers, so one call holds the whole width and
+  the searches behind it wait, and dividing would narrow every call exactly as
+  load rises. Its threads gain nothing past
   one socket: two hardware threads of a core share that core's execution units,
   and a socket reaches another socket's memory over a link. `ProcessorTopology`
   reads the socket count and the widest core from the kernel and bounds the
@@ -208,9 +208,11 @@ they govern differs:
   first one gets, and a host of one socket of single-threaded cores gives the
   two counts the same number.
 
-Only the second count is expensive to modify. A library holding one may
-deadlock or corrupt memory when it changes while a call is dispatching work, as
-OpenBLAS does behind the native dense scorer, so it is
+Only the second count is expensive to modify, and it is now constant, so it is
+applied once when its holder registers and never again. The machinery that
+applies it remains because the constraint has not gone away: a library holding
+such a count may deadlock or corrupt memory when it changes while a call is
+dispatching work, as OpenBLAS does behind the native dense scorer, so it is
 applied with no search running, which requires draining the concurrent searches
 and admitting none behind them until it is applied. Those searches are every
 search in the process, including searches of structures holding no such count
@@ -532,23 +534,47 @@ determined once per process, since the probe loads native code and a failing
 load would otherwise be repeated for every index built.
 `NearestNeighborSearchIndex.close()` releases any native dense-matrix memory.
 
+### Scoring Several Queries At Once
+
+A multiply against the whole matrix costs about what reading the matrix costs,
+so queries that share one multiply share that cost.
+`BatchedMatrixDotProductScorer` therefore scores together whatever queries are
+waiting: a caller enqueues its query and then contends to perform the multiply,
+whichever caller wins takes everything enqueued at that instant, and the rest
+wait only for the multiply already running. No query ever waits for a query
+that has not arrived, so the combined count measures the offered load rather
+than a configured window, it is one when the machine is idle, and there is no
+arrival timer to tune.
+
+One query does not repay the packing a matrix-matrix multiply performs first,
+so a combination of one is multiplied as a vector instead. That single branch
+is what makes the arrangement free at low load: measured against dividing the
+socket between concurrent callers, it ties at one concurrent search on both
+shapes tested and wins from sixteen upward, by 6.4 times the throughput and 5.5
+times the tail latency at 192 concurrent searches over 200k rows of 512
+dimensions.
+
+Serializing callers is what lets one multiply hold the socket, and it is also
+why the process-global thread count is no longer divided. Serializing without
+combining is worse than dividing, since one full-width query is then a
+single-server queue whose capacity load quickly exceeds; the gain comes from
+combining, and holding the full width is what makes a combination worth
+performing.
+
+A chunk is multiplied a slice of rows at a time rather than whole, because the
+products of one slice are held for every query in the combination while a chunk
+holds as many rows as a Java array can index. Slicing bounds that buffer by the
+slice rather than by the matrix, and the multiply still reads each row once.
+
 The native scorer is written against `NativeBlas`, not against OpenBLAS.
 `NativeMatrixDotProductScorer` allocates the buffers, reuses them across
-scores, traverses the matrix one chunk at a time and admits its callers, and
-none of that depends on the library in use. `OpenBlas` supplies the rest: which
-platforms carry a binary, whether it loads, the thread count the library
-maintains for the process, and the bound on concurrent callers its per-thread
-buffers impose. Supporting a further library requires implementing that
+scores, and traverses the matrix slice by slice, none of which depends on the
+library in use. `OpenBlas` supplies the rest: which platforms carry a binary,
+whether it loads, the thread count the library maintains for the process, and
+the two multiplies. Supporting a further library requires implementing that
 interface and nothing else. The interface is parameterised by the buffer handle
 it allocates, so a library addressing memory this process cannot dereference is
 supported on the same terms as one addressing memory it can.
-
-`NativeBlasAdmission` bounds the callers inside a library and admits them in
-arrival order. Where a library holds a fixed resource per calling thread, as
-OpenBLAS does with its buffers, the bound is a correctness requirement rather
-than a throughput choice, and a library rationing nothing is bounded by
-`Integer.MAX_VALUE`. One instance covers a whole library rather than one
-matrix, because the resource it rations is the library's.
 
 Scoring several waiting queries in one matrix-matrix multiply was benchmarked on
 x86-64 and ARM64 and not adopted. The appeal is that a batch reads the matrix

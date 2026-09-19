@@ -29,6 +29,27 @@ final class MatrixDotProductScorers {
         }
       };
 
+  /**
+   * Preferred over OpenBLAS where a device is present, since it holds the matrix in the device's
+   * memory and returns only the rows a query keeps. Untuned.
+   */
+  private static final Provider CUDA =
+      new Provider() {
+        @Override
+        public boolean isAvailable() {
+          return CudaMatrixDotProductScorer.isAvailable();
+        }
+
+        @Override
+        public MatrixDotProductScorer create(DenseMatrix matrix, MatrixRows rows) {
+          return new CudaMatrixDotProductScorer(
+              matrix,
+              rows,
+              Math.max(1, Runtime.getRuntime().availableProcessors()),
+              /* maxResults */ 1_024);
+        }
+      };
+
   private static final Provider OPEN_BLAS =
       new Provider() {
         @Override
@@ -43,7 +64,7 @@ final class MatrixDotProductScorers {
       };
 
   /** Most preferred first. */
-  private static final List<Provider> PREFERENCE_ORDER = List.of(OPEN_BLAS, JAVA);
+  private static final List<Provider> PREFERENCE_ORDER = List.of(CUDA, OPEN_BLAS, JAVA);
 
   private MatrixDotProductScorers() {}
 

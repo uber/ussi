@@ -1,0 +1,110 @@
+/*
+ * An illustration of a dense scorer that computes where this process cannot read. It is not
+ * compiled, run, tested or tuned, and the calls into a device library are named rather than
+ * made, because which library is used decides them.
+ *
+ * To make it real: declare it in com.uber.ussi.searchablestructure.index.matrix, since the types
+ * it extends are visible only there, add the device library as a dependency, and add a provider
+ * for it to MatrixDotProductScorers.PREFERENCE_ORDER ahead of OpenBLAS.
+ */
+package com.uber.ussi.searchablestructure.index.matrix;
+
+import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
+import com.uber.ussi.utils.BoundedSizeMaxHeap;
+
+/**
+ * A dense matrix-vector dot-product scorer that holds the matrix in a device's memory.
+ *
+ * <p>The matrix is copied there once and stays for the life of the scorer, so the device's
+ * memory bounds the rows an index may hold. A query's values are copied in, the batch is
+ * multiplied, and the rows it keeps are reduced there, so what returns is those rows rather than
+ * a value for every row.
+ */
+final class DeviceMatrixDotProductScorer
+    extends BatchedMatrixDotProductScorer<DeviceMatrixDotProductScorer.KeptRows> {
+
+  /**
+   * Rows that survived the reduction, which is a power of two at least as large as the results
+   * asked for. Held where the host can read them, since only these are copied back.
+   */
+  static final class KeptRows {
+    private final long[] rowNums;
+    private final float[] similarities;
+    private int numKept;
+
+    KeptRows(int capacity) {
+      this.rowNums = new long[capacity];
+      this.similarities = new float[capacity];
+    }
+  }
+
+  private final long deviceMatrix;
+  private final long deviceRowUniValues;
+  private final int maxNumKeptRows;
+
+  DeviceMatrixDotProductScorer(
+      DenseMatrix matrix, MatrixRows rows, int maxNumQueriesInABatch, int maxResults) {
+    super(matrix, rows, maxNumQueriesInABatch);
+    // Allocate on the device and copy the matrix chunk by chunk. The unilateral values go too,
+    // since the similarity is derived from them and a deleted row's is not a number, which is
+    // how the reduction excludes it.
+    this.deviceMatrix = 0;
+    this.deviceRowUniValues = 0;
+    this.maxNumKeptRows = Integer.highestOneBit(Math.max(1, maxResults - 1)) * 2;
+  }
+
+  @Override
+  protected KeptRows newMultiplyResult() {
+    return new KeptRows(maxNumKeptRows);
+  }
+
+  @Override
+  protected KeptRows[] newMultiplyResults(int numResults) {
+    return new KeptRows[numResults];
+  }
+
+  @Override
+  protected void multiplyOneQuery(float[] queryValues, RowSelection selection, KeptRows into) {
+    // Copy the query to the device, multiply the matrix by it, reduce, and copy back what
+    // survived. One query is a matrix-vector multiply.
+    multiplyQueries(new float[][] {queryValues}, new RowSelection[] {selection},
+        new KeptRows[] {into}, 1);
+  }
+
+  @Override
+  protected void multiplyQueries(
+      float[][] queryValues, RowSelection[] selections, KeptRows[] into, int numQueries) {
+    // Copy the queries to the device as one numQueries by dimension block.
+    //
+    // Multiply the matrix by the block, which is a matrix-matrix multiply of the queries by the
+    // transpose of the rows, so each query's products are contiguous. Keep the rows in ranges,
+    // as the host scorer does, so the products of one range fit where the reduction reads them.
+    //
+    // Reduce each query's products where they are: compare rows pairwise, on whether the
+    // similarity derived from the row's unilateral value is a number and then on that
+    // similarity, and keep the better of each pair. Halving repeatedly leaves the power of two
+    // at or above the results asked for, and only those are copied back into into[query].
+    //
+    // The similarity is the comparator's arithmetic, reimplemented for the device. A namespace
+    // configured with a comparator this scorer does not implement is rejected when it is built,
+    // not scored wrongly here.
+    throw new UnsupportedOperationException("An illustration, not an implementation.");
+  }
+
+  @Override
+  protected void addRows(
+      KeptRows result, RowSelection selection, BoundedSizeMaxHeap<RowNumAndSimilarity> rows) {
+    // The rows that survived the reduction, offered to the heap the base class owns, which
+    // applies the minimum and the bound. Nothing per row is held on this side.
+    for (int kept = 0; kept < result.numKept; ++kept) {
+      if (result.similarities[kept] >= selection.getMinSimilarity()) {
+        rows.add(new RowNumAndSimilarity(result.rowNums[kept], result.similarities[kept]));
+      }
+    }
+  }
+
+  @Override
+  protected void releaseResources() {
+    // Free the matrix and the unilateral values on the device. Called once.
+  }
+}

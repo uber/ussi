@@ -208,10 +208,14 @@ they govern differs:
 Only the second count costs anything to move. OpenBLAS deadlocks or corrupts
 memory when such a setting changes while a call is dispatching work, so it is
 applied with no search running, which means waiting for the searches in flight
-to finish and holding back those arriving behind them. Two things keep that
-rare. It is applied only when it differs from the count in force, so the many
-concurrency changes that move the first count and not the second cost nothing.
-And the searches in flight are read once a second but averaged over ten
+to finish and holding back those arriving behind them. Those searches are every
+search in the process, including searches of structures holding no such count
+of their own, so three things keep it rare. A process where no structure holds
+a process-global count never reaches that moment at all, which covers every
+engine built without a dense index. It is otherwise applied only when it
+differs from the count in force, so the many concurrency changes that move the
+first count and not the second cost nothing. And the searches in flight are
+read once a second but averaged over ten
 readings before either count moves, which bounds how often a change can arrive
 and smooths a workload whose searches overlap only occasionally.
 

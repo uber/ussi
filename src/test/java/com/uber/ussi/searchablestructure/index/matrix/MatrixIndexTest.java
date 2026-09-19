@@ -324,6 +324,23 @@ class MatrixIndexTest {
     assertEquals(1, index.size());
   }
 
+  /**
+   * The rows scored one at a time are ranked as the bulk multiply ranks them, whatever order the
+   * minimum rises in as the heap fills.
+   */
+  @Test
+  void scoringRowOneAtATimeRanksThemAsTheBulkMultiplyDoes() {
+    MatrixIndex index = new MatrixIndex(config(), rows(), metadata());
+    LongTermsAndValues query = denseVector(1f, 1f);
+
+    List<RowNumAndSimilarity> bulk = index.getNearestNeighborRowNums(10, query, null);
+    List<RowNumAndSimilarity> oneAtATime =
+        index.getNearestNeighborRowNums(10, query, new MetaFilter(Map.of()));
+
+    assertEquals(sortedRowNums(bulk), sortedRowNums(oneAtATime));
+    assertEquals(bulk.size(), oneAtATime.size());
+  }
+
   @Test
   void constructorRejectsNonDenseRows() {
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();

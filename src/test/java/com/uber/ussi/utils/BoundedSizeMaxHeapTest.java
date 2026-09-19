@@ -76,4 +76,32 @@ class BoundedSizeMaxHeapTest {
   private static List<Integer> sortedValues(BoundedSizeMaxHeap<Integer> heap) {
     return Arrays.stream(heap.toArray(new Integer[0])).sorted().toList();
   }
+
+  /** Both lists reach the caller unmodifiable, so neither exposes what the heap still holds. */
+  @Test
+  void neitherReturnedListCanBeModified() {
+    BoundedSizeMaxHeap<Integer> heap = new BoundedSizeMaxHeap<>(3, INTEGER_ORDER);
+    heap.add(2);
+    heap.add(3);
+
+    assertThrows(UnsupportedOperationException.class, () -> heap.toList().add(4));
+    assertThrows(
+        UnsupportedOperationException.class, () -> heap.toSortedList(INTEGER_ORDER).add(4));
+    assertThrows(
+        UnsupportedOperationException.class, () -> heap.toSortedList(INTEGER_ORDER).set(0, 4));
+  }
+
+  /** Sorting what the heap returns must not disturb what the heap still holds. */
+  @Test
+  void sortingTheReturnedListLeavesTheHeapAlone() {
+    BoundedSizeMaxHeap<Integer> heap = new BoundedSizeMaxHeap<>(3, INTEGER_ORDER);
+    heap.add(1);
+    heap.add(3);
+    heap.add(2);
+
+    List<Integer> sorted = heap.toSortedList(INTEGER_ORDER);
+
+    assertEquals(List.of(1, 2, 3), sorted);
+    assertEquals(List.of(1, 2, 3), heap.toSortedList(INTEGER_ORDER), "the heap must be reusable");
+  }
 }

@@ -2,6 +2,8 @@
 package com.uber.ussi.utils;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.PriorityQueue;
@@ -62,16 +64,24 @@ public final class BoundedSizeMaxHeap<T> {
    * matters.
    */
   public List<T> toList() {
-    if (priorityQueue.isEmpty()) {
-      return List.copyOf(unsortedCollection);
-    }
-    return List.copyOf(priorityQueue);
+    return List.copyOf(retainedElements());
   }
 
+  /**
+   * Returns the retained elements in the given order.
+   *
+   * <p>The elements are copied once, into the list that is sorted and returned, since that list
+   * is created here and reaches the caller only as an unmodifiable view of itself.
+   */
   public List<T> toSortedList(Comparator<? super T> outputOrder) {
-    List<T> sortedElements = new ArrayList<>(toList());
+    List<T> sortedElements = new ArrayList<>(retainedElements());
     sortedElements.sort(outputOrder);
-    return List.copyOf(sortedElements);
+    return Collections.unmodifiableList(sortedElements);
+  }
+
+  /** The elements kept so far, in whichever of the two holds them. */
+  private Collection<T> retainedElements() {
+    return priorityQueue.isEmpty() ? unsortedCollection : priorityQueue;
   }
 
   public T peek() {

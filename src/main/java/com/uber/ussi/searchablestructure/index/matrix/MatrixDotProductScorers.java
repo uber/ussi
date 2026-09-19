@@ -1,50 +1,82 @@
 /* AUTHOR: Shijie Lu (shijie@uber.com), Shalini Kedlaya (skedlaya@uber.com), Ahmed Metwally (ametwally@uber.com) */
 package com.uber.ussi.searchablestructure.index.matrix;
 
-import java.util.function.Supplier;
+import java.util.List;
 
-/** Chooses the dense scorer to use and checks the inputs both of them require. */
+/**
+ * Chooses which dense scorer to build, and checks the query every one of them requires.
+ *
+ * <p>The scorers are tried in the order of {@link #PREFERENCE_ORDER}, and the first whose
+ * implementation is available on this machine is built. A scorer that turns out to be
+ * unavailable only when it is built, which is how a missing native library presents itself, is
+ * skipped as though it had never claimed to be available, so the order continues past it.
+ *
+ * <p>Adding a scorer is adding a {@link Provider} to that list at the position it deserves. The
+ * last entry needs no native code and is always available, so the list always ends somewhere.
+ */
 final class MatrixDotProductScorers {
+
+  private static final Provider JAVA =
+      new Provider() {
+        @Override
+        public boolean isAvailable() {
+          return true;
+        }
+
+        @Override
+        public MatrixDotProductScorer create(DenseMatrix matrix, MatrixRows rows) {
+          return new JavaMatrixDotProductScorer(matrix, rows);
+        }
+      };
+
+  private static final Provider OPEN_BLAS =
+      new Provider() {
+        @Override
+        public boolean isAvailable() {
+          return OpenBlas.isAvailable();
+        }
+
+        @Override
+        public MatrixDotProductScorer create(DenseMatrix matrix, MatrixRows rows) {
+          return new NativeMatrixDotProductScorer<>(matrix, rows, OpenBlas.shared());
+        }
+      };
+
+  /** Most preferred first. */
+  private static final List<Provider> PREFERENCE_ORDER = List.of(OPEN_BLAS, JAVA);
 
   private MatrixDotProductScorers() {}
 
-  static MatrixDotProductScorer create(DenseMatrix matrix) {
-    return create(
-        matrix, OpenBlas.isAvailable(), () -> OpenBlas.createScorer(matrix, OpenBlas::isAvailable));
+  static MatrixDotProductScorer create(DenseMatrix matrix, MatrixRows rows) {
+    return create(matrix, rows, PREFERENCE_ORDER);
   }
 
   static MatrixDotProductScorer create(
-      DenseMatrix matrix,
-      boolean nativeBlasAvailable,
-      Supplier<MatrixDotProductScorer> nativeScorerSupplier) {
-    if (nativeBlasAvailable) {
+      DenseMatrix matrix, MatrixRows rows, List<Provider> preferenceOrder) {
+    for (Provider provider : preferenceOrder) {
+      if (!provider.isAvailable()) {
+        continue;
+      }
       try {
-        return nativeScorerSupplier.get();
+        return provider.create(matrix, rows);
       } catch (LinkageError e) {
-        return new JavaMatrixDotProductScorer(matrix);
+        continue;
       } catch (RuntimeException e) {
         if (isCausedByLinkageError(e)) {
-          return new JavaMatrixDotProductScorer(matrix);
+          continue;
         }
         throw e;
       }
     }
-    return new JavaMatrixDotProductScorer(matrix);
+    throw new IllegalStateException("No dense scorer is available on this machine.");
   }
 
-  static void validateScoreInputs(
-      DenseMatrix matrix, float[] queryValues, float[] dotProducts) {
+  static void validateQueryLength(DenseMatrix matrix, float[] queryValues) {
     if (queryValues.length != matrix.dimension()) {
       throw new IllegalArgumentException(
           String.format(
               "queryValues length mismatch. Expected %s, got %s.",
               matrix.dimension(), queryValues.length));
-    }
-    if (dotProducts.length != matrix.numRows()) {
-      throw new IllegalArgumentException(
-          String.format(
-              "dotProducts length mismatch. Expected %s, got %s.",
-              matrix.numRows(), dotProducts.length));
     }
   }
 
@@ -57,5 +89,13 @@ final class MatrixDotProductScorers {
       current = current.getCause();
     }
     return false;
+  }
+
+  /** A dense scorer that may or may not be usable on this machine. */
+  interface Provider {
+    /** Whether this machine can run it, which building it may still disprove. */
+    boolean isAvailable();
+
+    MatrixDotProductScorer create(DenseMatrix matrix, MatrixRows rows);
   }
 }

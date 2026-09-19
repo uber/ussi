@@ -566,6 +566,29 @@ products of one slice are held for every query in the combination while a chunk
 holds as many rows as a Java array can index. Slicing bounds that buffer by the
 slice rather than by the matrix, and the multiply still reads each row once.
 
+A scorer returns the rows a query keeps rather than a dot product for every
+row. An implementation computing its products where this process cannot read
+them would otherwise copy one product per row back for every query, which is
+the largest
+transfer a dense query makes and grows with the queries scored together.
+`MatrixRows` carries what choosing needs, the row numbers, their unilateral
+values, the deletions and the comparator's arithmetic, so choosing can happen
+wherever the products are. `HostProductsMatrixDotProductScorer` is the base
+class for an implementation whose multiply leaves the products here, and it
+chooses on the host; an implementation choosing elsewhere extends
+`BatchedMatrixDotProductScorer` directly and returns whatever it kept.
+
+Choosing runs on the thread that asked for the query, not on the thread that
+performed the multiply, so several queries choose at once and overlap the
+following multiply. Moving it into the multiply would serialize the one part of
+a dense query that is already parallel.
+
+`MatrixDotProductScorers` tries the scorers in a stated preference order and
+builds the first whose implementation this machine has, treating one that fails
+to load as one that was never available. Adding a scorer is adding an entry to
+that list, which is the only existing code a further implementation needs to
+touch.
+
 The native scorer is written against `NativeBlas`, not against OpenBLAS.
 `NativeMatrixDotProductScorer` allocates the buffers, reuses them across
 scores, and traverses the matrix slice by slice, none of which depends on the

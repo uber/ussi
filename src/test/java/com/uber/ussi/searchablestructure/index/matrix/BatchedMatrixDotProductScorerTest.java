@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
@@ -12,6 +13,8 @@ import org.junit.jupiter.api.Test;
 /** Combining waiting queries into one multiply, independent of what performs the multiply. */
 class BatchedMatrixDotProductScorerTest {
   private static final float DELTA = 1e-6f;
+  private static final RowSelection SELECTION =
+      new RowSelection(0, Float.NEGATIVE_INFINITY, 10);
 
   @Test
   void rejectsABoundBelowOneQuery() {
@@ -24,12 +27,12 @@ class BatchedMatrixDotProductScorerTest {
   @Test
   void aLoneQueryTakesTheSingleQueryPath() {
     RecordingScorer scorer = new RecordingScorer(TestDenseMatrices.of(new float[] {2f}, 1, 1), 8);
-    float[] dotProducts = new float[1];
 
-    scorer.score(new float[] {3f}, dotProducts);
+    List<RowNumAndSimilarity> kept = scorer.selectRows(new float[] {3f}, SELECTION);
 
     assertEquals(List.of(1), List.copyOf(scorer.numQueriesPerMultiply));
-    assertEquals(6f, dotProducts[0], DELTA, "the single-query path must still score the query");
+    assertEquals(1, kept.size(), "the single-query path must still score the query");
+    assertEquals(6f, kept.get(0).getSimilarity(), DELTA);
     assertEquals(1, scorer.getNumMultiplies());
     assertEquals(1, scorer.getNumQueriesMultiplied());
   }
@@ -52,9 +55,9 @@ class BatchedMatrixDotProductScorerTest {
                 try {
                   start.await();
                   for (int round = 0; round < 100; ++round) {
-                    float[] dotProducts = new float[1];
-                    scorer.score(new float[] {3f}, dotProducts);
-                    assertEquals(6f, dotProducts[0], DELTA);
+                    List<RowNumAndSimilarity> kept =
+                        scorer.selectRows(new float[] {3f}, SELECTION);
+                    assertEquals(6f, kept.get(0).getSimilarity(), DELTA);
                   }
                 } catch (InterruptedException e) {
                   Thread.currentThread().interrupt();
@@ -86,7 +89,7 @@ class BatchedMatrixDotProductScorerTest {
 
     assertEquals(1, scorer.numReleases, "resources must be released once");
     assertThrows(
-        IllegalStateException.class, () -> scorer.score(new float[] {1f}, new float[] {0f}));
+        IllegalStateException.class, () -> scorer.selectRows(new float[] {1f}, SELECTION));
   }
 
   @Test
@@ -95,31 +98,33 @@ class BatchedMatrixDotProductScorerTest {
         new RecordingScorer(TestDenseMatrices.of(new float[] {1f, 2f}, 1, 2), 8);
 
     assertThrows(
-        IllegalArgumentException.class, () -> scorer.score(new float[] {1f}, new float[] {0f}));
+        IllegalArgumentException.class, () -> scorer.selectRows(new float[] {1f}, SELECTION));
   }
 
   /** A scorer whose multiply is plain Java, recording how many queries each one carried. */
-  private static final class RecordingScorer extends BatchedMatrixDotProductScorer {
+  private static final class RecordingScorer extends HostProductsMatrixDotProductScorer {
     private final ConcurrentLinkedQueue<Integer> numQueriesPerMultiply =
         new ConcurrentLinkedQueue<>();
     private int numReleases;
 
     RecordingScorer(DenseMatrix matrix, int maxNumQueriesInAMultiply) {
-      super(matrix, maxNumQueriesInAMultiply);
+      super(matrix, TestMatrixRows.of(matrix.numRows()), maxNumQueriesInAMultiply);
     }
 
     @Override
-    protected void multiplyOneQuery(float[] queryValues, float[] dotProducts) {
+    protected void multiplyOneQuery(
+        float[] queryValues, RowSelection selection, float[] dotProducts) {
       numQueriesPerMultiply.add(1);
       multiply(queryValues, dotProducts);
     }
 
     @Override
     protected void multiplyQueries(
-        float[][] queryValues, float[][] dotProducts, int numQueries) {
+        float[][] queryValues, RowSelection[] selections, List<float[]> dotProducts,
+        int numQueries) {
       numQueriesPerMultiply.add(numQueries);
       for (int query = 0; query < numQueries; ++query) {
-        multiply(queryValues[query], dotProducts[query]);
+        multiply(queryValues[query], dotProducts.get(query));
       }
     }
 

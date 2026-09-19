@@ -25,7 +25,7 @@ class JavaMatrixDotProductScorerTest {
         float[] queryValues = randomValues(dimension, 7);
 
         float[] dotProducts = new float[numRows];
-        new JavaMatrixDotProductScorer(matrix).score(queryValues, dotProducts);
+        new JavaMatrixDotProductScorer(matrix, TestMatrixRows.of(matrix.numRows())).score(queryValues, dotProducts);
 
         assertArrayEquals(wholeMatrixDotProducts(matrix, queryValues), dotProducts, 0.0f, message);
       }

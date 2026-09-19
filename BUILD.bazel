@@ -46,7 +46,6 @@ java_library(
         "@maven//:com_google_guava_guava",
         "@maven//:jakarta_validation_jakarta_validation_api",
         "@maven//:org_apache_commons_commons_math3",
-        "@maven//:org_bytedeco_cuda",
         "@maven//:org_bytedeco_javacpp",
         "@maven//:org_bytedeco_openblas",
     ],

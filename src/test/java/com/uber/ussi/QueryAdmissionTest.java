@@ -113,7 +113,7 @@ class QueryAdmissionTest {
   }
 
   @Test
-  void runsExclusivelyOnlyWithNoSearchInFlight() throws Exception {
+  void runsExclusivelyOnlyWithNoConcurrentSearch() throws Exception {
     QueryAdmission admission = new QueryAdmission(2);
     admission.acquire();
 
@@ -122,7 +122,11 @@ class QueryAdmissionTest {
     Thread exclusive =
         new Thread(
             () -> {
-              admission.runExclusively(() -> events.add("ran with inFlight=" + admission.getNumConcurrentSearches()));
+              admission.runExclusively(
+                  () ->
+                      events.add(
+                          "ran with numConcurrentSearches="
+                              + admission.getNumConcurrentSearches()));
               ran.countDown();
             });
     exclusive.setDaemon(true);
@@ -135,7 +139,7 @@ class QueryAdmissionTest {
       admission.release();
       ran.await();
 
-      assertEquals(List.of("ran with inFlight=2"), List.copyOf(events));
+      assertEquals(List.of("ran with numConcurrentSearches=2"), List.copyOf(events));
     } finally {
       exclusive.join();
     }

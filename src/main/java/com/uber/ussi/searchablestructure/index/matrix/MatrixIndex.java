@@ -182,8 +182,8 @@ public final class MatrixIndex extends RowStoringIndex {
   }
 
   /**
-   * The scorer chooses the rows as well as scoring them, since an implementation scoring them
-   * where this process cannot read would otherwise copy a product per row back for every query.
+   * The scorer selects the rows as well as scoring them, so that an implementation able to
+   * discard the rows it will not keep returns only those it kept.
    */
   private List<RowNumAndSimilarity> searchAllMatrixRowsWithDotProductScorer(
       float[] queryValues, double queryUniValue, float minSimilarity, int maxResults) {

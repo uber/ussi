@@ -27,17 +27,16 @@ import java.util.concurrent.locks.ReentrantLock;
  * therefore a measurement of the offered load rather than a configured window, it is one when the
  * machine is idle, and no arrival policy or timer is needed to obtain it.
  *
- * <p>Callers are serialized, so an implementation holds the machine's full width for one multiply
- * rather than dividing it between concurrent multiplies.
+ * <p>Callers are serialized, so one multiply at a time may use every thread the implementation
+ * is configured for, rather than the threads being divided among concurrent multiplies.
  *
- * <p>{@code S} is what one multiply produces for one query, which an implementation reads back in
- * {@link #addRows addRows()} and nothing else interprets. An implementation computing its
- * products in memory this process cannot read returns whatever it kept there, and chooses rows
- * where it computed them rather than copying a product per row back.
+ * <p>{@code S} is what one multiply produces for one query, which the implementation reads back
+ * in {@link #addRows addRows()} and nothing else interprets. An implementation that discards
+ * rows as it scores them therefore returns only what it kept, rather than one value per row.
  *
- * <p>Choosing runs on the thread that asked for the query, after the multiply that scored it has
- * finished and released the next one. Several queries therefore choose at the same time and
- * overlap the following multiply, which the multiply itself cannot do.
+ * <p>Selecting runs on the thread that asked for the query, after the multiply that scored it
+ * has finished and released the next one. Several queries therefore select at the same time and
+ * overlap the following multiply, which a serialized multiply cannot do.
  */
 abstract class BatchedMatrixDotProductScorer<S> implements MatrixDotProductScorer {
 
@@ -128,8 +127,8 @@ abstract class BatchedMatrixDotProductScorer<S> implements MatrixDotProductScore
    * multiply, each into its own entry of {@code into}.
    *
    * <p>Never called with fewer than two queries, since one query does not repay what batching
-   * costs. The selections are given so that an implementation able to choose rows during the
-   * multiply has what choosing needs.
+   * costs. The selections are given so that an implementation able to select its rows during
+   * the multiply has what selecting needs.
    */
   protected abstract void multiplyQueries(
       float[][] queryValues, RowSelection[] selections, S[] into, int numQueries);

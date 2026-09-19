@@ -4,7 +4,7 @@ package com.uber.ussi.searchablestructure.index.matrix;
 import java.util.List;
 
 /**
- * Chooses which dense scorer to build, and checks the query every one of them requires.
+ * Selects which dense scorer to build, and checks the query every one of them requires.
  *
  * <p>The scorers are tried in the order of {@link #PREFERENCE_ORDER}, and the first whose
  * implementation is available on this machine is built. A scorer that turns out to be

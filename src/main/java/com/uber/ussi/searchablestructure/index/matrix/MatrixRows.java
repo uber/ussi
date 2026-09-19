@@ -4,18 +4,17 @@ package com.uber.ussi.searchablestructure.index.matrix;
 import com.uber.ussi.comparator.DotProductScored;
 
 /**
- * What choosing the rows a query keeps needs to know, beyond the dot products themselves.
+ * What selecting the rows a query keeps needs to know, beyond the dot products themselves.
  *
  * <p>A dot product is not a similarity: the comparator derives one from the dot product and the
  * unilateral value of each side. Nor is every row eligible, since a deleted row keeps its place
- * in the matrix until the matrix is rebuilt. Choosing therefore needs the row numbers, their
+ * in the matrix until the matrix is rebuilt. Selecting therefore needs the row numbers, their
  * unilateral values, the deletions and the comparator's arithmetic, all of which belong to the
  * index rather than to whatever performs the multiply.
  *
- * <p>These are given to the scorer so that choosing can happen wherever the products are, rather
- * than only on the host. An implementation that computes its products somewhere the host cannot
- * read holds the same values in the same place and chooses there, returning the few rows it kept
- * instead of a product for every row.
+ * <p>These are given to the scorer rather than applied by its caller, so that an implementation
+ * may select its rows as soon as it has scored them and return only those, instead of returning
+ * one value per row.
  */
 final class MatrixRows {
 
@@ -44,7 +43,7 @@ final class MatrixRows {
     return rowNums[matrixRowIndex];
   }
 
-  /** Every row's unilateral value, in matrix row order, for an implementation that keeps a copy. */
+  /** Every row's unilateral value, in matrix row order. */
   double[] getRowUniValues() {
     return rowUniValues;
   }

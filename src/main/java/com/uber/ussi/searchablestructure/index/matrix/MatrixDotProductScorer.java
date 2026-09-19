@@ -7,14 +7,13 @@ import java.util.List;
 /**
  * Scores a query against every row of a dense matrix and returns the rows it keeps.
  *
- * <p>The rows rather than a product per row, because an implementation computing its products
- * where the host cannot read them would otherwise have to copy one product per row back for
- * every query, which is the largest transfer a dense query makes and grows with the queries
- * scored together.
+ * <p>The rows it keeps rather than a dot product for every row, so that an implementation able
+ * to discard the rows it will not keep does so before returning, rather than returning as many
+ * values as the matrix has rows for the caller to discard.
  */
 interface MatrixDotProductScorer extends AutoCloseable {
 
-  /** The rows this query keeps, best first by the heap's order. */
+  /** The rows this query keeps, in the order the bounded heap holds them. */
   List<RowNumAndSimilarity> selectRows(float[] queryValues, RowSelection selection);
 
   @Override

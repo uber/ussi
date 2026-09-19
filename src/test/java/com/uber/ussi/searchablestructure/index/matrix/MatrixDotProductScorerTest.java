@@ -31,7 +31,9 @@ class MatrixDotProductScorerTest {
         javaScorerOver(TestDenseMatrices.of(matrix, 3, 3));
     try (NativeMatrixDotProductScorer<org.bytedeco.javacpp.FloatPointer> openBlasScorer =
         new NativeMatrixDotProductScorer<>(
-            TestDenseMatrices.of(matrix, 3, 3), TestMatrixRows.of((TestDenseMatrices.of(matrix, 3, 3)).numRows()), OpenBlas.shared())) {
+            TestDenseMatrices.of(matrix, 3, 3),
+            TestMatrixRows.of(3),
+            OpenBlas.shared())) {
       javaScorer.score(query, javaDots);
       openBlasScorer.multiplyOneQuery(query, SELECTION, openBlasDots);
     }
@@ -68,7 +70,8 @@ class MatrixDotProductScorerTest {
     assertEquals(3, chunked.numChunks());
 
     float[] fromJava = new float[numRows];
-    new JavaMatrixDotProductScorer(chunked, TestMatrixRows.of(chunked.numRows())).score(query, fromJava);
+    new JavaMatrixDotProductScorer(chunked, TestMatrixRows.of(chunked.numRows()))
+        .score(query, fromJava);
 
     assertArrayEquals(reference, fromJava, DELTA);
 
@@ -108,7 +111,9 @@ class MatrixDotProductScorerTest {
 
     try (NativeMatrixDotProductScorer<org.bytedeco.javacpp.FloatPointer> openBlasScorer =
         new NativeMatrixDotProductScorer<>(
-            TestDenseMatrices.of(matrix, numRows, dimension), TestMatrixRows.of((TestDenseMatrices.of(matrix, numRows, dimension)).numRows()), OpenBlas.shared())) {
+            TestDenseMatrices.of(matrix, numRows, dimension),
+            TestMatrixRows.of(numRows),
+            OpenBlas.shared())) {
       javaScorer.score(query, javaDots);
       openBlasScorer.multiplyOneQuery(query, SELECTION, openBlasDots);
     }

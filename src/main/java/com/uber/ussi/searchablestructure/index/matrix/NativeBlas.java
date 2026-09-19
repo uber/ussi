@@ -7,16 +7,16 @@ package com.uber.ussi.searchablestructure.index.matrix;
  *
  * <p>Supporting a further library requires implementing this interface and nothing else. A dense
  * scorer allocates the buffers, reuses them across scores, traverses the matrix a range at a time
- * and batchs the queries that are waiting, none of which depends on the library in use. An
+ * and batches the queries that are waiting, none of which depends on the library in use. An
  * implementation supplies the buffer operations and the two multiplies.
  *
  * <p>{@code B} is the implementation's own buffer handle, which a caller of this interface only
- * passes back. A library addressing memory the process cannot dereference is therefore supported
- * on the same terms as one addressing memory it can, and the offsets this interface passes are in
- * values rather than addresses for the same reason.
+ * passes back, and every offset is counted in values rather than in bytes or addresses. An
+ * implementation is therefore free to allocate its buffers wherever its library requires.
  *
- * <p>Calls are serialized by the caller, so an implementation holds whatever width the machine
- * has for one multiply and need not be safe against concurrent multiplies of its own.
+ * <p>Calls are serialized by the caller, so an implementation may use every thread it is
+ * configured for on one multiply, and need not be safe against concurrent multiplies of its
+ * own.
  *
  * <p>An implementation is instantiated once per process rather than once per matrix, because any
  * thread count it maintains is process-global.

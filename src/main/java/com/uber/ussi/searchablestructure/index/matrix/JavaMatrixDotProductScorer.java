@@ -42,7 +42,9 @@ final class JavaMatrixDotProductScorer implements MatrixDotProductScorer {
   public List<RowNumAndSimilarity> selectRows(float[] queryValues, RowSelection selection) {
     float[] dotProducts = new float[matrix.numRows()];
     score(queryValues, dotProducts);
-    return HostRowSelection.selectRows(dotProducts, rows, selection);
+    RowCollector collector = new RowCollector(selection);
+    HostRowSelection.collectRows(dotProducts, rows, selection, collector);
+    return collector.toList();
   }
 
   /**

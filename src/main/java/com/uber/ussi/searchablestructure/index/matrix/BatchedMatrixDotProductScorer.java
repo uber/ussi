@@ -29,7 +29,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * rather than dividing it between concurrent multiplies.
  *
  * <p>{@code S} is what one multiply produces for one query, which an implementation reads back in
- * {@link #selectRowsFrom selectRowsFrom()} and nothing else interprets. An implementation computing its
+ * {@link #collectRows collectRows()} and nothing else interprets. An implementation computing its
  * products in memory this process cannot read returns whatever it kept there, and chooses rows
  * where it computed them rather than copying a product per row back.
  *
@@ -98,7 +98,9 @@ abstract class BatchedMatrixDotProductScorer<S> implements MatrixDotProductScore
         query.awaitBriefly();
       }
     }
-    return selectRowsFrom(query.result, selection);
+    RowCollector collector = new RowCollector(selection);
+    collectRows(query.result, selection, collector);
+    return collector.toList();
   }
 
   @Override
@@ -126,8 +128,14 @@ abstract class BatchedMatrixDotProductScorer<S> implements MatrixDotProductScore
   protected abstract void multiplyQueries(
       float[][] queryValues, RowSelection[] selections, List<S> into, int numQueries);
 
-  /** The rows this query keeps, from what its multiply produced. */
-  protected abstract List<RowNumAndSimilarity> selectRowsFrom(S result, RowSelection selection);
+  /**
+   * Offers to {@code collector} the rows worth keeping, from what this query's multiply produced.
+   *
+   * <p>The bound and the ordering belong to the collector, so an implementation that has already
+   * reduced its rows offers what survived and one holding a similarity for every row offers every
+   * row, and both reach the same answer.
+   */
+  protected abstract void collectRows(S result, RowSelection selection, RowCollector collector);
 
   /** Releases whatever the implementation allocated. Called once. */
   protected abstract void releaseResources();

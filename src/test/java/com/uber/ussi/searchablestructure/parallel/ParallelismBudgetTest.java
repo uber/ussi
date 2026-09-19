@@ -214,6 +214,29 @@ class ParallelismBudgetTest {
         List.of(), exclusiveCalls, "only a change of the shared count may quiesce the engine");
   }
 
+  /**
+   * A process whose structures all choose their own thread count registers nothing, so the shared
+   * count it derives applies to no one and the searches it would stop are all other structures'.
+   */
+  @Test
+  void registeringNoSharedThreadCountQuiescesTheEngineForNothing() {
+    ParallelismBudget budget = new ParallelismBudget(32, 4);
+    List<String> exclusiveCalls = new ArrayList<>();
+    attachThen(
+        budget,
+        task -> {
+          exclusiveCalls.add("entered");
+          task.run();
+        });
+
+    // Four concurrent searches move the shared count from four to one.
+    budget.update(4);
+
+    assertEquals(8, budget.getNumThreadsPerSearch(), "the budget still follows the concurrency");
+    assertEquals(
+        List.of(), exclusiveCalls, "a count no structure holds must not quiesce the engine");
+  }
+
   @Test
   void updateLeavesAnUnchangedBudgetAlone() {
     ParallelismBudget budget = new ParallelismBudget(CORES, CORES);

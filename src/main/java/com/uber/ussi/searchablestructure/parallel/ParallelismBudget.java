@@ -33,6 +33,12 @@ public final class ParallelismBudget {
   private static final long SAMPLE_INTERVAL_MILLIS = 1_000;
 
   /**
+   * Stands in until a process-global thread count is registered, and is compared against to tell
+   * that none is.
+   */
+  private static final IntConsumer NO_HOLDER = threads -> {};
+
+  /**
    * Readings averaged into one update, which bounds how often a process-global thread count moves
    * and so how often the engine is quiesced to move it.
    */
@@ -47,7 +53,7 @@ public final class ParallelismBudget {
   private final int maxNumSharedThreads;
   private volatile int numSharedThreads;
   private volatile int numThreadsPerSearch;
-  private volatile IntConsumer onChange = threads -> {};
+  private volatile IntConsumer onChange = NO_HOLDER;
   /**
    * Until {@link #attach attach()} there are no searches, so running a change inline is already
    * exclusive.
@@ -90,7 +96,7 @@ public final class ParallelismBudget {
    * and a structure can be built while other searches are running. Such a setting is shared by
    * every concurrent search, so changing it underneath one is not safe.
    */
-  public void onChange(IntConsumer applier) {
+  public synchronized void onChange(IntConsumer applier) {
     exclusively.accept(
         () -> {
           this.onChange = applier;
@@ -186,15 +192,26 @@ public final class ParallelismBudget {
    *
    * <p>The threads one search may use is read by each search for itself, so it is assigned here
    * and needs no moment without searches. A process-global thread count is one setting every
-   * search in flight shares, and OpenBLAS deadlocks or corrupts memory when such a setting moves
-   * while a call is dispatching work, so it is applied with no search running and only when it
-   * differs from the count already in force.
+   * search in flight shares, and a library holding one may deadlock or corrupt memory when it
+   * moves while a call is dispatching work, so it is applied with no search running and only when
+   * it differs from the count already in force.
+   *
+   * <p>A moment without searches stops every search in the process, including those of structures
+   * holding no process-global count of their own. It is therefore reached only when a count is
+   * registered to apply and its value has moved. A process where nothing registers one, and a
+   * process whose load leaves the count where it stands, never stop.
    */
   void update(int numConcurrentSearches) {
     numThreadsPerSearch = getNumThreadsPerSearchFor(numConcurrentSearches);
     int updatedNumSharedThreads = getNumSharedThreadsFor(numConcurrentSearches);
-    if (updatedNumSharedThreads == numSharedThreads) {
-      return;
+    synchronized (this) {
+      if (updatedNumSharedThreads == numSharedThreads) {
+        return;
+      }
+      if (onChange == NO_HOLDER) {
+        numSharedThreads = updatedNumSharedThreads;
+        return;
+      }
     }
     exclusively.accept(
         () -> {

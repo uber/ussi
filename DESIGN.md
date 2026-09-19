@@ -614,6 +614,15 @@ to load as one that was never available. Adding a scorer is adding an entry to
 that list, which is the only existing code a further implementation needs to
 touch.
 
+A scorer may compute the dot products somewhere this process cannot read, which
+is why it returns the rows a query keeps rather than a value for every row. Such
+a scorer extends `BatchedMatrixDotProductScorer` directly, reduces its rows
+where it scored them, and returns only those. `examples/device` describes what
+such a scorer implements, and states the two things to settle first: the types
+it extends are visible only inside the matrix package, so it must be declared
+there, and the memory it holds the matrix in bounds the rows an index may hold.
+Nothing in that directory is compiled, run or tuned.
+
 The native scorer is written against `NativeBlas`, not against OpenBLAS.
 `NativeMatrixDotProductScorer` allocates the buffers, reuses them across
 scores, and traverses the matrix range by range, none of which depends on the

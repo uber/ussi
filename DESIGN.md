@@ -597,6 +597,12 @@ the bound, so one adding no more rows than the bound never builds a queue. The
 dot products of a query are reused rather than allocated for each query, since
 they are as long as the matrix has rows.
 
+Selecting raises its minimum similarity as its heap fills, as a scan does, so a
+row that cannot reach what the heap already holds is rejected before a result
+is made for it. A query asking for the best rows of the whole matrix otherwise
+makes one result per row and lets the heap discard almost all of them, which
+was measured to cost more than the multiply that produced the dot products.
+
 Selecting runs on the thread that asked for the query, not on the thread that
 performed the multiply, so several queries select at once and overlap the
 following multiply. Performing it inside the multiply would serialize the one

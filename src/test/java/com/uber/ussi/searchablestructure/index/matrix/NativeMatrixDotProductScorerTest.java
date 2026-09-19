@@ -60,24 +60,27 @@ class NativeMatrixDotProductScorerTest {
     }
   }
 
+  /** A matrix of more rows than one slice is multiplied a slice at a time, in row order. */
   @Test
-  void theProductsBufferIsSizedForTheChunkOfMostRows() {
-    // Five rows at two per chunk gives chunks of 2, 2 and 1, so the last is not the largest.
-    DenseMatrix uneven =
-        TestDenseMatrices.of(
-            new float[] {1f, 1f, 2f, 2f, 3f, 3f, 4f, 4f, 5f, 5f}, 5, 2, /* maxChunkValues */ 4);
+  void aMatrixOfManySlicesIsMultipliedSliceBySlice() {
+    int numRows = NativeMatrixDotProductScorer.MAX_NUM_ROWS_IN_A_SLICE * 2 + 17;
+    float[] values = new float[numRows * 2];
+    for (int row = 0; row < numRows; ++row) {
+      values[row * 2] = row;
+      values[row * 2 + 1] = 1f;
+    }
+    DenseMatrix matrix = TestDenseMatrices.of(values, numRows, 2);
+    FakeNativeBlas blas = new FakeNativeBlas();
+    try (NativeMatrixDotProductScorer<float[]> scorer =
+        new NativeMatrixDotProductScorer<>(matrix, blas)) {
+      float[] dotProducts = new float[numRows];
 
-    assertEquals(3, uneven.numChunks());
-    assertEquals(1, uneven.numRowsInChunk(2), "the last chunk is the smallest");
-    assertEquals(2, NativeMatrixDotProductScorer.getMaxNumRowsInAChunk(uneven));
-    assertEquals(
-        1,
-        NativeMatrixDotProductScorer.getMaxNumRowsInAChunk(
-            TestDenseMatrices.of(new float[] {1f}, 1, 1)));
-    assertEquals(
-        0,
-        NativeMatrixDotProductScorer.getMaxNumRowsInAChunk(
-            TestDenseMatrices.of(new float[0], 0, 0)));
+      scorer.score(new float[] {1f, 0f}, dotProducts);
+
+      for (int row = 0; row < numRows; ++row) {
+        assertEquals(row, dotProducts[row], DELTA, "row " + row + " landed in the wrong slice");
+      }
+    }
   }
 
   @Test
@@ -183,11 +186,11 @@ class NativeMatrixDotProductScorerTest {
     }
   }
 
-  /** The library's bound is what limits the callers inside it, not the buffer pool. */
+  /** The library is handed one multiply at a time, so its width is never divided. */
   @Test
-  void admitsNoMoreConcurrentCallersThanTheLibraryPermits() throws Exception {
+  void multipliesNeverOverlap() throws Exception {
     DenseMatrix matrix = TestDenseMatrices.of(new float[] {1f, 1f, 1f, 1f}, 2, 2);
-    FakeNativeBlas blas = new FakeNativeBlas(/* maxNumConcurrentCallers */ 1);
+    FakeNativeBlas blas = new FakeNativeBlas();
     try (NativeMatrixDotProductScorer<float[]> scorer =
         new NativeMatrixDotProductScorer<>(matrix, blas)) {
       int numThreads = 4;
@@ -215,9 +218,10 @@ class NativeMatrixDotProductScorerTest {
       finished.await();
 
       assertEquals(
-          1,
-          blas.maxNumConcurrentMultiplies.get(),
-          "the library was entered by more callers than it admits");
+          1, blas.maxNumConcurrentMultiplies.get(), "two multiplies ran at the same time");
+      assertTrue(
+          blas.numBatchedMultiplies.get() > 0 || scorer.getNumMultiplies() > 0,
+          "the scorer performed no multiply");
     }
   }
 
@@ -257,25 +261,12 @@ class NativeMatrixDotProductScorerTest {
    * score's arithmetic be asserted, and counting the calls lets its buffer use be asserted.
    */
   private static final class FakeNativeBlas implements NativeBlas<float[]> {
-    private final NativeBlasAdmission admission;
     private final AtomicInteger numAllocations = new AtomicInteger();
     private final AtomicInteger numFrees = new AtomicInteger();
     private final AtomicInteger numConcurrentMultiplies = new AtomicInteger();
     private final AtomicInteger maxNumConcurrentMultiplies = new AtomicInteger();
+    private final AtomicInteger numBatchedMultiplies = new AtomicInteger();
     private final List<float[]> live = Collections.synchronizedList(new ArrayList<>());
-
-    FakeNativeBlas() {
-      this(Integer.MAX_VALUE);
-    }
-
-    FakeNativeBlas(int maxNumConcurrentCallers) {
-      this.admission = new NativeBlasAdmission(maxNumConcurrentCallers);
-    }
-
-    @Override
-    public NativeBlasAdmission getAdmission() {
-      return admission;
-    }
 
     @Override
     public float[] allocate(float[] values) {
@@ -294,8 +285,8 @@ class NativeMatrixDotProductScorerTest {
     }
 
     @Override
-    public void write(float[] buffer, float[] values, int numValues) {
-      System.arraycopy(values, 0, buffer, 0, numValues);
+    public void write(float[] buffer, long bufferOffset, float[] values, int numValues) {
+      System.arraycopy(values, 0, buffer, (int) bufferOffset, numValues);
     }
 
     @Override
@@ -305,19 +296,44 @@ class NativeMatrixDotProductScorerTest {
 
     @Override
     public void multiply(
-        int numRows, int numColumns, float[] matrix, float[] vector, float[] products) {
+        int numRows, int numColumns, float[] matrix, long matrixOffset, float[] vector,
+        float[] products) {
       maxNumConcurrentMultiplies.accumulateAndGet(
           numConcurrentMultiplies.incrementAndGet(), Math::max);
       try {
-        for (int row = 0; row < numRows; ++row) {
-          float product = 0f;
-          for (int column = 0; column < numColumns; ++column) {
-            product += matrix[row * numColumns + column] * vector[column];
-          }
-          products[row] = product;
+        multiplyRows(numRows, numColumns, matrix, (int) matrixOffset, vector, 0, products, 0);
+      } finally {
+        numConcurrentMultiplies.decrementAndGet();
+      }
+    }
+
+    @Override
+    public void multiplyQueries(
+        int numQueries, int numRows, int numColumns, float[] matrix, long matrixOffset,
+        float[] queries, float[] products) {
+      numBatchedMultiplies.incrementAndGet();
+      maxNumConcurrentMultiplies.accumulateAndGet(
+          numConcurrentMultiplies.incrementAndGet(), Math::max);
+      try {
+        for (int query = 0; query < numQueries; ++query) {
+          multiplyRows(
+              numRows, numColumns, matrix, (int) matrixOffset, queries, query * numColumns,
+              products, query * numRows);
         }
       } finally {
         numConcurrentMultiplies.decrementAndGet();
+      }
+    }
+
+    private static void multiplyRows(
+        int numRows, int numColumns, float[] matrix, int matrixOffset, float[] vectors,
+        int vectorOffset, float[] products, int productsOffset) {
+      for (int row = 0; row < numRows; ++row) {
+        float product = 0f;
+        for (int column = 0; column < numColumns; ++column) {
+          product += matrix[matrixOffset + row * numColumns + column] * vectors[vectorOffset + column];
+        }
+        products[productsOffset + row] = product;
       }
     }
 

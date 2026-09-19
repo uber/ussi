@@ -3,6 +3,7 @@ package com.uber.ussi.searchablestructure.index.matrix;
 
 import static org.bytedeco.openblas.global.openblas.CblasNoTrans;
 import static org.bytedeco.openblas.global.openblas.CblasRowMajor;
+import static org.bytedeco.openblas.global.openblas.CblasTrans;
 
 import com.uber.ussi.searchablestructure.utils.parallel.ParallelismBudget;
 import com.uber.ussi.utils.Utils;
@@ -51,6 +52,7 @@ final class OpenBlas implements NativeBlas<FloatPointer> {
   static FloatPointerArrayWriter floatPointerArrayWriter =
       (pointer, values, length) -> pointer.put(values, 0, length);
   static SgemvOperation sgemvOperation = openblas::cblas_sgemv;
+  static SgemmOperation sgemmOperation = openblas::cblas_sgemm;
   static Runnable blasNativeLoadProbe = openblas_nolapack::blas_get_num_threads;
   static IntConsumer blasNumThreadsSetter = CachedBlasThreadCountSetter::setNumThreads;
 
@@ -62,16 +64,20 @@ final class OpenBlas implements NativeBlas<FloatPointer> {
 
   @Nullable private static volatile OpenBlas shared;
 
-  private final NativeBlasAdmission admission;
+  private final int maxNumThreads;
 
   OpenBlas() {
-    this.admission =
-        new NativeBlasAdmission(
-            Math.min(Math.max(1, Runtime.getRuntime().availableProcessors()), readMaxNumThreads()));
+    this.maxNumThreads = readMaxNumThreads();
     // The count is process-global to OpenBLAS and rebuilds its thread pool, so it cannot be chosen
-    // per score, where it would cost orders of magnitude more than the multiply itself. The budget
-    // applies it instead, whenever the search concurrency changes.
-    ParallelismBudget.shared().onChange(numThreads -> blasNumThreadsSetter.accept(numThreads));
+    // per multiply, where it would cost orders of magnitude more than the multiply itself. The
+    // budget applies it instead, under a moment with no search running. It is bounded by the
+    // threads the loaded binary retains buffers for, since asking for more than that is refused.
+    ParallelismBudget.shared()
+        .onChange(numThreads -> blasNumThreadsSetter.accept(Math.min(numThreads, maxNumThreads)));
+  }
+
+  int getMaxNumThreads() {
+    return maxNumThreads;
   }
 
   /** The instance for this process, constructed on first use. */
@@ -138,11 +144,6 @@ final class OpenBlas implements NativeBlas<FloatPointer> {
   }
 
   @Override
-  public NativeBlasAdmission getAdmission() {
-    return admission;
-  }
-
-  @Override
   public FloatPointer allocate(float[] values) {
     return floatArrayPointerFactory.create(values);
   }
@@ -158,8 +159,9 @@ final class OpenBlas implements NativeBlas<FloatPointer> {
   }
 
   @Override
-  public void write(FloatPointer buffer, float[] values, int numValues) {
-    floatPointerArrayWriter.write(buffer, values, numValues);
+  public void write(FloatPointer buffer, long bufferOffset, float[] values, int numValues) {
+    floatPointerArrayWriter.write(buffer.position(bufferOffset), values, numValues);
+    buffer.position(0);
   }
 
   @Override
@@ -172,6 +174,7 @@ final class OpenBlas implements NativeBlas<FloatPointer> {
       int numRows,
       int numColumns,
       FloatPointer matrix,
+      long matrixOffset,
       FloatPointer vector,
       FloatPointer products) {
     sgemvOperation.run(
@@ -180,13 +183,46 @@ final class OpenBlas implements NativeBlas<FloatPointer> {
         /* numRowsA */ numRows,
         /* numColsA */ numColumns,
         /* alpha */ 1.0f,
-        /* A */ matrix,
+        /* A */ matrix.position(matrixOffset),
         /* lda */ numColumns,
         /* X */ vector,
         /* incX */ 1,
         /* beta */ 0.0f,
         /* Y */ products,
         /* incY */ 1);
+    matrix.position(0);
+  }
+
+  /**
+   * The queries are a numQueries by numColumns row-major matrix and the rows are a numRows by
+   * numColumns row-major matrix, so the products are the first multiplied by the transpose of the
+   * second, which leaves each query's products contiguous.
+   */
+  @Override
+  public void multiplyQueries(
+      int numQueries,
+      int numRows,
+      int numColumns,
+      FloatPointer matrix,
+      long matrixOffset,
+      FloatPointer queries,
+      FloatPointer products) {
+    sgemmOperation.run(
+        /* Order */ CblasRowMajor,
+        /* transA */ CblasNoTrans,
+        /* transB */ CblasTrans,
+        /* numRowsA */ numQueries,
+        /* numColsB */ numRows,
+        /* numColsA */ numColumns,
+        /* alpha */ 1.0f,
+        /* A */ queries,
+        /* lda */ numColumns,
+        /* B */ matrix.position(matrixOffset),
+        /* ldb */ numColumns,
+        /* beta */ 0.0f,
+        /* C */ products,
+        /* ldc */ numRows);
+    matrix.position(0);
   }
 
   /**
@@ -233,6 +269,24 @@ final class OpenBlas implements NativeBlas<FloatPointer> {
 
   interface FloatPointerArrayWriter {
     void write(FloatPointer pointer, float[] values, int length);
+  }
+
+  interface SgemmOperation {
+    void run(
+        int order,
+        int transA,
+        int transB,
+        int numRowsA,
+        int numColsB,
+        int numColsA,
+        float alpha,
+        FloatPointer queries,
+        int lda,
+        FloatPointer matrix,
+        int ldb,
+        float beta,
+        FloatPointer dotProducts,
+        int ldc);
   }
 
   interface SgemvOperation {

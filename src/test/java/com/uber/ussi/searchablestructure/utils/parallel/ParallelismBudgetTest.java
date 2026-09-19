@@ -25,15 +25,19 @@ class ParallelismBudgetTest {
     assertThrows(IllegalArgumentException.class, () -> new ParallelismBudget(CORES, 0));
   }
 
+  /**
+   * A holder of a process-global count serializes its callers, so one call holds the whole width
+   * and there is nothing to divide between concurrent searches.
+   */
   @Test
-  void dividesTheSharedThreadsOutOfOneSocketsCores() {
+  void holdsOneSocketsCoresWhateverTheConcurrency() {
     int numCoresPerSocket = CORES / 4;
     int[][] concurrencyAndNumThreads = {
       {1, numCoresPerSocket},
-      {2, numCoresPerSocket / 2},
-      {4, numCoresPerSocket / 4},
-      {numCoresPerSocket, 1},
-      {CORES, 1},
+      {2, numCoresPerSocket},
+      {4, numCoresPerSocket},
+      {numCoresPerSocket, numCoresPerSocket},
+      {CORES, numCoresPerSocket},
       {0, numCoresPerSocket},
       {-1, numCoresPerSocket},
     };
@@ -138,6 +142,10 @@ class ParallelismBudgetTest {
     assertEquals(List.of(CORES), applied);
   }
 
+  /**
+   * The count a holder keeps no longer follows the concurrency, so an update leaves it alone and
+   * suspends nothing, while the threads one search may use still follow.
+   */
   @Test
   void updateAppliesANewBudgetExclusively() {
     ParallelismBudget budget = new ParallelismBudget(CORES, CORES);
@@ -156,12 +164,10 @@ class ParallelismBudgetTest {
 
     budget.update(CORES);
 
-    assertEquals(List.of(1), applied);
+    assertEquals(List.of(), applied, "a constant count is never re-applied");
     assertEquals(1, budget.getNumThreadsPerSearch());
     assertEquals(
-        List.of("entered", "left"),
-        exclusiveCalls,
-        "a process-global count must only change with no search running");
+        List.of(), exclusiveCalls, "a count that does not change must not suspend any search");
   }
 
   @Test
@@ -185,7 +191,7 @@ class ParallelismBudgetTest {
     budget.sample(readings[readings.length - 1]);
 
     assertEquals(CORES / 4, budget.getNumThreadsPerSearch(), "the average of the window");
-    assertEquals(List.of(CORES / 4), applied);
+    assertEquals(List.of(), applied, "a constant process-global count is never re-applied");
   }
 
   @Test
@@ -307,6 +313,6 @@ class ParallelismBudgetTest {
     budget.update(4);
     budget.update(1);
 
-    assertEquals(List.of(1, CORES / 4, CORES), applied);
+    assertEquals(List.of(), applied, "a constant process-global count is never re-applied");
   }
 }

@@ -1,16 +1,10 @@
 package com.uber.ussi.searchablestructure.index.matrix;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-import com.uber.ussi.searchablestructure.parallel.ParallelismBudget;
-import java.util.ArrayList;
-import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class MatrixDotProductScorersTest {
@@ -31,32 +25,7 @@ class MatrixDotProductScorersTest {
   }
 
   @Test
-  void createUsesDefaultOpenBlasScorerWhenNativePathIsAvailable() {
-    assumeTrue(OpenBlasMatrixDotProductScorer.isSupportedPlatform());
-    FakeOpenBlas fakeOpenBlas = new FakeOpenBlas();
-
-    withFakeOpenBlas(
-        fakeOpenBlas,
-        () -> {
-          try (MatrixDotProductScorer scorer =
-              MatrixDotProductScorers.create(TestDenseMatrices.of(new float[] {1f}, 1, 1))) {
-            float[] dotProducts = new float[1];
-
-            scorer.score(new float[] {2f}, dotProducts);
-
-            assertEquals(2f, dotProducts[0], DELTA);
-          }
-        });
-
-    assertEquals(1, fakeOpenBlas.gemvCalls);
-    assertEquals(2, fakeOpenBlas.nativeLoadProbeCalls);
-    // One probe buffer per availability check, the matrix chunk, and the two buffers of the one
-    // scratch that scoring needed.
-    assertEquals(5, fakeOpenBlas.deallocateCalls);
-  }
-
-  @Test
-  void createUsesOpenBlasSupplierWhenAvailable() {
+  void createUsesTheNativeSupplierWhenAvailable() {
     MatrixDotProductScorer expectedScorer =
         new MatrixDotProductScorer() {
           @Override
@@ -66,20 +35,20 @@ class MatrixDotProductScorersTest {
     try (MatrixDotProductScorer scorer =
         MatrixDotProductScorers.create(
             TestDenseMatrices.of(new float[] {1f, 2f}, 1, 2),
-            /* openBlasAvailable */ true, () -> expectedScorer)) {
+            /* nativeBlasAvailable */ true, () -> expectedScorer)) {
       assertSame(expectedScorer, scorer);
     }
   }
 
   @Test
-  void createBuildsJavaScorerWhenOpenBlasUnavailable() {
+  void createBuildsJavaScorerWhenNoNativeLibraryIsAvailable() {
     try (MatrixDotProductScorer scorer =
         MatrixDotProductScorers.create(
             TestDenseMatrices.of(new float[] {1f, 2f}, 1, 2),
-            /* openBlasAvailable */ false,
+            /* nativeBlasAvailable */ false,
             () -> {
               throw new AssertionError(
-                  "supplier must not be invoked when OpenBLAS is unavailable.");
+                  "the supplier must not be invoked when no native library is available.");
             })) {
       assertInstanceOf(JavaMatrixDotProductScorer.class, scorer);
     }
@@ -90,7 +59,7 @@ class MatrixDotProductScorersTest {
     try (MatrixDotProductScorer scorer =
         MatrixDotProductScorers.create(
             TestDenseMatrices.of(new float[] {1f, 2f}, 1, 2),
-            /* openBlasAvailable */ true,
+            /* nativeBlasAvailable */ true,
             () -> {
               throw new UnsatisfiedLinkError("native missing");
             })) {
@@ -103,7 +72,7 @@ class MatrixDotProductScorersTest {
     try (MatrixDotProductScorer scorer =
         MatrixDotProductScorers.create(
             TestDenseMatrices.of(new float[] {1f, 2f}, 1, 2),
-            /* openBlasAvailable */ true,
+            /* nativeBlasAvailable */ true,
             () -> {
               throw new RuntimeException(new UnsatisfiedLinkError("native missing"));
             })) {
@@ -118,77 +87,10 @@ class MatrixDotProductScorersTest {
         () ->
             MatrixDotProductScorers.create(
                 TestDenseMatrices.of(new float[] {1f, 2f}, 1, 2),
-                /* openBlasAvailable */ true,
+                /* nativeBlasAvailable */ true,
                 () -> {
                   throw new IllegalStateException("boom");
                 }));
-  }
-
-  @Test
-  void openBlasConstructorThrowsWhenUnavailable() {
-    assertThrows(
-        IllegalStateException.class,
-        () ->
-            new OpenBlasMatrixDotProductScorer(
-                  TestDenseMatrices.of(new float[] {1f}, 1, 1),
-                  /* availabilitySupplier */ () -> false));
-  }
-
-  @Test
-  void openBlasScorerTakesTheCurrentBudgetAtConstructionAndLeavesItAloneWhileScoring() {
-    FakeOpenBlas fakeOpenBlas = new FakeOpenBlas();
-
-    withFakeOpenBlas(
-        fakeOpenBlas,
-        () -> {
-          try (OpenBlasMatrixDotProductScorer scorer =
-              new OpenBlasMatrixDotProductScorer(
-                  TestDenseMatrices.of(new float[] {1f}, 1, 1),
-                  /* availabilitySupplier */ () -> true)) {
-            float[] dotProducts = new float[1];
-
-            scorer.score(new float[] {2f}, dotProducts);
-            scorer.score(new float[] {2f}, dotProducts);
-
-            assertEquals(2f, dotProducts[0], DELTA);
-          }
-        });
-
-    // The budget, not the core count: it tracks the search concurrency, so the value at
-    // construction depends on what else is running.
-    assertEquals(
-        List.of(ParallelismBudget.shared().getNumThreadsPerSearch()),
-        fakeOpenBlas.numThreadsUpdates);
-  }
-
-  @Test
-  void isAvailableReturnsFalseOnUnsupportedPlatform() {
-    assertFalse(OpenBlasMatrixDotProductScorer.isAvailable(false, () -> {}));
-  }
-
-  @Test
-  void isAvailableReturnsFalseWhenNativeProbeFails() {
-    assertFalse(
-        OpenBlasMatrixDotProductScorer.isAvailable(
-            true,
-            () -> {
-              throw new RuntimeException("native probe failed");
-            }));
-  }
-
-  @Test
-  void isAvailableReturnsTrueWhenNativeProbeAndPointerProbeSucceed() {
-    FakeOpenBlas fakeOpenBlas = new FakeOpenBlas();
-
-    withFakeOpenBlas(
-        fakeOpenBlas,
-        () ->
-            assertTrue(
-                OpenBlasMatrixDotProductScorer.isAvailable(
-                    true, () -> fakeOpenBlas.nativeLoadProbeCalls++)));
-
-    assertEquals(1, fakeOpenBlas.nativeLoadProbeCalls);
-    assertEquals(1, fakeOpenBlas.deallocateCalls);
   }
 
   @Test
@@ -200,28 +102,6 @@ class MatrixDotProductScorersTest {
         };
 
     scorer.close();
-  }
-
-  @Test
-  void openBlasScorerRejectsScoreAfterClose() {
-    FakeOpenBlas fakeOpenBlas = new FakeOpenBlas();
-
-    withFakeOpenBlas(
-        fakeOpenBlas,
-        () -> {
-          OpenBlasMatrixDotProductScorer scorer =
-              new OpenBlasMatrixDotProductScorer(
-                  TestDenseMatrices.of(new float[] {1f}, 1, 1),
-                  /* availabilitySupplier */ () -> true);
-
-          scorer.close();
-
-          assertThrows(
-              IllegalStateException.class, () -> scorer.score(new float[] {1f}, new float[] {0f}));
-          scorer.close();
-        });
-
-    assertEquals(1, fakeOpenBlas.deallocateCalls);
   }
 
   @Test
@@ -246,68 +126,5 @@ class MatrixDotProductScorersTest {
   void validateScoreInputsAcceptsConsistentDimensions() {
     MatrixDotProductScorers.validateScoreInputs(
                 TestDenseMatrices.of(new float[] {1f, 2f}, 1, 2), new float[] {1f, 2f}, new float[] {0f});
-  }
-
-  private static void withFakeOpenBlas(FakeOpenBlas fakeOpenBlas, Runnable runnable) {
-    OpenBlasMatrixDotProductScorer.FloatArrayPointerFactory originalArrayPointerFactory =
-        OpenBlasMatrixDotProductScorer.floatArrayPointerFactory;
-    OpenBlasMatrixDotProductScorer.FloatSizePointerFactory originalSizePointerFactory =
-        OpenBlasMatrixDotProductScorer.floatSizePointerFactory;
-    OpenBlasMatrixDotProductScorer.FloatPointerDeallocator originalDeallocator =
-        OpenBlasMatrixDotProductScorer.floatPointerDeallocator;
-    OpenBlasMatrixDotProductScorer.FloatPointerArrayReader originalArrayReader =
-        OpenBlasMatrixDotProductScorer.floatPointerArrayReader;
-    OpenBlasMatrixDotProductScorer.SgemvOperation originalSgemvOperation =
-        OpenBlasMatrixDotProductScorer.sgemvOperation;
-    OpenBlasMatrixDotProductScorer.FloatPointerArrayWriter originalArrayWriter =
-        OpenBlasMatrixDotProductScorer.floatPointerArrayWriter;
-    Runnable originalNativeLoadProbe = OpenBlasMatrixDotProductScorer.blasNativeLoadProbe;
-    java.util.function.IntConsumer originalThreadCountSetter =
-        OpenBlasMatrixDotProductScorer.blasNumThreadsSetter;
-    try {
-      OpenBlasMatrixDotProductScorer.floatArrayPointerFactory = values -> null;
-      OpenBlasMatrixDotProductScorer.floatSizePointerFactory = size -> null;
-      OpenBlasMatrixDotProductScorer.floatPointerDeallocator =
-          pointer -> fakeOpenBlas.deallocateCalls++;
-      OpenBlasMatrixDotProductScorer.floatPointerArrayReader =
-          (pointer, values, offset, length) -> values[offset] = 2f;
-      OpenBlasMatrixDotProductScorer.floatPointerArrayWriter =
-          (pointer, values, length) -> fakeOpenBlas.queryWrites++;
-      OpenBlasMatrixDotProductScorer.sgemvOperation =
-          (order,
-              transA,
-              numRowsA,
-              numColsA,
-              alpha,
-              matrix,
-              lda,
-              query,
-              incX,
-              beta,
-              dotProducts,
-              incY) -> fakeOpenBlas.gemvCalls++;
-      OpenBlasMatrixDotProductScorer.blasNativeLoadProbe =
-          () -> fakeOpenBlas.nativeLoadProbeCalls++;
-      OpenBlasMatrixDotProductScorer.blasNumThreadsSetter =
-          numThreads -> fakeOpenBlas.numThreadsUpdates.add(numThreads);
-      runnable.run();
-    } finally {
-      OpenBlasMatrixDotProductScorer.floatArrayPointerFactory = originalArrayPointerFactory;
-      OpenBlasMatrixDotProductScorer.floatSizePointerFactory = originalSizePointerFactory;
-      OpenBlasMatrixDotProductScorer.floatPointerDeallocator = originalDeallocator;
-      OpenBlasMatrixDotProductScorer.floatPointerArrayReader = originalArrayReader;
-      OpenBlasMatrixDotProductScorer.floatPointerArrayWriter = originalArrayWriter;
-      OpenBlasMatrixDotProductScorer.sgemvOperation = originalSgemvOperation;
-      OpenBlasMatrixDotProductScorer.blasNativeLoadProbe = originalNativeLoadProbe;
-      OpenBlasMatrixDotProductScorer.blasNumThreadsSetter = originalThreadCountSetter;
-    }
-  }
-
-  private static final class FakeOpenBlas {
-    private int nativeLoadProbeCalls;
-    private int deallocateCalls;
-    private int gemvCalls;
-    private int queryWrites;
-    private final List<Integer> numThreadsUpdates = new ArrayList<>();
   }
 }

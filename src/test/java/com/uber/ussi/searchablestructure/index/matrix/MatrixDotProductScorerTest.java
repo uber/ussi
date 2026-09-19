@@ -15,7 +15,7 @@ class MatrixDotProductScorerTest {
 
   @Test
   void openBlasScorerMatchesJavaScorer() {
-    assumeTrue(OpenBlasMatrixDotProductScorer.isAvailable());
+    assumeTrue(OpenBlas.isAvailable());
     float[] matrix =
         new float[] {
           1.0f, 0.0f, 2.0f,
@@ -27,8 +27,9 @@ class MatrixDotProductScorerTest {
     float[] openBlasDots = new float[3];
     JavaMatrixDotProductScorer javaScorer =
         new JavaMatrixDotProductScorer(TestDenseMatrices.of(matrix, 3, 3));
-    try (OpenBlasMatrixDotProductScorer openBlasScorer =
-        new OpenBlasMatrixDotProductScorer(TestDenseMatrices.of(matrix, 3, 3), OpenBlasMatrixDotProductScorer::isAvailable)) {
+    try (MatrixDotProductScorer openBlasScorer =
+        OpenBlas.createScorer(
+            TestDenseMatrices.of(matrix, 3, 3), OpenBlas::isAvailable)) {
       javaScorer.score(query, javaDots);
       openBlasScorer.score(query, openBlasDots);
     }
@@ -69,9 +70,9 @@ class MatrixDotProductScorerTest {
 
     assertArrayEquals(reference, fromJava, DELTA);
 
-    try (OpenBlasMatrixDotProductScorer openBlasScorer =
-        new OpenBlasMatrixDotProductScorer(
-            chunked, OpenBlasMatrixDotProductScorer::isAvailable)) {
+    try (MatrixDotProductScorer openBlasScorer =
+        OpenBlas.createScorer(
+            chunked, OpenBlas::isAvailable)) {
       float[] fromOpenBlas = new float[numRows];
 
       openBlasScorer.score(query, fromOpenBlas);
@@ -88,7 +89,7 @@ class MatrixDotProductScorerTest {
    */
   @Test
   void openBlasScorerMatchesJavaScorerOverProfilePhotoSizedEmbeddings() {
-    assumeTrue(OpenBlasMatrixDotProductScorer.isAvailable());
+    assumeTrue(OpenBlas.isAvailable());
     EmbeddingData embeddingData =
         generatedProfilePhotoEmbeddingsData(
             RANDOM_PROFILE_PHOTO_NUM_ROWS,
@@ -103,10 +104,10 @@ class MatrixDotProductScorerTest {
     JavaMatrixDotProductScorer javaScorer =
         new JavaMatrixDotProductScorer(TestDenseMatrices.of(matrix, numRows, dimension));
 
-    try (OpenBlasMatrixDotProductScorer openBlasScorer =
-        new OpenBlasMatrixDotProductScorer(
+    try (MatrixDotProductScorer openBlasScorer =
+        OpenBlas.createScorer(
             TestDenseMatrices.of(matrix, numRows, dimension),
-            OpenBlasMatrixDotProductScorer::isAvailable)) {
+            OpenBlas::isAvailable)) {
       javaScorer.score(query, javaDots);
       openBlasScorer.score(query, openBlasDots);
     }

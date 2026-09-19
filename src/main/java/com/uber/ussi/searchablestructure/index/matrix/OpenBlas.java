@@ -72,7 +72,7 @@ final class OpenBlas implements NativeBlas<FloatPointer> {
     // budget applies it instead, under a moment with no search running. It is bounded by the
     // threads the loaded binary retains buffers for, since asking for more than that is refused.
     ParallelismBudget.shared()
-        .onChange(numThreads -> blasNumThreadsSetter.accept(Math.min(numThreads, maxNumThreads)));
+        .onNumThreadsPerBatchChange(numThreads -> blasNumThreadsSetter.accept(Math.min(numThreads, maxNumThreads)));
   }
 
   int getMaxNumThreads() {

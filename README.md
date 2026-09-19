@@ -25,6 +25,8 @@ bazel build //:src_main
 bazel test //:test_main
 ```
 
+The same tests run on Linux and macOS for every pull request.
+
 Create a namespace, insert rows, and search:
 
 ```java

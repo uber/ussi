@@ -205,6 +205,21 @@ they govern differs:
   first one gets, and a host of one socket of single-threaded cores gives the
   two counts the same number.
 
+Only the second count costs anything to move. OpenBLAS deadlocks or corrupts
+memory when such a setting changes while a call is dispatching work, so it is
+applied with no search running, which means waiting for the searches in flight
+to finish and holding back those arriving behind them. Two things keep that
+rare. It is applied only when it differs from the count in force, so the many
+concurrency changes that move the first count and not the second cost nothing.
+And the searches in flight are read once a second but averaged over ten
+readings before either count moves, which bounds how often a change can arrive
+and smooths a workload whose searches overlap only occasionally.
+
+Averaging rather than taking the highest reading is what makes that window
+safe. A maximum grows with the window it is taken over, so a ten-second maximum
+would read a machine serving one long search at a time as though it served
+several, and would divide the machine among searches that never ran together.
+
 A scan is the search that divides most readily, since rows score independently
 and only the best few survive. `ParallelRowScan` gives each range of the row
 space its own heap and merges the heaps, a merge whose size is the range count

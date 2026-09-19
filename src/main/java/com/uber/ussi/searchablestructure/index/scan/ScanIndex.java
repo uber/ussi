@@ -90,7 +90,7 @@ public final class ScanIndex extends RowStoringIndex {
     return ParallelRowScan.search(
         rowNumToTermsAndValuesMap,
         requestTermsAndValues,
-        searchParallelism(),
+        getNumThreadsPerSearch(),
         maxResults,
         minSimilarity,
         (rowNum, termsAndValues, rows, sharedMinSimilarity) ->
@@ -113,7 +113,7 @@ public final class ScanIndex extends RowStoringIndex {
     return ParallelRowScan.searchCandidates(
         rowNums,
         requestTermsAndValues,
-        searchParallelism(),
+        getNumThreadsPerSearch(),
         maxResults,
         minSimilarity,
         (rowNum, rows, sharedMinSimilarity) ->

@@ -100,49 +100,16 @@ class QueryAdmissionTest {
   }
 
   @Test
-  void reportsThePeakInFlightAndThenForgetsIt() {
+  void countsTheSearchesRunningRightNow() {
     QueryAdmission admission = new QueryAdmission(4);
     admission.acquire();
     admission.acquire();
-    admission.acquire();
 
-    // Dropping to one and rising again to two must not lower the peak: it is the high-water mark of
-    // the interval, not the latest reading.
-    admission.release();
-    admission.release();
-    admission.acquire();
-    admission.release();
-    admission.release();
-
-    assertEquals(3, admission.takePeakNumConcurrentSearches());
-    assertEquals(0, admission.takePeakNumConcurrentSearches(), "the peak covers one interval only");
-  }
-
-  @Test
-  void countsASearchStillRunningFromAnEarlierInterval() {
-    QueryAdmission admission = new QueryAdmission(8);
-    admission.acquire();
-    admission.acquire();
-    admission.acquire();
-
-    assertEquals(
-        3, admission.takePeakNumConcurrentSearches(), "the interval they started in sees them");
-
-    // A search can outlast the interval it arrived in, so later intervals must still count it
-    // rather than concluding the engine is idle and budgeting every core to one search.
-    assertEquals(3, admission.takePeakNumConcurrentSearches(), "later intervals still see them");
+    assertEquals(2, admission.getNumConcurrentSearches());
 
     admission.release();
-    admission.release();
-    admission.release();
 
-    // They were running when this interval opened, so its peak is still three.
-    assertEquals(
-        3,
-        admission.takePeakNumConcurrentSearches(),
-        "the interval they finished in still sees them");
-    assertEquals(
-        0, admission.takePeakNumConcurrentSearches(), "the interval after they finish sees none");
+    assertEquals(1, admission.getNumConcurrentSearches(), "a finished search is not counted");
   }
 
   @Test

@@ -89,7 +89,7 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
     // Composition lives here: admission counts the searches and can quiet them, the budget decides
     // what that concurrency is worth, and neither needs to know about the other.
     ParallelismBudget.shared()
-        .attach(queryAdmission::takePeakNumConcurrentSearches, queryAdmission::runExclusively);
+        .attach(queryAdmission::getNumConcurrentSearches, queryAdmission::runExclusively);
     this.nextRowNum = 0;
     this.nextStructureGeneration = 0;
     this.consolidationInProgress = false;

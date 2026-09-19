@@ -44,7 +44,7 @@ public final class ScanCache extends Cache {
     return ParallelRowScan.search(
         rowNumToTermsAndValuesMap,
         record,
-        searchParallelism(),
+        getNumThreadsPerSearch(),
         maxResults,
         minSimilarity,
         (rowNum, termsAndValues, rows, sharedMinSimilarity) -> {

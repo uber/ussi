@@ -30,7 +30,13 @@ import javax.annotation.Nullable;
  */
 public final class ParallelismBudget {
 
-  private static final long REBUDGET_INTERVAL_MILLIS = 1_000;
+  private static final long SAMPLE_INTERVAL_MILLIS = 1_000;
+
+  /**
+   * Readings averaged into one update, which bounds how often a process-global thread count moves
+   * and so how often the engine is quiesced to move it.
+   */
+  private static final int NUM_SAMPLES_PER_UPDATE = 10;
 
   private static final ParallelismBudget SHARED =
       new ParallelismBudget(
@@ -49,6 +55,9 @@ public final class ParallelismBudget {
   private volatile Consumer<Runnable> exclusively = Runnable::run;
   private int numAttachments;
   @Nullable private ScheduledExecutorService rebudgeter;
+  // Read and written by the rebudgeter's single thread alone.
+  private int numSamples;
+  private long numConcurrentSearchesSampled;
 
   ParallelismBudget(int maxNumThreadsPerSearch, int maxNumSharedThreads) {
     if (maxNumThreadsPerSearch < 1) {
@@ -111,10 +120,12 @@ public final class ParallelismBudget {
               thread.setDaemon(true);
               return thread;
             });
+    numSamples = 0;
+    numConcurrentSearchesSampled = 0;
     rebudgeter.scheduleWithFixedDelay(
-        () -> update(numConcurrentSearchesSource.getAsInt()),
-        REBUDGET_INTERVAL_MILLIS,
-        REBUDGET_INTERVAL_MILLIS,
+        () -> sample(numConcurrentSearchesSource.getAsInt()),
+        SAMPLE_INTERVAL_MILLIS,
+        SAMPLE_INTERVAL_MILLIS,
         TimeUnit.MILLISECONDS);
   }
 
@@ -149,18 +160,45 @@ public final class ParallelismBudget {
     return Math.max(1, maxNumSharedThreads / Math.max(1, numConcurrentSearches));
   }
 
-  /** Re-derives both counts from the concurrent searches just counted. */
+  /**
+   * Takes one reading of the searches in flight, and re-derives both counts once {@link
+   * #NUM_SAMPLES_PER_UPDATE} readings are in.
+   *
+   * <p>The readings are averaged rather than maximised. A maximum is biased upward by however long
+   * it is taken over, so averaging keeps the window a question of cost rather than of what is
+   * being measured: a machine serving one long search at a time reads as one search, however many
+   * readings go into the average.
+   */
+  void sample(int numConcurrentSearches) {
+    numConcurrentSearchesSampled += Math.max(0, numConcurrentSearches);
+    if (++numSamples < NUM_SAMPLES_PER_UPDATE) {
+      return;
+    }
+    int averageNumConcurrentSearches =
+        (int) Math.round((double) numConcurrentSearchesSampled / numSamples);
+    numSamples = 0;
+    numConcurrentSearchesSampled = 0;
+    update(averageNumConcurrentSearches);
+  }
+
+  /**
+   * Re-derives both counts from the given number of concurrent searches.
+   *
+   * <p>The threads one search may use is read by each search for itself, so it is assigned here
+   * and needs no moment without searches. A process-global thread count is one setting every
+   * search in flight shares, and OpenBLAS deadlocks or corrupts memory when such a setting moves
+   * while a call is dispatching work, so it is applied with no search running and only when it
+   * differs from the count already in force.
+   */
   void update(int numConcurrentSearches) {
-    int updatedNumThreadsPerSearch = getNumThreadsPerSearchFor(numConcurrentSearches);
+    numThreadsPerSearch = getNumThreadsPerSearchFor(numConcurrentSearches);
     int updatedNumSharedThreads = getNumSharedThreadsFor(numConcurrentSearches);
-    if (updatedNumThreadsPerSearch == numThreadsPerSearch
-        && updatedNumSharedThreads == numSharedThreads) {
+    if (updatedNumSharedThreads == numSharedThreads) {
       return;
     }
     exclusively.accept(
         () -> {
           onChange.accept(updatedNumSharedThreads);
-          numThreadsPerSearch = updatedNumThreadsPerSearch;
           numSharedThreads = updatedNumSharedThreads;
         });
   }

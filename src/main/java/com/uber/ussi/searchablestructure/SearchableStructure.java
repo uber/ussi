@@ -43,7 +43,7 @@ public interface SearchableStructure {
    * since the setting is shared by every concurrent search. Such a structure registers with {@link
    * ParallelismBudget#onChange} instead.
    */
-  default int searchParallelism() {
+  default int getNumThreadsPerSearch() {
     return ParallelismBudget.shared().getNumThreadsPerSearch();
   }
 }

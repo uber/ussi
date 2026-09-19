@@ -1,0 +1,69 @@
+name: tests
+
+# Every pull request, and every push to main so a merge that breaks the build is caught even if
+# the branch passed before it was rebased.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A new push to a branch makes the previous run's answer stale.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Both platforms report their own answer rather than the first failure ending the run.
+      fail-fast: false
+      matrix:
+        # The dense scorer loads a different native binary on each, and falls back to the Java
+        # scorer where none loads, so each platform exercises a different path.
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      # Bazel downloads its own toolchain and every Maven artifact, which is most of the run.
+      # Both caches are keyed on the lock file, so they are reused until a dependency changes.
+      - name: Restore the build caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/bazel-disk
+            ~/.cache/bazel-repository
+          key: bazel-${{ matrix.os }}-${{ hashFiles('MODULE.bazel.lock', '.bazelversion') }}
+          restore-keys: bazel-${{ matrix.os }}-
+
+      - name: Test
+        run: |
+          bazel test //:test_main \
+            --disk_cache="$HOME/.cache/bazel-disk" \
+            --repository_cache="$HOME/.cache/bazel-repository" \
+            --test_output=errors
+
+      # The runner reports success when no test runs at all, so the count is asserted rather
+      # than the exit status alone.
+      - name: Assert that tests ran
+        run: |
+          log=bazel-testlogs/test_main/test.log
+          if [ ! -f "$log" ]; then
+            echo "No test log at $log."
+            exit 1
+          fi
+          numTests=$(grep -oE '[0-9]+ tests successful' "$log" | grep -oE '^[0-9]+' | tail -1)
+          echo "$numTests tests successful"
+          if [ -z "$numTests" ] || [ "$numTests" -lt 1 ]; then
+            echo "The suite reported success without running any test."
+            exit 1
+          fi
+
+      - name: Upload the test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-log-${{ matrix.os }}
+          path: bazel-testlogs/test_main/test.log
+          if-no-files-found: ignore

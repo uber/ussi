@@ -19,7 +19,13 @@ public final class LongTermsAndValues {
 
   private final long[] terms;
   private final float[] values;
-  // Comparator-specific summary value used for pruning. For L2 this is the squared vector norm.
+  /**
+   * Comparator-specific summary value used for pruning. For L2 this is the squared vector norm.
+   *
+   * <p>It also records whether the row is deleted: a value that is not a number marks a row an
+   * index no longer returns. Every record reaching an index is validated to carry a finite,
+   * non-negative value, so no live row can carry that mark.
+   */
   private final double uniValue;
 
   /** Trusted construction path for canonical terms and a comparator-derived uniValue. */
@@ -70,6 +76,16 @@ public final class LongTermsAndValues {
 
   public double getUniValue() {
     return uniValue;
+  }
+
+  /**
+   * Returns this record as a deleted row, which an index keeps in place of the original until
+   * it is rebuilt. Its unilateral value is no longer a number, which is how the row is
+   * recognised as deleted and, where a similarity is derived from that value, how the row is
+   * excluded.
+   */
+  public LongTermsAndValues markAsDeleted() {
+    return new LongTermsAndValues(terms, values, Double.NaN);
   }
 
   /**

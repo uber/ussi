@@ -3,7 +3,9 @@ package com.uber.ussi.comparatornormalizer;
 import static com.uber.ussi.utils.MathUtils.EPSILON_9;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.uber.ussi.error.ComparatorNormalizerCreationError;
 import com.uber.ussi.error.SearchResponseError;
@@ -150,5 +152,30 @@ class ComparatorNormalizerTest {
     assertThrows(
         ComparatorNormalizerCreationError.class,
         () -> ComparatorNormalizerFactory.createComparatorNormalizer("nope", Map.of()));
+  }
+
+  /**
+   * A matrix index marks a deleted row by giving it a unilateral value no similarity can be
+   * derived from, and relies on every normalizer carrying that through rather than rejecting it
+   * or clamping it into range, since a similarity that is not a number is what excludes the row.
+   */
+  @Test
+  void everyNormalizerCarriesAValueThatIsNotANumberThrough() {
+    ComparatorNormalizer[] normalizers = {
+      new IdentityComparatorNormalizer(),
+      new ComplementComparatorNormalizer(),
+      new LpComparatorNormalizer(),
+      new ReciprocalComparatorNormalizer(),
+    };
+
+    for (ComparatorNormalizer normalizer : normalizers) {
+      double similarity = normalizer.comparatorValueToNormalizedSimilarityValue(Double.NaN);
+
+      assertTrue(
+          Double.isNaN(similarity),
+          normalizer.getClass().getSimpleName() + " returned " + similarity);
+      assertFalse(
+          similarity >= 0.0, normalizer.getClass().getSimpleName() + " admitted a deleted row");
+    }
   }
 }

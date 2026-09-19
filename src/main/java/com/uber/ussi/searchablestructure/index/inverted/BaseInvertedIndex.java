@@ -499,7 +499,7 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
         || termsAndValues.termsLength() == 0
         || indexedRow == null
         || !indexedQuery.sharesAnyTerm(indexedRow)
-        || !canScoreRow(rowNum, metadataFilter)) {
+        || !canScoreRow(indexedRow, rowNum, metadataFilter)) {
       return minSimilarity;
     }
     double similarity = comparator.getSimilarity(query, termsAndValues, minSimilarity);
@@ -513,10 +513,30 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
     return Math.max(minSimilarity, ResultHeaps.getConservativeMinSimilarity(rows));
   }
 
-  /** Lets tombstoned rows stay in the physical inverted lists without reaching search results. */
+  /** The same, for a caller that has not read the indexed row yet. */
   private boolean canScoreRow(long rowNum, @Nullable MetaFilter metadataFilter) {
-    return !isDeleted(rowNum)
+    return canScoreRow(getIndexedRow(rowNum), rowNum, metadataFilter);
+  }
+
+  /** Lets deleted rows stay in the physical inverted lists without reaching search results. */
+  private boolean canScoreRow(
+      LongTermsAndValues indexedRow, long rowNum, @Nullable MetaFilter metadataFilter) {
+    return !isDeleted(indexedRow)
         && (metadataFilter == null || matchesMetaFilter(rowNum, metadataFilter));
+  }
+
+  /**
+   * The indexed form of a row is what verification reads, so it records the deletion too. The
+   * unilateral values the inverted lists are ordered by are left alone, since candidate
+   * generation prunes against them and an order it cannot compare would stop pruning working.
+   */
+  @Override
+  protected void onRowDeleted(long rowNum) {
+    LongTermsAndValues indexedRow = indexedRowNumToTermsAndValuesMap.get(rowNum);
+    // Defensive check: a row whose terms were all discarded has no indexed form.
+    if (indexedRow != null) {
+      indexedRowNumToTermsAndValuesMap.put(rowNum, indexedRow.markAsDeleted());
+    }
   }
 
   private KeyAndPrefixFilteringData[] collectFilteredSearchQueryKeys(

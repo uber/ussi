@@ -71,7 +71,7 @@ public final class MatrixIndex extends RowStoringIndex {
     this.dotProductScorer =
         MatrixDotProductScorers.create(
             matrix,
-            new MatrixRows(rowNums, rowUniValues, this::isDeleted, dotProductScored));
+            new MatrixRows(rowNums, rowUniValues, dotProductScored));
     // Dense bulk scoring cannot push metadata filters down, so AUTO pre-filters or post-filters.
     this.metadataFilteredSearchExecutor =
         new MetadataFilteredSearchExecutor(
@@ -191,6 +191,23 @@ public final class MatrixIndex extends RowStoringIndex {
         queryValues, new RowSelection(queryUniValue, minSimilarity, maxResults));
   }
 
+  /**
+   * A deleted row keeps its place in the matrix until the matrix is rebuilt, so its unilateral
+   * value is replaced with one no similarity can be derived from. Every similarity the comparator
+   * derives from it is then not a number, which no minimum similarity admits, so the row is
+   * excluded by the arithmetic the search performs regardless. Asking a set of deleted row
+   * numbers instead costs a lookup for every row of every query, which was measured to dominate
+   * the rest of the search.
+   */
+  @Override
+  protected void onRowDeleted(long rowNum) {
+    int matrixRowIndex = rowNumToMatrixRowIndex.getOrDefault(rowNum, -1);
+    // Defensive check: a row absent from the matrix has no unilateral value to replace.
+    if (matrixRowIndex >= 0) {
+      rowUniValues[matrixRowIndex] = Double.NaN;
+    }
+  }
+
   private List<RowNumAndSimilarity> searchMatrixRows(
       float[] queryValues,
       double queryUniValue,
@@ -214,9 +231,6 @@ public final class MatrixIndex extends RowStoringIndex {
       @Nullable MetaFilter metadataFilter,
       float minSimilarity) {
     long rowNum = rowNums[matrixRowIndex];
-    if (isDeleted(rowNum)) {
-      return;
-    }
     if (metadataFilter != null && !matchesMetaFilter(rowNum, metadataFilter)) {
       return;
     }

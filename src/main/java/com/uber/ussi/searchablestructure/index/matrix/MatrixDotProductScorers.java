@@ -10,20 +10,16 @@ final class MatrixDotProductScorers {
 
   static MatrixDotProductScorer create(DenseMatrix matrix) {
     return create(
-        matrix,
-        OpenBlasMatrixDotProductScorer.isAvailable(),
-        () ->
-            new OpenBlasMatrixDotProductScorer(
-                matrix, OpenBlasMatrixDotProductScorer::isAvailable));
+        matrix, OpenBlas.isAvailable(), () -> OpenBlas.createScorer(matrix, OpenBlas::isAvailable));
   }
 
   static MatrixDotProductScorer create(
       DenseMatrix matrix,
-      boolean openBlasAvailable,
-      Supplier<MatrixDotProductScorer> openBlasScorerSupplier) {
-    if (openBlasAvailable) {
+      boolean nativeBlasAvailable,
+      Supplier<MatrixDotProductScorer> nativeScorerSupplier) {
+    if (nativeBlasAvailable) {
       try {
-        return openBlasScorerSupplier.get();
+        return nativeScorerSupplier.get();
       } catch (LinkageError e) {
         return new JavaMatrixDotProductScorer(matrix);
       } catch (RuntimeException e) {

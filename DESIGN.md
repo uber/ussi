@@ -91,8 +91,8 @@ rises as structures return results, and never falls, which is what lets a
 structure treat it as a bound rather than a hint. It is one step below the
 weakest result held, so a row scoring exactly as well still qualifies. Passing
 it requires no additional mechanism, because every structure already prunes on
-a minimum similarity to answer a minimum similarity search. A nearest-neighbour search
-used to pass zero.
+a minimum similarity to answer a minimum similarity search. A nearest-neighbour
+search used to pass zero.
 
 Order therefore matters, and the structures are visited oldest first. Caches
 graduate at one size and older indexes are consolidated into larger ones, so the
@@ -175,7 +175,10 @@ check before using: OpenBLAS keeps one memory buffer per thread inside the
 library, and past that count its allocator faults rather than failing, so enough
 concurrent dense searches abort the process rather than merely slowing it down.
 The supply the shipped binaries are built with is above the core count on the
-machines tested, so a bound of the cores keeps them inside it.
+machines tested, so a bound of the cores keeps them inside it. That is not
+relied upon: `NativeBlasAdmission` bounds the callers of a native library by
+the lesser of the cores and what the loaded binary reports, so a machine whose
+cores outnumber the supply is bounded by the supply.
 
 ### Threads Within One Search
 
@@ -193,9 +196,9 @@ they govern differs:
   divided by the concurrent searches. That work waits in a queue when the cores
   are busy and spreads over every core, so every core it may use is worth
   having. Every structure that divides its own search reads this one.
-- **A process-global thread count**, which today means the OpenBLAS thread
-  count behind the dense scorer, takes the cores of *one socket*, divided by the
-  concurrent searches. Such a library keeps threads of its own and occupies its
+- **A process-global thread count**, held by a native library rather than by
+  any one structure, takes the cores of *one socket*, divided by the concurrent
+  searches. Such a library keeps threads of its own and occupies its
   cores for as long as the setting stands, and those threads gain nothing past
   one socket: two hardware threads of a core share that core's execution units,
   and a socket reaches another socket's memory over a link. `ProcessorTopology`
@@ -205,8 +208,9 @@ they govern differs:
   first one gets, and a host of one socket of single-threaded cores gives the
   two counts the same number.
 
-Only the second count is expensive to modify. OpenBLAS deadlocks or corrupts
-memory when such a setting changes while a call is dispatching work, so it is
+Only the second count is expensive to modify. A library holding one may
+deadlock or corrupt memory when it changes while a call is dispatching work, as
+OpenBLAS does behind the native dense scorer, so it is
 applied with no search running, which requires draining the concurrent searches
 and admitting none behind them until it is applied. Those searches are every
 search in the process, including searches of structures holding no such count
@@ -399,8 +403,9 @@ store, and an index holds the one record type its comparator also reads.
 - `index.scan`: `ScanIndex`, which reads no record type of its own and so
   accepts every one of them.
 - `index.matrix`: `MatrixIndex` and its matrix-vector dot-product scorers
-  (`MatrixDotProductScorers` and the Java and OpenBLAS scorers). The technology
-  presumes dense vectors.
+  (`MatrixDotProductScorers`, the Java scorer, and the native scorer with the
+  `NativeBlas` implementation it runs over). The technology presumes dense
+  vectors.
 - `index.inverted`: the inverted-list family, which presumes a sparse key
   alphabet, since its pruning is only worth its bookkeeping when a key selects
   few rows. `BaseInvertedIndex` owns the uni-sorted inverted lists and drives
@@ -517,8 +522,28 @@ derives L2 distance from:
 ```
 
 The dense scorer tries OpenBLAS on supported Linux and macOS platforms and
-falls back to the Java scorer when OpenBLAS cannot be loaded.
+falls back to the Java scorer when OpenBLAS cannot be loaded. Availability is
+determined once per process, since the probe loads native code and a failing
+load would otherwise be repeated for every index built.
 `NearestNeighborSearchIndex.close()` releases any native dense-matrix memory.
+
+The native scorer is written against `NativeBlas`, not against OpenBLAS.
+`NativeMatrixDotProductScorer` allocates the buffers, reuses them across
+scores, traverses the matrix one chunk at a time and admits its callers, and
+none of that depends on the library in use. `OpenBlas` supplies the rest: which
+platforms carry a binary, whether it loads, the thread count the library
+maintains for the process, and the bound on concurrent callers its per-thread
+buffers impose. Supporting a further library requires implementing that
+interface and nothing else. The interface is parameterised by the buffer handle
+it allocates, so a library addressing memory this process cannot dereference is
+supported on the same terms as one addressing memory it can.
+
+`NativeBlasAdmission` bounds the callers inside a library and admits them in
+arrival order. Where a library holds a fixed resource per calling thread, as
+OpenBLAS does with its buffers, the bound is a correctness requirement rather
+than a throughput choice, and a library rationing nothing is bounded by
+`Integer.MAX_VALUE`. One instance covers a whole library rather than one
+matrix, because the resource it rations is the library's.
 
 Scoring several waiting queries in one matrix-matrix multiply was benchmarked on
 x86-64 and ARM64 and not adopted. The appeal is that a batch reads the matrix
@@ -711,8 +736,8 @@ The minimum is 50,000 rows, chosen conservatively rather than measured: sharding
 was measured to pay at about 60,000 rows per shard and to lose at about 15,000.
 
 Only inverted indexes are sharded. A scan index already divides one search
-across its rows, and a matrix index scored by OpenBLAS divides inside that
-scorer, both from the same budget. A matrix index scored by the pure-Java scorer
+across its rows, and a matrix index scored by a native library divides inside
+that scorer, both from the same budget. A matrix index scored by the Java scorer
 draws nothing from the budget, so sharding it remains unexplored.
 
 The inverted term cache is not sharded. It is bounded by `max_cache_size` and so

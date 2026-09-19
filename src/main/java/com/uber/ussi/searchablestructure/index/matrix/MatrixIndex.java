@@ -13,10 +13,11 @@ import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
-import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
+import com.uber.ussi.searchablestructure.result.ResultHeaps;
+import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.index.RowStoringIndex;
 import com.uber.ussi.searchablestructure.index.MetadataFilteredSearchExecutor;
-import com.uber.ussi.searchablestructure.metadata.MetadataFilteringStrategy;
+import com.uber.ussi.searchablestructure.utils.metadata.MetadataFilteringStrategy;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
 import java.util.Collections;
 import java.util.List;
@@ -169,7 +170,7 @@ public final class MatrixIndex extends RowStoringIndex {
           queryValues, queryUniValue, minSimilarity, maxResults);
     }
     // With in-filtering, skip non-matching rows before paying the per-row similarity cost.
-    BoundedSizeMaxHeap<RowNumAndSimilarity> rows = createTopResultsHeap(maxResults);
+    BoundedSizeMaxHeap<RowNumAndSimilarity> rows = ResultHeaps.newTopResults(maxResults);
     for (int matrixRowIndex = 0; matrixRowIndex < rowNums.length; ++matrixRowIndex) {
       addMatchingRow(
           rows, queryValues, queryUniValue, matrixRowIndex, metadataFilter, minSimilarity);
@@ -182,7 +183,7 @@ public final class MatrixIndex extends RowStoringIndex {
     float[] dotProducts = new float[rowNums.length];
     dotProductScorer.score(queryValues, dotProducts);
 
-    BoundedSizeMaxHeap<RowNumAndSimilarity> rows = createTopResultsHeap(maxResults);
+    BoundedSizeMaxHeap<RowNumAndSimilarity> rows = ResultHeaps.newTopResults(maxResults);
     for (int matrixRowIndex = 0; matrixRowIndex < rowNums.length; ++matrixRowIndex) {
       long rowNum = rowNums[matrixRowIndex];
       if (isDeleted(rowNum)) {
@@ -205,7 +206,7 @@ public final class MatrixIndex extends RowStoringIndex {
       @Nullable MetaFilter metadataFilter,
       float minSimilarity,
       int maxResults) {
-    BoundedSizeMaxHeap<RowNumAndSimilarity> rows = createTopResultsHeap(maxResults);
+    BoundedSizeMaxHeap<RowNumAndSimilarity> rows = ResultHeaps.newTopResults(maxResults);
     for (IntCursor matrixRowIndex : matrixRowIndexes) {
       addMatchingRow(
           rows, queryValues, queryUniValue, matrixRowIndex.value, metadataFilter, minSimilarity);
@@ -233,9 +234,6 @@ public final class MatrixIndex extends RowStoringIndex {
     }
   }
 
-  private static BoundedSizeMaxHeap<RowNumAndSimilarity> createTopResultsHeap(int maxResults) {
-    return new BoundedSizeMaxHeap<>(maxResults, RowNumAndSimilarity.TOP_RESULTS_HEAP_ORDER);
-  }
 
   /** Scores one row without the bulk multiply, for a search that reaches only some of them. */
   private float computeSimilarityForMatrixRow(

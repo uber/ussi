@@ -7,13 +7,13 @@ import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
-import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
-import com.uber.ussi.searchablestructure.TopResults;
+import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
+import com.uber.ussi.searchablestructure.result.ResultHeaps;
 import com.uber.ussi.searchablestructure.index.RowStoringIndex;
 import com.uber.ussi.searchablestructure.index.MetadataFilteredSearchExecutor;
-import com.uber.ussi.searchablestructure.metadata.MetadataFilteringStrategy;
-import com.uber.ussi.searchablestructure.parallel.ParallelRowScan;
-import com.uber.ussi.searchablestructure.parallel.SharedMinSimilarity;
+import com.uber.ussi.searchablestructure.utils.metadata.MetadataFilteringStrategy;
+import com.uber.ussi.searchablestructure.utils.parallel.ParallelRowScan;
+import com.uber.ussi.searchablestructure.utils.parallel.SharedMinSimilarity;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
 import java.util.Collections;
 import java.util.List;
@@ -142,7 +142,7 @@ public final class ScanIndex extends RowStoringIndex {
       return;
     }
     float tightened =
-        TopResults.tightenedMinSimilarity(rows, minSimilarity, sharedMinSimilarity);
+        ResultHeaps.tightenedMinSimilarity(rows, minSimilarity, sharedMinSimilarity);
     float similarity =
         (float) comparator.getSimilarity(requestTermsAndValues, termsAndValues, tightened);
     if (similarity >= tightened) {
@@ -150,7 +150,4 @@ public final class ScanIndex extends RowStoringIndex {
     }
   }
 
-  private static BoundedSizeMaxHeap<RowNumAndSimilarity> createTopResultsHeap(int maxResults) {
-    return new BoundedSizeMaxHeap<>(maxResults, RowNumAndSimilarity.TOP_RESULTS_HEAP_ORDER);
-  }
 }

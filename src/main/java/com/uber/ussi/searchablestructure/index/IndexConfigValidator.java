@@ -13,7 +13,7 @@ import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.config.NamespaceConfig.CandidateGeneratorType;
 import com.uber.ussi.config.NamespaceConfigValidator;
 import com.uber.ussi.entity.termsandvalues.RecordType;
-import com.uber.ussi.searchablestructure.metadata.MetadataFilteringStrategy;
+import com.uber.ussi.searchablestructure.utils.metadata.MetadataFilteringStrategy;
 import com.uber.ussi.utils.ConfigKeys;
 import java.util.List;
 import java.util.Set;

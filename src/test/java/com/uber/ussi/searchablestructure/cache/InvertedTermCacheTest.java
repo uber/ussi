@@ -16,7 +16,7 @@ import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.RecordType;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
-import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
+import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
 import com.uber.ussi.utils.ConfigKeys;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;

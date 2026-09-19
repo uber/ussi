@@ -4,9 +4,9 @@ package com.uber.ussi.searchablestructure.cache;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
-import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
-import com.uber.ussi.searchablestructure.TopResults;
-import com.uber.ussi.searchablestructure.parallel.ParallelRowScan;
+import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
+import com.uber.ussi.searchablestructure.result.ResultHeaps;
+import com.uber.ussi.searchablestructure.utils.parallel.ParallelRowScan;
 import java.util.Collections;
 import java.util.List;
 
@@ -52,7 +52,7 @@ public final class ScanCache extends Cache {
             return;
           }
           float tightened =
-              TopResults.tightenedMinSimilarity(rows, minSimilarity, sharedMinSimilarity);
+              ResultHeaps.tightenedMinSimilarity(rows, minSimilarity, sharedMinSimilarity);
           float similarity = (float) comparator.getSimilarity(record, termsAndValues, tightened);
           if (similarity >= tightened) {
             rows.add(new RowNumAndSimilarity(rowNum, similarity));

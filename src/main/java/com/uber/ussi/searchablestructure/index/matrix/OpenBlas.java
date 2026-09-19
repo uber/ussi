@@ -4,7 +4,7 @@ package com.uber.ussi.searchablestructure.index.matrix;
 import static org.bytedeco.openblas.global.openblas.CblasNoTrans;
 import static org.bytedeco.openblas.global.openblas.CblasRowMajor;
 
-import com.uber.ussi.searchablestructure.parallel.ParallelismBudget;
+import com.uber.ussi.searchablestructure.utils.parallel.ParallelismBudget;
 import com.uber.ussi.utils.Utils;
 import java.util.function.BooleanSupplier;
 import java.util.function.IntConsumer;

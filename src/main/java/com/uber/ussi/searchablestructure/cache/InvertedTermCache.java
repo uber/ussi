@@ -10,12 +10,12 @@ import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.config.NamespaceConfig.PopularTermDiscardScope;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
-import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
-import com.uber.ussi.searchablestructure.TopResults;
-import com.uber.ussi.searchablestructure.inverted.KeyAndPrefixFilteringData;
-import com.uber.ussi.searchablestructure.metadata.PreFilteringResult;
-import com.uber.ussi.searchablestructure.parallel.ParallelRowScan;
-import com.uber.ussi.searchablestructure.parallel.SharedMinSimilarity;
+import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
+import com.uber.ussi.searchablestructure.result.ResultHeaps;
+import com.uber.ussi.searchablestructure.index.inverted.KeyAndPrefixFilteringData;
+import com.uber.ussi.searchablestructure.utils.metadata.PreFilteringResult;
+import com.uber.ussi.searchablestructure.utils.parallel.ParallelRowScan;
+import com.uber.ussi.searchablestructure.utils.parallel.SharedMinSimilarity;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
 import com.uber.ussi.utils.ConfigKeys;
 import com.uber.ussi.utils.MathUtils;
@@ -174,7 +174,7 @@ public final class InvertedTermCache extends Cache {
             return;
           }
           float tightened =
-              TopResults.tightenedMinSimilarity(rows, minSimilarity, sharedMinSimilarity);
+              ResultHeaps.tightenedMinSimilarity(rows, minSimilarity, sharedMinSimilarity);
           float similarity = (float) comparator.getSimilarity(query, verificationRow, tightened);
           if (similarity >= tightened) {
             rows.add(new RowNumAndSimilarity(rowNum, similarity));
@@ -197,7 +197,7 @@ public final class InvertedTermCache extends Cache {
       int maxResults) {
     KeyAndPrefixFilteringData[] termData = getTermAndPrefixFilteringData(discardedTermFreeQuery);
     Arrays.sort(termData);
-    BoundedSizeMaxHeap<RowNumAndSimilarity> rows = createTopResultsHeap(maxResults);
+    BoundedSizeMaxHeap<RowNumAndSimilarity> rows = ResultHeaps.newTopResults(maxResults);
     double currentMinSimilarity = minSimilarity;
     double maxPrefixSum =
         comparator.getMaxPrefixSumForTermsAndValues(
@@ -356,9 +356,6 @@ public final class InvertedTermCache extends Cache {
     }
   }
 
-  private static BoundedSizeMaxHeap<RowNumAndSimilarity> createTopResultsHeap(int maxResults) {
-    return new BoundedSizeMaxHeap<>(maxResults, RowNumAndSimilarity.TOP_RESULTS_HEAP_ORDER);
-  }
 
   private static double parseMaxFractionIdsPerTerm(NamespaceConfig namespaceConfig) {
     return namespaceConfig.readDoubleCacheParam(

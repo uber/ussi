@@ -12,7 +12,7 @@ import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
 import com.uber.ussi.entity.termsandvalues.TermsAndValues;
-import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
+import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.cache.Cache;
 import com.uber.ussi.searchablestructure.cache.CacheFactory;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;

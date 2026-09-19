@@ -1,8 +1,8 @@
 /* AUTHOR: Shijie Lu (shijie@uber.com), Shalini Kedlaya (skedlaya@uber.com), Ahmed Metwally (ametwally@uber.com) */
 package com.uber.ussi.searchablestructure.index.matrix;
 
-import com.uber.ussi.searchablestructure.parallel.ParallelismBudget;
-import com.uber.ussi.searchablestructure.parallel.SearchThreads;
+import com.uber.ussi.searchablestructure.utils.parallel.ParallelismBudget;
+import com.uber.ussi.searchablestructure.utils.parallel.SearchThreads;
 
 /**
  * Pure Java dense matrix-vector dot-product scorer.

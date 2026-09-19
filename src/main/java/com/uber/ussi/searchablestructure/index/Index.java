@@ -10,9 +10,9 @@ import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
-import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
+import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.SearchableStructure;
-import com.uber.ussi.searchablestructure.metadata.MetadataFilteringStrategy;
+import com.uber.ussi.searchablestructure.utils.metadata.MetadataFilteringStrategy;
 import java.util.List;
 import java.util.Objects;
 

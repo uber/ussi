@@ -310,7 +310,7 @@ unit can start after its siblings have already proved a great deal. The two
 kinds of work unit take it at different granularities, and both are correct:
 
 - A range of a scan reads the shared value for every row, through
-  `TopResults.tightenedMinSimilarity()`, which publishes what this range has
+  `ResultHeaps.tightenedMinSimilarity()`, which publishes what this range has
   proved and returns the higher of that and the shared value. The result is
   given to the comparator as a bound before the row is scored, so the first row
   a late-starting range scores already uses everything its siblings proved.
@@ -426,14 +426,16 @@ store, and an index holds the one record type its comparator also reads.
 
 The shared `Index` base class, `IndexFactory`, and
 `MetadataFilteredSearchExecutor` stay in the `index` package itself.
-`searchablestructure.inverted` holds `KeyAndPrefixFilteringData`, the one type
-the inverted indexes and the inverted cache both order their query keys with,
-so it sits beside both. Mutable `ScanCache` and `InvertedTermCache` live under
-`searchablestructure.cache`.
+`KeyAndPrefixFilteringData`, the one type the inverted indexes and the inverted
+cache both order their query keys with, lives with the inverted family in
+`index.inverted`, which the cache depends on in the one direction. Mutable
+`ScanCache` and `InvertedTermCache` live under `searchablestructure.cache`.
 
-`searchablestructure.parallel` holds everything that divides one search between
-threads, so that a structure reaches all of it through one package and none of
-it lives beside the structures it serves:
+`searchablestructure.utils` gathers what serves the structures without
+belonging to any of them. `utils.metadata` holds the metadata filtering
+vocabulary, and `utils.parallel` holds everything that divides one search
+between threads, so that a structure reaches all of it through one package and
+none of it lives beside the structures it serves:
 
 - `SearchThreads` owns the pool every structure submits its work units to, and
   the ticket ordering that serves them at their query's arrival.
@@ -446,9 +448,12 @@ it lives beside the structures it serves:
 - `WorkUnitSearcher` is what those two take, and `SharedMinSimilarity` is what
   the work units of one search prune against each other with.
 
-`RowNumAndSimilarity` and `TopResults` stay in `searchablestructure` itself,
-since a result and the heap holding it are the vocabulary of every structure
-rather than of the divided search.
+`searchablestructure.result` holds `RowNumAndSimilarity` and `ResultHeaps`,
+since a result and the operations over the heap holding it are the vocabulary
+of every structure rather than of the divided search. Every structure builds
+its heap with `ResultHeaps.newTopResults()`, so two searches of the same
+rows keep the same rows and merge into what one heap would have held.
+`SearchableStructure` itself stays at the root of the package it names.
 
 ### Comparators
 

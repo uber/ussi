@@ -170,7 +170,7 @@ class OpenBlasTest {
       }
 
       scorer.multiplyQueries(
-          queries, new RowSelection[queries.length], List.of(batched), queries.length);
+          queries, new RowSelection[queries.length], batched, queries.length);
 
       for (int query = 0; query < queries.length; ++query) {
         assertArrayEquals(

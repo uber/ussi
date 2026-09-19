@@ -542,12 +542,12 @@ so queries that share one multiply share that cost.
 waiting: a caller enqueues its query and then contends to perform the multiply,
 whichever caller wins takes everything enqueued at that instant, and the rest
 wait only for the multiply already running. No query ever waits for a query
-that has not arrived, so the combined count measures the offered load rather
+that has not arrived, so the batch size measures the offered load rather
 than a configured window, it is one when the machine is idle, and there is no
 arrival timer to tune.
 
 One query does not repay the packing a matrix-matrix multiply performs first,
-so a combination of one is multiplied as a vector instead. That single branch
+so a batch of one is multiplied as a vector instead. That single branch
 is what makes the arrangement free at low load: measured against dividing the
 socket between concurrent callers, it ties at one concurrent search on both
 shapes tested and wins from sixteen upward, by 6.4 times the throughput and 5.5
@@ -556,15 +556,15 @@ dimensions.
 
 Serializing callers is what lets one multiply hold the socket, and it is also
 why the process-global thread count is no longer divided. Serializing without
-combining is worse than dividing, since one full-width query is then a
+batching is worse than dividing, since one full-width query is then a
 single-server queue whose capacity load quickly exceeds; the gain comes from
-combining, and holding the full width is what makes a combination worth
+batching, and holding the full width is what makes a batch worth
 performing.
 
-A chunk is multiplied a slice of rows at a time rather than whole, because the
-products of one slice are held for every query in the combination while a chunk
-holds as many rows as a Java array can index. Slicing bounds that buffer by the
-slice rather than by the matrix, and the multiply still reads each row once.
+A chunk is multiplied a range of rows at a time rather than whole, because the
+products of one range are held for every query in the batch while a chunk holds
+as many rows as a Java array can index. Dividing the rows bounds that buffer by
+the range rather than by the matrix, and the multiply still reads each row once.
 
 A scorer returns the rows a query keeps rather than a dot product for every
 row. An implementation computing its products where this process cannot read
@@ -591,7 +591,7 @@ touch.
 
 The native scorer is written against `NativeBlas`, not against OpenBLAS.
 `NativeMatrixDotProductScorer` allocates the buffers, reuses them across
-scores, and traverses the matrix slice by slice, none of which depends on the
+scores, and traverses the matrix range by range, none of which depends on the
 library in use. `OpenBlas` supplies the rest: which platforms carry a binary,
 whether it loads, the thread count the library maintains for the process, and
 the two multiplies. Supporting a further library requires implementing that
@@ -622,7 +622,7 @@ the lists and verification reads the forward index.
 
 Candidate traversal runs on two axes. A **vertical scan** visits the query's
 keys, and a **horizontal scan** walks the inverted list of each key it visits.
-Traversal combines length, position, and prefix filtering while tightening the
+Traversal batchs length, position, and prefix filtering while tightening the
 minimum similarity as the top-k heap fills. The latter two both prune on a
 partial unilateral value: the portion of a `uniValue` consumed so far, leaving
 the rest to bound what the unconsumed part can still contribute.
@@ -709,10 +709,10 @@ signatures that a qualifying candidate can collide on. Signatures collide at a
 rate tracking the multiset similarity of the records behind them, so for Jaccard
 and Ruzicka that share is the minimum similarity itself. An edit distance
 measures something else, and the share follows from the same L1 bound the
-term-keyed lists use: multisets within L1 distance `u` of their combined length
+term-keyed lists use: multisets within L1 distance `u` of their batched length
 share at least `(1 - u) / (1 + u)` of it, and the lengths cancel, so one share
 covers every candidate the minimum similarity admits. A normalized distance is
-already a share of the combined length; a raw edit count becomes one against the
+already a share of the batched length; a raw edit count becomes one against the
 shortest candidate length filtering admits.
 
 Signature prefix filtering applies a generator-specific approximation safety
@@ -725,7 +725,7 @@ exact.
 
 ### Hybrid Index
 
-`HybridIndex` combines a `TermIndex` and a `SignatureIndex`. During each build,
+`HybridIndex` batchs a `TermIndex` and a `SignatureIndex`. During each build,
 rows with at most 270 terms go to its term index and longer rows to its
 signature index. The configured length range may
 fall entirely below, entirely above, or across this internal boundary.

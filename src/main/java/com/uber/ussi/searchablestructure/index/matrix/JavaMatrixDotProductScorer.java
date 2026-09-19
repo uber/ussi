@@ -1,9 +1,11 @@
 /* AUTHOR: Shijie Lu (shijie@uber.com), Shalini Kedlaya (skedlaya@uber.com), Ahmed Metwally (ametwally@uber.com) */
 package com.uber.ussi.searchablestructure.index.matrix;
 
+import com.uber.ussi.searchablestructure.result.ResultHeaps;
 import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.utils.parallel.ParallelismBudget;
 import com.uber.ussi.searchablestructure.utils.parallel.SearchThreads;
+import com.uber.ussi.utils.BoundedSizeMaxHeap;
 import java.util.List;
 
 /**
@@ -42,13 +44,14 @@ final class JavaMatrixDotProductScorer implements MatrixDotProductScorer {
   public List<RowNumAndSimilarity> selectRows(float[] queryValues, RowSelection selection) {
     float[] dotProducts = new float[matrix.numRows()];
     score(queryValues, dotProducts);
-    RowCollector collector = new RowCollector(selection);
-    HostRowSelection.collectRows(dotProducts, rows, selection, collector);
-    return collector.toList();
+    BoundedSizeMaxHeap<RowNumAndSimilarity> kept =
+        ResultHeaps.newTopResults(selection.getMaxResults());
+    DotProductRows.addRows(dotProducts, rows, selection, kept);
+    return kept.toList();
   }
 
   /**
-   * Combining queries was measured and not adopted here. The gain elsewhere comes from sharing a
+   * Batching queries was measured and not adopted here. The gain elsewhere comes from sharing a
    * cost a library pays once per call whatever the query count, and this multiply has no such
    * cost: it moves a few gigabytes a second, far below what one core can read, so there is no
    * traffic for queries to share.

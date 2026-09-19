@@ -174,9 +174,11 @@ public final class MatrixIndex extends RowStoringIndex {
     }
     // With in-filtering, skip non-matching rows before paying the per-row similarity cost.
     BoundedSizeMaxHeap<RowNumAndSimilarity> rows = ResultHeaps.newTopResults(maxResults);
+    float tightened = minSimilarity;
     for (int matrixRowIndex = 0; matrixRowIndex < rowNums.length; ++matrixRowIndex) {
-      addMatchingRow(
-          rows, queryValues, queryUniValue, matrixRowIndex, metadataFilter, minSimilarity);
+      tightened =
+          addMatchingRow(
+              rows, queryValues, queryUniValue, matrixRowIndex, metadataFilter, tightened);
     }
     return rows.toList();
   }
@@ -216,14 +218,21 @@ public final class MatrixIndex extends RowStoringIndex {
       float minSimilarity,
       int maxResults) {
     BoundedSizeMaxHeap<RowNumAndSimilarity> rows = ResultHeaps.newTopResults(maxResults);
+    float tightened = minSimilarity;
     for (IntCursor matrixRowIndex : matrixRowIndexes) {
-      addMatchingRow(
-          rows, queryValues, queryUniValue, matrixRowIndex.value, metadataFilter, minSimilarity);
+      tightened =
+          addMatchingRow(
+              rows, queryValues, queryUniValue, matrixRowIndex.value, metadataFilter, tightened);
     }
     return rows.toList();
   }
 
-  private void addMatchingRow(
+  /**
+   * Adds the row when it matches and reaches the minimum, and returns the minimum to score the
+   * rows after it against, which rises as the heap fills so that a row unable to reach what the
+   * heap already holds costs nothing beyond its own similarity.
+   */
+  private float addMatchingRow(
       BoundedSizeMaxHeap<RowNumAndSimilarity> rows,
       float[] queryValues,
       double queryUniValue,
@@ -232,12 +241,14 @@ public final class MatrixIndex extends RowStoringIndex {
       float minSimilarity) {
     long rowNum = rowNums[matrixRowIndex];
     if (metadataFilter != null && !matchesMetaFilter(rowNum, metadataFilter)) {
-      return;
+      return minSimilarity;
     }
     float similarity = computeSimilarityForMatrixRow(queryValues, queryUniValue, matrixRowIndex);
-    if (similarity >= minSimilarity) {
-      rows.add(new RowNumAndSimilarity(rowNum, similarity));
+    if (similarity < minSimilarity) {
+      return minSimilarity;
     }
+    rows.add(new RowNumAndSimilarity(rowNum, similarity));
+    return ResultHeaps.tightenedMinSimilarity(rows, minSimilarity);
   }
 
 

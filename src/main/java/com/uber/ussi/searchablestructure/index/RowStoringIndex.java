@@ -1,7 +1,6 @@
 /* AUTHOR: Shijie Lu (shijie@uber.com), Shalini Kedlaya (skedlaya@uber.com), Ahmed Metwally (ametwally@uber.com) */
 package com.uber.ussi.searchablestructure.index;
 
-import com.carrotsearch.hppc.LongHashSet;
 import com.carrotsearch.hppc.LongObjectHashMap;
 import com.carrotsearch.hppc.cursors.LongObjectCursor;
 import com.uber.ussi.config.NamespaceConfig;
@@ -11,6 +10,7 @@ import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.utils.metadata.MetadataFilteringModule;
 import com.uber.ussi.searchablestructure.utils.metadata.PreFilteringResult;
 import java.util.Objects;
+import javax.annotation.Nullable;
 
 /**
  * An index that holds its own rows.
@@ -22,7 +22,7 @@ public abstract class RowStoringIndex extends Index {
 
   protected final LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap;
   protected final MetadataFilteringModule metadataFilteringModule;
-  private final LongHashSet deletedRowNums;
+  private int numDeletedRows;
 
   protected RowStoringIndex(
       NamespaceConfig namespaceConfig,
@@ -31,7 +31,6 @@ public abstract class RowStoringIndex extends Index {
     super(namespaceConfig);
     this.rowNumToTermsAndValuesMap =
         new LongObjectHashMap<>(Objects.requireNonNull(rowNumToTermsAndValuesMap, "rows"));
-    this.deletedRowNums = new LongHashSet();
     this.metadataFilteringModule = new MetadataFilteringModule();
     LongObjectHashMap<LongMeta> metadataByRow =
         rowNumToMetaMap == null ? new LongObjectHashMap<>() : rowNumToMetaMap;
@@ -41,21 +40,41 @@ public abstract class RowStoringIndex extends Index {
     }
   }
 
+  /**
+   * Marks the row deleted by replacing its record with one whose unilateral value is not a
+   * number. Every path that must skip a deleted row already reads the record, so recognising one
+   * costs nothing further, where a set of deleted row numbers would cost a lookup for every row
+   * of every search.
+   */
   @Override
   public final boolean delete(long rowNum) {
-    if (!rowNumToTermsAndValuesMap.containsKey(rowNum) || deletedRowNums.contains(rowNum)) {
+    LongTermsAndValues row = rowNumToTermsAndValuesMap.get(rowNum);
+    if (row == null || isDeleted(row)) {
       return false;
     }
-    deletedRowNums.add(rowNum);
+    rowNumToTermsAndValuesMap.put(rowNum, row.markAsDeleted());
+    ++numDeletedRows;
     metadataFilteringModule.delete(rowNum);
+    onRowDeleted(rowNum);
     return true;
+  }
+
+  /**
+   * Called once when a row is deleted, so that a subclass holding a further form of the row
+   * records the deletion in it too.
+   */
+  protected void onRowDeleted(long rowNum) {}
+
+  /** Whether the row is one a search must skip, which a deleted row is. */
+  protected static boolean isDeleted(@Nullable LongTermsAndValues row) {
+    return row == null || Double.isNaN(row.getUniValue());
   }
 
   @Override
   public final LongObjectHashMap<LongTermsAndValues> getAll() {
     LongObjectHashMap<LongTermsAndValues> rows = new LongObjectHashMap<>();
     for (LongObjectCursor<LongTermsAndValues> entry : rowNumToTermsAndValuesMap) {
-      if (!isDeleted(entry.key)) {
+      if (!isDeleted(entry.value)) {
         rows.put(entry.key, entry.value);
       }
     }
@@ -69,7 +88,7 @@ public abstract class RowStoringIndex extends Index {
 
   @Override
   public final int size() {
-    return rowNumToTermsAndValuesMap.size() - deletedRowNums.size();
+    return rowNumToTermsAndValuesMap.size() - numDeletedRows;
   }
 
   @Override
@@ -106,7 +125,7 @@ public abstract class RowStoringIndex extends Index {
   }
 
   protected final boolean isDeleted(long rowNum) {
-    return deletedRowNums.contains(rowNum);
+    return isDeleted(rowNumToTermsAndValuesMap.get(rowNum));
   }
 
   private int getMaxPreFilteringNumRows() {

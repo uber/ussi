@@ -291,6 +291,39 @@ class MatrixIndexTest {
     assertEquals(List.of(11L, 12L), sortedRowNums(result));
   }
 
+  /**
+   * The bulk multiply scores every row of the matrix, including a deleted one, so exclusion rests
+   * on the similarity derived for a deleted row rather than on a test the search performs.
+   */
+  @Test
+  void deletedRowsAreExcludedFromTheBulkMultiply() {
+    MatrixIndex index = new MatrixIndex(config(), rows(), metadata());
+
+    assertTrue(index.delete(12));
+    List<RowNumAndSimilarity> result =
+        index.getNearestNeighborRowNums(10, denseVector(1f, 1f), /* metadataFilter */ null);
+
+    assertEquals(List.of(10L, 11L), sortedRowNums(result));
+    for (RowNumAndSimilarity row : result) {
+      assertFalse(
+          Float.isNaN(row.getSimilarity()), "a kept row must carry a similarity that is a number");
+    }
+  }
+
+  /** A row deleted after others were deleted is excluded too, so the mark is per row. */
+  @Test
+  void deletingSeveralRowsExcludesAllOfThem() {
+    MatrixIndex index = new MatrixIndex(config(), rows(), metadata());
+
+    assertTrue(index.delete(10));
+    assertTrue(index.delete(12));
+    List<RowNumAndSimilarity> result =
+        index.getNearestNeighborRowNums(10, denseVector(1f, 1f), /* metadataFilter */ null);
+
+    assertEquals(List.of(11L), sortedRowNums(result));
+    assertEquals(1, index.size());
+  }
+
   @Test
   void constructorRejectsNonDenseRows() {
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();

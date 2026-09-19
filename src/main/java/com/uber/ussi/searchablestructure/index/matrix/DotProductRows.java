@@ -9,22 +9,21 @@ final class DotProductRows {
 
   private DotProductRows() {}
 
-  /** Adds every row that is not deleted and reaches the minimum similarity. */
+  /**
+   * Adds every row reaching the minimum similarity. A deleted row reaches nothing, since the
+   * similarity derived from its unilateral value is not a number.
+   */
   static void addRows(
       float[] dotProducts,
       MatrixRows rows,
       RowSelection selection,
       BoundedSizeMaxHeap<RowNumAndSimilarity> into) {
     for (int matrixRowIndex = 0; matrixRowIndex < rows.getNumRows(); ++matrixRowIndex) {
-      long rowNum = rows.getRowNum(matrixRowIndex);
-      if (rows.isDeleted(rowNum)) {
-        continue;
-      }
       float similarity =
           rows.getSimilarity(
               dotProducts[matrixRowIndex], selection.getQueryUniValue(), matrixRowIndex);
       if (similarity >= selection.getMinSimilarity()) {
-        into.add(new RowNumAndSimilarity(rowNum, similarity));
+        into.add(new RowNumAndSimilarity(rows.getRowNum(matrixRowIndex), similarity));
       }
     }
   }

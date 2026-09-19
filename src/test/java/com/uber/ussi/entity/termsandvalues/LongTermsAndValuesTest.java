@@ -318,4 +318,23 @@ class LongTermsAndValuesTest {
     assertTrue(text.contains("LongTermsAndValues{"));
     assertTrue(text.contains("uniValue=3.0"));
   }
+
+  /**
+   * A deleted row keeps its terms and values, since it stays in the index until the index is
+   * rebuilt, and is recognised only by a unilateral value that is not a number.
+   */
+  @Test
+  void markAsDeletedKeepsTheRowAndMarksItsUniValue() {
+    LongTermsAndValues row =
+        LongTermsAndValuesTestFactory.create(new long[] {3L, 5L}, new float[] {1f, 2f}, 5.0d);
+
+    LongTermsAndValues deleted = row.markAsDeleted();
+
+    assertTrue(Double.isNaN(deleted.getUniValue()));
+    assertEquals(row.termsLength(), deleted.termsLength());
+    assertEquals(row.valuesLength(), deleted.valuesLength());
+    assertEquals(row.getTerm(0), deleted.getTerm(0));
+    assertEquals(row.getValue(1), deleted.getValue(1));
+    assertFalse(Double.isNaN(row.getUniValue()), "the original must be left alone");
+  }
 }

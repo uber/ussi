@@ -1,6 +1,10 @@
 package com.uber.ussi.searchablestructure.index.matrix;
 
-/** Row data for a test: row numbers in matrix order, nothing deleted, similarity is the product. */
+/**
+ * Row data for a test: row numbers in matrix order, unilateral values of zero, and a similarity
+ * that is the dot product plus the row's unilateral value, so that a deleted row's value carries
+ * into the similarity as it does for a real comparator.
+ */
 final class TestMatrixRows {
 
   private TestMatrixRows() {}
@@ -13,7 +17,6 @@ final class TestMatrixRows {
     return new MatrixRows(
         rowNums,
         new double[numRows],
-        rowNum -> false,
-        (dotProduct, queryUniValue, rowUniValue) -> dotProduct);
+        (dotProduct, queryUniValue, rowUniValue) -> dotProduct + rowUniValue);
   }
 }

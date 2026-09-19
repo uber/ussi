@@ -146,6 +146,24 @@ each `rowNum` lives in exactly one structure at a time. Candidate scoring skips
 tombstoned records at query time rather than waiting for physical removal from
 the inverted lists.
 
+A tombstone is recorded in the row's own unilateral value, which is set to a
+value that is not a number, rather than in a set of deleted row numbers. A set
+is the cleaner representation, since it states the fact it holds and nothing
+else, and it is what an index would use if deletion stood alone. The unilateral
+value is used instead because the dense scorer needs it regardless: it derives
+every similarity from that value, so a value no similarity can be derived from
+excludes the row through arithmetic the search already performs, where asking a
+set would add a lookup for every row of every search. Having paid for the
+representation there, every structure uses it, and each recognises a tombstone
+from the record it has already read rather than from a second lookup.
+
+`RowStoringIndex.isDeleted()` recognises a tombstone. A structure holding its
+own form of a row records the tombstone there too: the matrix index in the
+unilateral values it scores against, and an inverted index in the indexed form
+verification reads. The unilateral values an inverted index orders its lists by are left
+alone, since candidate generation prunes against them and an order it cannot
+compare would stop pruning working.
+
 An update is a delete of the old version followed by an insert of the new one
 under the same `rowNum`, so the active cache always holds the latest version.
 

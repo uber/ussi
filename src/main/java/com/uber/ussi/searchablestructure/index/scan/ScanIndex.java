@@ -135,7 +135,7 @@ public final class ScanIndex extends RowStoringIndex {
       @Nullable MetaFilter metadataFilter,
       float minSimilarity,
       SharedMinSimilarity sharedMinSimilarity) {
-    if (isDeleted(rowNum)) {
+    if (isDeleted(termsAndValues)) {
       return;
     }
     if (metadataFilter != null && !matchesMetaFilter(rowNum, metadataFilter)) {

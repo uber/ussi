@@ -188,25 +188,27 @@ alone and falls to a single thread once the concurrent searches already fill the
 cores, which is what turns dividing off under load rather than letting
 concurrent searches multiply their own width against each other.
 
-It derives two counts, out of two different numbers of cores, because the work
-they govern differs:
+It derives two counts, for two ways of using threads that cannot share one
+number:
 
-- **Work submitted to `SearchThreads`** takes the processors the machine has,
-  divided by the concurrent searches. That work waits in a queue when the cores
-  are busy and spreads over every core, so every core it may use is worth
-  having. Every structure that divides its own search reads this one.
-- **A process-global thread count**, held by a native library rather than by
-  any one structure, takes the cores of *one socket* and is not divided at all.
-  Such a library serializes its callers, so one call holds the whole width and
-  the searches behind it wait, and dividing would narrow every call exactly as
-  load rises. Its threads gain nothing past
-  one socket: two hardware threads of a core share that core's execution units,
-  and a socket reaches another socket's memory over a link. `ProcessorTopology`
-  reads the socket count and the widest core from the kernel and bounds the
-  result by the processors this process may run on, so a host of two sockets
-  carrying two hardware threads a core gives this count a quarter of what the
-  first one gets, and a host of one socket of single-threaded cores gives the
-  two counts the same number.
+- **`getNumThreadsPerSearch()`** takes the processors the machine has, divided
+  by the concurrent searches, and is read by every structure that divides its
+  own search and submits the pieces to `SearchThreads`. That work waits in a
+  queue when the cores are busy and otherwise spreads over every core, so
+  dividing keeps the threads of all the concurrent searches within the cores.
+- **The threads per batch** is held by a native library rather than by any one
+  structure, and is applied to it through `onNumThreadsPerBatchChange()` rather
+  than read. It takes the cores of *one socket*, undivided: such a library
+  serializes its callers and multiplies the queries that accumulate as one
+  batch, so one call at a time uses all of those threads and there is nothing
+  to divide. Its threads gain nothing past one socket, since two hardware
+  threads of a core share that core's execution units and a socket reaches
+  another socket's memory over a link. `ProcessorTopology` reads the socket
+  count and the widest core from the kernel and bounds the result by the
+  processors this process may run on, so a machine of two sockets carrying two
+  hardware threads a core gives this count a quarter of what the first one
+  gets, and a machine of one socket of single-threaded cores gives the two
+  counts the same number.
 
 Only the second count is expensive to modify, and it is now constant, so it is
 applied once when its holder registers and never again. The machinery that

@@ -20,7 +20,7 @@ class ParallelismBudgetTest {
   }
 
   @Test
-  void rejectsMoreSharedThreadsThanThreadsPerSearch() {
+  void rejectsMoreThreadsPerBatchThanThreadsPerSearch() {
     assertThrows(IllegalArgumentException.class, () -> new ParallelismBudget(CORES, CORES + 1));
     assertThrows(IllegalArgumentException.class, () -> new ParallelismBudget(CORES, 0));
   }
@@ -45,18 +45,18 @@ class ParallelismBudgetTest {
     for (int[] testCase : concurrencyAndNumThreads) {
       assertEquals(
           testCase[1],
-          budget.getNumSharedThreadsFor(testCase[0]),
+          budget.getNumThreadsPerBatchFor(testCase[0]),
           "concurrency " + testCase[0]);
     }
   }
 
   @Test
-  void appliesTheSharedThreadsAndNotTheBudgetOnRegistration() {
+  void appliesTheThreadsPerBatchAndNotTheBudgetOnRegistration() {
     int numCoresPerSocket = CORES / 4;
     ParallelismBudget budget = new ParallelismBudget(CORES, numCoresPerSocket);
     int[] appliedNumThreads = new int[1];
 
-    budget.onChange(threads -> appliedNumThreads[0] = threads);
+    budget.onNumThreadsPerBatchChange(threads -> appliedNumThreads[0] = threads);
 
     assertEquals(numCoresPerSocket, appliedNumThreads[0]);
   }
@@ -118,7 +118,7 @@ class ParallelismBudgetTest {
           task.run();
         });
 
-    budget.onChange(threads -> exclusiveCalls.add("applied " + threads));
+    budget.onNumThreadsPerBatchChange(threads -> exclusiveCalls.add("applied " + threads));
 
     assertEquals(List.of("entered", "applied " + CORES), exclusiveCalls);
   }
@@ -137,7 +137,7 @@ class ParallelismBudgetTest {
     ParallelismBudget budget = new ParallelismBudget(CORES, CORES);
     List<Integer> applied = new ArrayList<>();
 
-    budget.onChange(applied::add);
+    budget.onNumThreadsPerBatchChange(applied::add);
 
     assertEquals(List.of(CORES), applied);
   }
@@ -158,7 +158,7 @@ class ParallelismBudgetTest {
           exclusiveCalls.add("left");
         });
     List<Integer> applied = new ArrayList<>();
-    budget.onChange(applied::add);
+    budget.onNumThreadsPerBatchChange(applied::add);
     applied.clear();
     exclusiveCalls.clear();
 
@@ -177,7 +177,7 @@ class ParallelismBudgetTest {
     int[] readings = {8, 8, 8, 8, 8, 0, 0, 0, 0, 0};
     ParallelismBudget budget = new ParallelismBudget(CORES, CORES);
     List<Integer> applied = new ArrayList<>();
-    budget.onChange(applied::add);
+    budget.onNumThreadsPerBatchChange(applied::add);
     applied.clear();
     attachThen(budget, Runnable::run);
 
@@ -200,7 +200,7 @@ class ParallelismBudgetTest {
     // one while the budget falls from four to three.
     ParallelismBudget budget = new ParallelismBudget(32, 4);
     List<Integer> applied = new ArrayList<>();
-    budget.onChange(applied::add);
+    budget.onNumThreadsPerBatchChange(applied::add);
     List<String> exclusiveCalls = new ArrayList<>();
     attachThen(
         budget,
@@ -247,7 +247,7 @@ class ParallelismBudgetTest {
   void updateLeavesAnUnchangedBudgetAlone() {
     ParallelismBudget budget = new ParallelismBudget(CORES, CORES);
     List<Integer> applied = new ArrayList<>();
-    budget.onChange(applied::add);
+    budget.onNumThreadsPerBatchChange(applied::add);
     applied.clear();
     List<String> exclusiveCalls = new ArrayList<>();
     attachThen(budget, task -> exclusiveCalls.add("entered"));
@@ -306,7 +306,7 @@ class ParallelismBudgetTest {
   void updateTracksConcurrencyUpAndBackDown() {
     ParallelismBudget budget = new ParallelismBudget(CORES, CORES);
     List<Integer> applied = new ArrayList<>();
-    budget.onChange(applied::add);
+    budget.onNumThreadsPerBatchChange(applied::add);
     applied.clear();
 
     budget.update(CORES);

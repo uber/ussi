@@ -17,16 +17,27 @@ import javax.annotation.Nullable;
  * the core count, which inflates tail latency. The budget is therefore the core count divided by
  * the concurrent searches, and is re-derived as that number changes.
  *
- * <p>A structure choosing its own thread count per search reads {@link #getNumThreadsPerSearch()}.
- * A structure whose thread count is a process-global setting cannot, because such a setting is
- * shared by every concurrent search and is expensive to change. Such a structure registers with
- * {@link #onChange onChange()} instead, and is called while no search is running.
+ * <p>The budget derives two thread counts, for two ways of using threads that cannot share one
+ * number.
  *
- * <p>The two counts are divided out of different numbers of cores. Work submitted to {@link
- * SearchThreads} waits in its queue and spreads over every core the machine has. A process-global
- * thread count belongs to a library holding threads of its own, which occupy their cores for as
- * long as the setting stands, and such threads gain nothing past the cores of one socket that
- * {@link ProcessorTopology} reports.
+ * <p>{@link #getNumThreadsPerSearch()} is read by a structure that divides its own search and
+ * submits the pieces to {@link SearchThreads}. It is the processors the machine has divided by
+ * the concurrent searches, because such work waits in a queue when the cores are busy and
+ * otherwise spreads over every core, so the threads of all the concurrent searches together stay
+ * within the cores.
+ *
+ * <p>The threads per batch is held by a native library rather than by any one structure, and is
+ * applied to it through {@link #onNumThreadsPerBatchChange onNumThreadsPerBatchChange()} rather
+ * than read, because one setting serves every search and changing it while a call is dispatching
+ * work may deadlock or corrupt memory. It is the cores of one socket that {@link
+ * ProcessorTopology} reports, undivided: a library holding such a count serializes its callers
+ * and multiplies the queries that accumulate as one batch, so one call at a time uses all of
+ * those threads and there is nothing to divide. Threads of such a library gain nothing past one
+ * socket, since two hardware threads of a core share that core's execution units and a socket
+ * reaches another socket's memory over a link.
+ *
+ * <p>Being undivided, the threads per batch never changes after its holder registers, so no
+ * search is suspended to apply it.
  */
 public final class ParallelismBudget {
 
@@ -50,10 +61,10 @@ public final class ParallelismBudget {
           ProcessorTopology.getNumCoresPerSocket());
 
   private final int maxNumThreadsPerSearch;
-  private final int maxNumSharedThreads;
-  private volatile int numSharedThreads;
+  private final int maxNumThreadsPerBatch;
+  private volatile int numThreadsPerBatch;
   private volatile int numThreadsPerSearch;
-  private volatile IntConsumer onChange = NO_HOLDER;
+  private volatile IntConsumer onNumThreadsPerBatchChange = NO_HOLDER;
   /**
    * Until {@link #attach attach()} there are no searches, so running a change inline is already
    * exclusive.
@@ -65,18 +76,18 @@ public final class ParallelismBudget {
   private int numSamples;
   private long numConcurrentSearchesSampled;
 
-  ParallelismBudget(int maxNumThreadsPerSearch, int maxNumSharedThreads) {
+  ParallelismBudget(int maxNumThreadsPerSearch, int maxNumThreadsPerBatch) {
     if (maxNumThreadsPerSearch < 1) {
       throw new IllegalArgumentException("maxNumThreadsPerSearch must be >= 1.");
     }
-    if (maxNumSharedThreads < 1 || maxNumSharedThreads > maxNumThreadsPerSearch) {
+    if (maxNumThreadsPerBatch < 1 || maxNumThreadsPerBatch > maxNumThreadsPerSearch) {
       throw new IllegalArgumentException(
-          "maxNumSharedThreads must be >= 1 and <= maxNumThreadsPerSearch.");
+          "maxNumThreadsPerBatch must be >= 1 and <= maxNumThreadsPerSearch.");
     }
     this.maxNumThreadsPerSearch = maxNumThreadsPerSearch;
-    this.maxNumSharedThreads = maxNumSharedThreads;
+    this.maxNumThreadsPerBatch = maxNumThreadsPerBatch;
     this.numThreadsPerSearch = maxNumThreadsPerSearch;
-    this.numSharedThreads = maxNumSharedThreads;
+    this.numThreadsPerBatch = maxNumThreadsPerBatch;
   }
 
   public static ParallelismBudget shared() {
@@ -96,11 +107,11 @@ public final class ParallelismBudget {
    * and a structure can be built while other searches are running. Such a setting is shared by
    * every concurrent search, so modifying it during one is unsafe.
    */
-  public synchronized void onChange(IntConsumer applier) {
+  public synchronized void onNumThreadsPerBatchChange(IntConsumer applier) {
     exclusively.accept(
         () -> {
-          this.onChange = applier;
-          applier.accept(numSharedThreads);
+          this.onNumThreadsPerBatchChange = applier;
+          applier.accept(numThreadsPerBatch);
         });
   }
 
@@ -173,8 +184,8 @@ public final class ParallelismBudget {
    * <p>The count is therefore constant, which means it is applied once when its holder registers
    * and never again, so no search is ever suspended to change it.
    */
-  int getNumSharedThreadsFor(int numConcurrentSearches) {
-    return maxNumSharedThreads;
+  int getNumThreadsPerBatchFor(int numConcurrentSearches) {
+    return maxNumThreadsPerBatch;
   }
 
   /**
@@ -215,20 +226,20 @@ public final class ParallelismBudget {
    */
   void update(int numConcurrentSearches) {
     numThreadsPerSearch = getNumThreadsPerSearchFor(numConcurrentSearches);
-    int updatedNumSharedThreads = getNumSharedThreadsFor(numConcurrentSearches);
+    int updatedNumThreadsPerBatch = getNumThreadsPerBatchFor(numConcurrentSearches);
     synchronized (this) {
-      if (updatedNumSharedThreads == numSharedThreads) {
+      if (updatedNumThreadsPerBatch == numThreadsPerBatch) {
         return;
       }
-      if (onChange == NO_HOLDER) {
-        numSharedThreads = updatedNumSharedThreads;
+      if (onNumThreadsPerBatchChange == NO_HOLDER) {
+        numThreadsPerBatch = updatedNumThreadsPerBatch;
         return;
       }
     }
     exclusively.accept(
         () -> {
-          onChange.accept(updatedNumSharedThreads);
-          numSharedThreads = updatedNumSharedThreads;
+          onNumThreadsPerBatchChange.accept(updatedNumThreadsPerBatch);
+          numThreadsPerBatch = updatedNumThreadsPerBatch;
         });
   }
 }

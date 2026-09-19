@@ -42,7 +42,7 @@ public interface SearchableStructure {
    *
    * <p>A structure whose thread count is a process-global setting cannot read this per search,
    * since the setting is shared by every concurrent search. Such a structure registers with {@link
-   * ParallelismBudget#onChange} instead.
+   * ParallelismBudget#onNumThreadsPerBatchChange} instead.
    */
   default int getNumThreadsPerSearch() {
     return ParallelismBudget.shared().getNumThreadsPerSearch();

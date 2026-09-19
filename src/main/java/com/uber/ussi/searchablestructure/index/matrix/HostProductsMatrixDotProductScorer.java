@@ -1,8 +1,6 @@
 /* AUTHOR: Ahmed Metwally (ametwally@uber.com) */
 package com.uber.ussi.searchablestructure.index.matrix;
 
-import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
-import java.util.List;
 
 /**
  * A batched scorer whose multiply leaves a dot product per row in this process's memory, and
@@ -24,8 +22,8 @@ abstract class HostProductsMatrixDotProductScorer extends BatchedMatrixDotProduc
   }
 
   @Override
-  protected final List<RowNumAndSimilarity> selectRowsFrom(
-      float[] result, RowSelection selection) {
-    return HostRowSelection.selectRows(result, getRows(), selection);
+  protected final void collectRows(
+      float[] result, RowSelection selection, RowCollector collector) {
+    HostRowSelection.collectRows(result, getRows(), selection, collector);
   }
 }

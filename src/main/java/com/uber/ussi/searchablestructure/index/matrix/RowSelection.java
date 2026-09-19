@@ -6,7 +6,7 @@ package com.uber.ussi.searchablestructure.index.matrix;
  * reach, and how many rows to keep.
  *
  * <p>Given to whatever performs the multiply, not only to whatever reads its products, so that an
- * implementation able to choose rows where it computed them has everything it needs to do so.
+ * implementation able to select its rows as it scores them has everything selecting needs.
  */
 final class RowSelection {
 

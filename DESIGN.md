@@ -547,41 +547,40 @@ than a configured window, it is one when the machine is idle, and there is no
 arrival timer to tune.
 
 One query does not repay the packing a matrix-matrix multiply performs first,
-so a batch of one is multiplied as a vector instead. That single branch
-is what makes the arrangement free at low load: measured against dividing the
-socket between concurrent callers, it ties at one concurrent search on both
-shapes tested and wins from sixteen upward, by 6.4 times the throughput and 5.5
-times the tail latency at 192 concurrent searches over 200k rows of 512
-dimensions.
+so a batch of one is multiplied as a vector instead. That branch is what makes
+the arrangement cost nothing when no queries are concurrent: it was measured to
+match dividing the threads at a single concurrent search, and to exceed it in
+both throughput and tail latency at every higher concurrency.
 
-Serializing callers is what lets one multiply hold the socket, and it is also
-why the process-global thread count is no longer divided. Serializing without
-batching is worse than dividing, since one full-width query is then a
-single-server queue whose capacity load quickly exceeds; the gain comes from
-batching, and holding the full width is what makes a batch worth
-performing.
+Serializing the callers is what lets one multiply use every thread the library
+holds, and it is also why the process-global thread count is no longer divided.
+Serializing alone, without batching, was measured to be worse than dividing:
+the multiplies then form a single queue served one at a time, whose service
+rate the offered load reaches. The gain comes from batching, and running one
+multiply on every thread is what makes a batch worth forming.
 
-A chunk is multiplied a range of rows at a time rather than whole, because the
-products of one range are held for every query in the batch while a chunk holds
-as many rows as a Java array can index. Dividing the rows bounds that buffer by
-the range rather than by the matrix, and the multiply still reads each row once.
+A chunk is a contiguous span of whole rows of the matrix, of which there is one
+unless the matrix holds more values than a Java array can index. A chunk is
+multiplied a range of rows at a time rather than whole, because the dot
+products of one range are held for every query in the batch. Bounding the range
+bounds that buffer by the range rather than by the matrix, and the multiply
+still reads each row once.
 
 A scorer returns the rows a query keeps rather than a dot product for every
-row. An implementation computing its products where this process cannot read
-them would otherwise copy one product per row back for every query, which is
-the largest
-transfer a dense query makes and grows with the queries scored together.
-`MatrixRows` carries what choosing needs, the row numbers, their unilateral
-values, the deletions and the comparator's arithmetic, so choosing can happen
-wherever the products are. `HostProductsMatrixDotProductScorer` is the base
-class for an implementation whose multiply leaves the products here, and it
-chooses on the host; an implementation choosing elsewhere extends
-`BatchedMatrixDotProductScorer` directly and returns whatever it kept.
+row, which lets an implementation discard the rows it will not keep before
+returning, instead of returning as many values as the matrix has rows.
+Selecting those rows needs the row numbers, their unilateral values, the
+deletions and the comparator's arithmetic, which `MatrixRows` carries, so an
+implementation may select as soon as it has scored. Every implementation adds
+its rows to the same bounded heap, which holds them in a list until they exceed
+the bound, so one adding no more rows than the bound never builds a queue. The
+dot products of a query are reused rather than allocated for each query, since
+they are as long as the matrix has rows.
 
-Choosing runs on the thread that asked for the query, not on the thread that
-performed the multiply, so several queries choose at once and overlap the
-following multiply. Moving it into the multiply would serialize the one part of
-a dense query that is already parallel.
+Selecting runs on the thread that asked for the query, not on the thread that
+performed the multiply, so several queries select at once and overlap the
+following multiply. Performing it inside the multiply would serialize the one
+part of a dense query that is already concurrent.
 
 `MatrixDotProductScorers` tries the scorers in a stated preference order and
 builds the first whose implementation this machine has, treating one that fails
@@ -596,17 +595,14 @@ library in use. `OpenBlas` supplies the rest: which platforms carry a binary,
 whether it loads, the thread count the library maintains for the process, and
 the two multiplies. Supporting a further library requires implementing that
 interface and nothing else. The interface is parameterised by the buffer handle
-it allocates, so a library addressing memory this process cannot dereference is
-supported on the same terms as one addressing memory it can.
+it allocates, and counts every offset in values, so an implementation may hold
+its buffers wherever its library requires.
 
-Scoring several waiting queries in one matrix-matrix multiply was benchmarked on
-x86-64 and ARM64 and not adopted. The appeal is that a batch reads the matrix
-once for all of its queries rather than once for each, but the library first
-copies the matrix into packed buffers, a cost set by the size of the matrix
-rather than the size of the batch, so a small batch pays it for almost no reuse.
-Batches large enough to amortize that copy are bound by arithmetic rather than
-by memory, so the remaining gain is throughput taken out of tail latency, and it
-only appears at loads well past the core count.
+An earlier attempt at scoring several queries in one matrix-matrix multiply was
+not adopted, because it formed a batch by waiting for a fixed number of queries
+to arrive, which delays a query whenever the load does not supply them. Taking
+only the queries already waiting removes that delay, which is what made the
+arrangement pay.
 
 ### Term Index
 
@@ -622,7 +618,7 @@ the lists and verification reads the forward index.
 
 Candidate traversal runs on two axes. A **vertical scan** visits the query's
 keys, and a **horizontal scan** walks the inverted list of each key it visits.
-Traversal batchs length, position, and prefix filtering while tightening the
+Traversal combines length, position, and prefix filtering while tightening the
 minimum similarity as the top-k heap fills. The latter two both prune on a
 partial unilateral value: the portion of a `uniValue` consumed so far, leaving
 the rest to bound what the unconsumed part can still contribute.
@@ -709,10 +705,10 @@ signatures that a qualifying candidate can collide on. Signatures collide at a
 rate tracking the multiset similarity of the records behind them, so for Jaccard
 and Ruzicka that share is the minimum similarity itself. An edit distance
 measures something else, and the share follows from the same L1 bound the
-term-keyed lists use: multisets within L1 distance `u` of their batched length
+term-keyed lists use: multisets within L1 distance `u` of their combined length
 share at least `(1 - u) / (1 + u)` of it, and the lengths cancel, so one share
 covers every candidate the minimum similarity admits. A normalized distance is
-already a share of the batched length; a raw edit count becomes one against the
+already a share of the combined length; a raw edit count becomes one against the
 shortest candidate length filtering admits.
 
 Signature prefix filtering applies a generator-specific approximation safety
@@ -725,7 +721,7 @@ exact.
 
 ### Hybrid Index
 
-`HybridIndex` batchs a `TermIndex` and a `SignatureIndex`. During each build,
+`HybridIndex` combines a `TermIndex` and a `SignatureIndex`. During each build,
 rows with at most 270 terms go to its term index and longer rows to its
 signature index. The configured length range may
 fall entirely below, entirely above, or across this internal boundary.
@@ -786,8 +782,9 @@ Similarity](#the-shared-minimum-similarity) describes it.
 
 That cost bounds the shard count. An index takes one shard per core only once
 every shard would hold a minimum number of rows, and fewer shards until then.
-The minimum is 50,000 rows, chosen conservatively rather than measured: sharding
-was measured to pay at about 60,000 rows per shard and to lose at about 15,000.
+The minimum is 50,000 rows, chosen conservatively rather than measured, since
+what sharding pays for depends on the shard count and the shards a query may
+search at once, which have not been swept together.
 
 Only inverted indexes are sharded. A scan index already divides one search
 across its rows, and a matrix index scored by a native library divides inside

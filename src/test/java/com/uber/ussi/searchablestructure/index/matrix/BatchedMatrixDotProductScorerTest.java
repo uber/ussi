@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
+import com.uber.ussi.utils.BoundedSizeMaxHeap;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
@@ -102,13 +103,29 @@ class BatchedMatrixDotProductScorerTest {
   }
 
   /** A scorer whose multiply is plain Java, recording how many queries each one carried. */
-  private static final class RecordingScorer extends HostProductsMatrixDotProductScorer {
+  private static final class RecordingScorer extends BatchedMatrixDotProductScorer<float[]> {
     private final ConcurrentLinkedQueue<Integer> numQueriesPerMultiply =
         new ConcurrentLinkedQueue<>();
     private int numReleases;
 
     RecordingScorer(DenseMatrix matrix, int maxNumQueriesInABatch) {
       super(matrix, TestMatrixRows.of(matrix.numRows()), maxNumQueriesInABatch);
+    }
+
+    @Override
+    protected float[] newMultiplyResult() {
+      return new float[getMatrix().numRows()];
+    }
+
+    @Override
+    protected float[][] newMultiplyResults(int numResults) {
+      return new float[numResults][];
+    }
+
+    @Override
+    protected void addRows(
+        float[] result, RowSelection selection, BoundedSizeMaxHeap<RowNumAndSimilarity> rows) {
+      DotProductRows.addRows(result, getRows(), selection, rows);
     }
 
     @Override

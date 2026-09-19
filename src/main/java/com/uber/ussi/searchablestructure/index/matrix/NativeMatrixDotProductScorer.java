@@ -15,7 +15,7 @@ import java.util.List;
  *
  * <p>One set of working buffers serves the whole scorer, since the caller serializes multiplies.
  */
-final class NativeMatrixDotProductScorer<B> extends BatchedMatrixDotProductScorer {
+final class NativeMatrixDotProductScorer<B> extends HostProductsMatrixDotProductScorer {
 
   /**
    * Rows multiplied at once. Wide enough that a multiply is worth its call and that a row is read
@@ -30,8 +30,8 @@ final class NativeMatrixDotProductScorer<B> extends BatchedMatrixDotProductScore
   private final B products;
   private final float[] readBuffer;
 
-  NativeMatrixDotProductScorer(DenseMatrix matrix, NativeBlas<B> blas) {
-    this(matrix, blas, Math.max(1, Runtime.getRuntime().availableProcessors()));
+  NativeMatrixDotProductScorer(DenseMatrix matrix, MatrixRows rows, NativeBlas<B> blas) {
+    this(matrix, rows, blas, Math.max(1, Runtime.getRuntime().availableProcessors()));
   }
 
   /**
@@ -39,8 +39,8 @@ final class NativeMatrixDotProductScorer<B> extends BatchedMatrixDotProductScore
    *     may run at once, since no more than that can ever be waiting.
    */
   NativeMatrixDotProductScorer(
-      DenseMatrix matrix, NativeBlas<B> blas, int maxNumQueriesInAMultiply) {
-    super(matrix, maxNumQueriesInAMultiply);
+      DenseMatrix matrix, MatrixRows rows, NativeBlas<B> blas, int maxNumQueriesInAMultiply) {
+    super(matrix, rows, maxNumQueriesInAMultiply);
     this.blas = blas;
     this.chunks = new ArrayList<>(matrix.numChunks());
     for (int chunk = 0; chunk < matrix.numChunks(); ++chunk) {
@@ -53,7 +53,8 @@ final class NativeMatrixDotProductScorer<B> extends BatchedMatrixDotProductScore
   }
 
   @Override
-  protected void multiplyOneQuery(float[] queryValues, float[] dotProducts) {
+  protected void multiplyOneQuery(
+      float[] queryValues, RowSelection selection, float[] dotProducts) {
     int dimension = getMatrix().dimension();
     blas.write(queries, 0, queryValues, dimension);
     forEachSlice(
@@ -70,7 +71,9 @@ final class NativeMatrixDotProductScorer<B> extends BatchedMatrixDotProductScore
   }
 
   @Override
-  protected void multiplyQueries(float[][] queryValues, float[][] dotProducts, int numQueries) {
+  protected void multiplyQueries(
+      float[][] queryValues, RowSelection[] selections, List<float[]> dotProducts,
+      int numQueries) {
     int dimension = getMatrix().dimension();
     for (int query = 0; query < numQueries; ++query) {
       blas.write(queries, (long) query * dimension, queryValues[query], dimension);
@@ -88,7 +91,11 @@ final class NativeMatrixDotProductScorer<B> extends BatchedMatrixDotProductScore
           blas.read(products, readBuffer, 0, numQueries * numRowsInSlice);
           for (int query = 0; query < numQueries; ++query) {
             System.arraycopy(
-                readBuffer, query * numRowsInSlice, dotProducts[query], firstRow, numRowsInSlice);
+                readBuffer,
+                query * numRowsInSlice,
+                dotProducts.get(query),
+                firstRow,
+                numRowsInSlice);
           }
         });
   }

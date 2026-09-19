@@ -1,8 +1,10 @@
 /* AUTHOR: Shijie Lu (shijie@uber.com), Shalini Kedlaya (skedlaya@uber.com), Ahmed Metwally (ametwally@uber.com) */
 package com.uber.ussi.searchablestructure.index.matrix;
 
+import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.utils.parallel.ParallelismBudget;
 import com.uber.ussi.searchablestructure.utils.parallel.SearchThreads;
+import java.util.List;
 
 /**
  * Pure Java dense matrix-vector dot-product scorer.
@@ -29,14 +31,28 @@ final class JavaMatrixDotProductScorer implements MatrixDotProductScorer {
   private static final long MIN_NUM_MULTIPLY_ADDS_TO_DIVIDE = 4_096;
 
   private final DenseMatrix matrix;
+  private final MatrixRows rows;
 
-  JavaMatrixDotProductScorer(DenseMatrix matrix) {
+  JavaMatrixDotProductScorer(DenseMatrix matrix, MatrixRows rows) {
     this.matrix = matrix;
+    this.rows = rows;
   }
 
   @Override
-  public void score(float[] queryValues, float[] dotProducts) {
-    MatrixDotProductScorers.validateScoreInputs(matrix, queryValues, dotProducts);
+  public List<RowNumAndSimilarity> selectRows(float[] queryValues, RowSelection selection) {
+    float[] dotProducts = new float[matrix.numRows()];
+    score(queryValues, dotProducts);
+    return HostRowSelection.selectRows(dotProducts, rows, selection);
+  }
+
+  /**
+   * Combining queries was measured and not adopted here. The gain elsewhere comes from sharing a
+   * cost a library pays once per call whatever the query count, and this multiply has no such
+   * cost: it moves a few gigabytes a second, far below what one core can read, so there is no
+   * traffic for queries to share.
+   */
+  void score(float[] queryValues, float[] dotProducts) {
+    MatrixDotProductScorers.validateQueryLength(matrix, queryValues);
     int numRows = matrix.numRows();
     int numRanges =
         getNumRanges(

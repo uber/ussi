@@ -68,7 +68,10 @@ public final class MatrixIndex extends RowStoringIndex {
     this.matrix = matrixData.matrix;
     this.rowUniValues = matrixData.rowUniValues;
     this.rowNumToMatrixRowIndex = matrixData.rowNumToMatrixRowIndex;
-    this.dotProductScorer = MatrixDotProductScorers.create(matrix);
+    this.dotProductScorer =
+        MatrixDotProductScorers.create(
+            matrix,
+            new MatrixRows(rowNums, rowUniValues, this::isDeleted, dotProductScored));
     // Dense bulk scoring cannot push metadata filters down, so AUTO pre-filters or post-filters.
     this.metadataFilteredSearchExecutor =
         new MetadataFilteredSearchExecutor(
@@ -178,25 +181,14 @@ public final class MatrixIndex extends RowStoringIndex {
     return rows.toList();
   }
 
+  /**
+   * The scorer chooses the rows as well as scoring them, since an implementation scoring them
+   * where this process cannot read would otherwise copy a product per row back for every query.
+   */
   private List<RowNumAndSimilarity> searchAllMatrixRowsWithDotProductScorer(
       float[] queryValues, double queryUniValue, float minSimilarity, int maxResults) {
-    float[] dotProducts = new float[rowNums.length];
-    dotProductScorer.score(queryValues, dotProducts);
-
-    BoundedSizeMaxHeap<RowNumAndSimilarity> rows = ResultHeaps.newTopResults(maxResults);
-    for (int matrixRowIndex = 0; matrixRowIndex < rowNums.length; ++matrixRowIndex) {
-      long rowNum = rowNums[matrixRowIndex];
-      if (isDeleted(rowNum)) {
-        continue;
-      }
-      float similarity =
-          computeSimilarityFromDotProduct(
-              queryUniValue, matrixRowIndex, dotProducts[matrixRowIndex]);
-      if (similarity >= minSimilarity) {
-        rows.add(new RowNumAndSimilarity(rowNum, similarity));
-      }
-    }
-    return rows.toList();
+    return dotProductScorer.selectRows(
+        queryValues, new RowSelection(queryUniValue, minSimilarity, maxResults));
   }
 
   private List<RowNumAndSimilarity> searchMatrixRows(

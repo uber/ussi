@@ -5,126 +5,151 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class MatrixDotProductScorersTest {
   private static final float DELTA = 1e-6f;
+  private static final RowSelection SELECTION =
+      new RowSelection(0, Float.NEGATIVE_INFINITY, 10);
 
   @Test
-  void createReturnsUsableScorer() {
+  void createReturnsAUsableScorer() {
+    DenseMatrix matrix = TestDenseMatrices.of(new float[] {1f, 2f, 3f, 4f}, 2, 2);
     try (MatrixDotProductScorer scorer =
-        MatrixDotProductScorers.create(
-            TestDenseMatrices.of(new float[] {1f, 2f, 3f, 4f}, 2, 2))) {
-      float[] dotProducts = new float[2];
+        MatrixDotProductScorers.create(matrix, TestMatrixRows.of(2))) {
 
-      scorer.score(new float[] {0.5f, 2f}, dotProducts);
+      List<RowNumAndSimilarity> kept = scorer.selectRows(new float[] {0.5f, 2f}, SELECTION);
 
-      assertEquals(4.5f, dotProducts[0], DELTA);
-      assertEquals(9.5f, dotProducts[1], DELTA);
+      assertEquals(2, kept.size());
+      List<Float> similarities =
+          kept.stream().map(RowNumAndSimilarity::getSimilarity).sorted().toList();
+      assertEquals(4.5f, similarities.get(0), DELTA);
+      assertEquals(9.5f, similarities.get(1), DELTA);
     }
   }
 
   @Test
-  void createUsesTheNativeSupplierWhenAvailable() {
-    MatrixDotProductScorer expectedScorer =
-        new MatrixDotProductScorer() {
-          @Override
-          public void score(float[] queryValues, float[] dotProducts) {}
-        };
+  void createTakesTheFirstAvailableScorerInPreferenceOrder() {
+    MatrixDotProductScorer preferred = new NoScorer();
 
-    try (MatrixDotProductScorer scorer =
-        MatrixDotProductScorers.create(
-            TestDenseMatrices.of(new float[] {1f, 2f}, 1, 2),
-            /* nativeBlasAvailable */ true, () -> expectedScorer)) {
-      assertSame(expectedScorer, scorer);
+    try (MatrixDotProductScorer scorer = createWith(provider(true, preferred), provider(true, new NoScorer()))) {
+      assertSame(preferred, scorer);
     }
   }
 
   @Test
-  void createBuildsJavaScorerWhenNoNativeLibraryIsAvailable() {
+  void createSkipsAScorerThatIsUnavailable() {
+    MatrixDotProductScorer next = new NoScorer();
+
     try (MatrixDotProductScorer scorer =
-        MatrixDotProductScorers.create(
-            TestDenseMatrices.of(new float[] {1f, 2f}, 1, 2),
-            /* nativeBlasAvailable */ false,
-            () -> {
-              throw new AssertionError(
-                  "the supplier must not be invoked when no native library is available.");
-            })) {
-      assertInstanceOf(JavaMatrixDotProductScorer.class, scorer);
+        createWith(
+            provider(
+                false,
+                () -> {
+                  throw new AssertionError("an unavailable scorer must not be built.");
+                }),
+            provider(true, next))) {
+      assertSame(next, scorer);
     }
   }
 
   @Test
-  void createFallsBackToJavaScorerOnLinkageError() {
-    try (MatrixDotProductScorer scorer =
-        MatrixDotProductScorers.create(
-            TestDenseMatrices.of(new float[] {1f, 2f}, 1, 2),
-            /* nativeBlasAvailable */ true,
-            () -> {
-              throw new UnsatisfiedLinkError("native missing");
-            })) {
-      assertInstanceOf(JavaMatrixDotProductScorer.class, scorer);
+  void createSkipsAScorerWhoseNativeCodeFailsToLoad() {
+    MatrixDotProductScorer next = new NoScorer();
+
+    try (MatrixDotProductScorer first =
+        createWith(
+            provider(
+                true,
+                () -> {
+                  throw new UnsatisfiedLinkError("native missing");
+                }),
+            provider(true, next))) {
+      assertSame(next, first);
+    }
+    try (MatrixDotProductScorer wrapped =
+        createWith(
+            provider(
+                true,
+                () -> {
+                  throw new RuntimeException(new UnsatisfiedLinkError("native missing"));
+                }),
+            provider(true, next))) {
+      assertSame(next, wrapped);
     }
   }
 
   @Test
-  void createFallsBackToJavaScorerWhenRuntimeExceptionWrapsLinkageError() {
-    try (MatrixDotProductScorer scorer =
-        MatrixDotProductScorers.create(
-            TestDenseMatrices.of(new float[] {1f, 2f}, 1, 2),
-            /* nativeBlasAvailable */ true,
-            () -> {
-              throw new RuntimeException(new UnsatisfiedLinkError("native missing"));
-            })) {
-      assertInstanceOf(JavaMatrixDotProductScorer.class, scorer);
-    }
-  }
-
-  @Test
-  void createRethrowsRuntimeExceptionNotCausedByLinkageError() {
+  void createRethrowsAFailureThatIsNotAMissingLibrary() {
     assertThrows(
         IllegalStateException.class,
         () ->
-            MatrixDotProductScorers.create(
-                TestDenseMatrices.of(new float[] {1f, 2f}, 1, 2),
-                /* nativeBlasAvailable */ true,
-                () -> {
-                  throw new IllegalStateException("boom");
-                }));
+            createWith(
+                provider(
+                    true,
+                    () -> {
+                      throw new IllegalStateException("boom");
+                    })));
   }
 
   @Test
-  void defaultScorerCloseCanBeCalled() {
-    MatrixDotProductScorer scorer =
-        new MatrixDotProductScorer() {
-          @Override
-          public void score(float[] queryValues, float[] dotProducts) {}
-        };
+  void createRejectsAnEmptyPreferenceOrder() {
+    assertThrows(IllegalStateException.class, this::createWith);
+  }
 
-    scorer.close();
+  /** The default order ends with a scorer needing no native code, so it always builds one. */
+  @Test
+  void theDefaultOrderAlwaysBuildsAScorer() {
+    DenseMatrix matrix = TestDenseMatrices.of(new float[] {1f, 2f}, 1, 2);
+    try (MatrixDotProductScorer scorer =
+        MatrixDotProductScorers.create(matrix, TestMatrixRows.of(1))) {
+      assertInstanceOf(MatrixDotProductScorer.class, scorer);
+    }
   }
 
   @Test
-  void validateScoreInputsRejectsQueryLengthMismatch() {
+  void validateQueryLengthRejectsAQueryOfTheWrongLength() {
+    DenseMatrix matrix = TestDenseMatrices.of(new float[] {1f, 2f}, 1, 2);
+
     assertThrows(
         IllegalArgumentException.class,
-        () ->
-            MatrixDotProductScorers.validateScoreInputs(
-                TestDenseMatrices.of(new float[] {1f, 2f}, 1, 2), new float[] {1f}, new float[] {0f}));
+        () -> MatrixDotProductScorers.validateQueryLength(matrix, new float[] {1f}));
+    MatrixDotProductScorers.validateQueryLength(matrix, new float[] {1f, 2f});
   }
 
-  @Test
-  void validateScoreInputsRejectsDotProductsLengthMismatch() {
-    assertThrows(
-        IllegalArgumentException.class,
-        () ->
-            MatrixDotProductScorers.validateScoreInputs(
-                TestDenseMatrices.of(new float[] {1f, 2f}, 1, 2), new float[] {1f, 2f}, new float[] {0f, 0f}));
+  private MatrixDotProductScorer createWith(MatrixDotProductScorers.Provider... providers) {
+    return MatrixDotProductScorers.create(
+        TestDenseMatrices.of(new float[] {1f, 2f}, 1, 2), TestMatrixRows.of(1),
+        List.of(providers));
   }
 
-  @Test
-  void validateScoreInputsAcceptsConsistentDimensions() {
-    MatrixDotProductScorers.validateScoreInputs(
-                TestDenseMatrices.of(new float[] {1f, 2f}, 1, 2), new float[] {1f, 2f}, new float[] {0f});
+  private static MatrixDotProductScorers.Provider provider(
+      boolean available, MatrixDotProductScorer scorer) {
+    return provider(available, () -> scorer);
+  }
+
+  private static MatrixDotProductScorers.Provider provider(
+      boolean available, java.util.function.Supplier<MatrixDotProductScorer> scorer) {
+    return new MatrixDotProductScorers.Provider() {
+      @Override
+      public boolean isAvailable() {
+        return available;
+      }
+
+      @Override
+      public MatrixDotProductScorer create(DenseMatrix matrix, MatrixRows rows) {
+        return scorer.get();
+      }
+    };
+  }
+
+  /** A scorer that is only ever identified, never used. */
+  private static final class NoScorer implements MatrixDotProductScorer {
+    @Override
+    public List<RowNumAndSimilarity> selectRows(float[] queryValues, RowSelection selection) {
+      return List.of();
+    }
   }
 }

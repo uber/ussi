@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -21,15 +22,17 @@ import org.junit.jupiter.api.Test;
  */
 class NativeMatrixDotProductScorerTest {
   private static final float DELTA = 1e-3f;
+  private static final RowSelection SELECTION =
+      new RowSelection(0, Float.NEGATIVE_INFINITY, 10);
 
   @Test
   void scoresAMatrixAgainstAQuery() {
     DenseMatrix matrix = TestDenseMatrices.of(new float[] {1f, 2f, 3f, 4f}, 2, 2);
     try (NativeMatrixDotProductScorer<float[]> scorer =
-        new NativeMatrixDotProductScorer<>(matrix, new FakeNativeBlas())) {
+        new NativeMatrixDotProductScorer<>(matrix, TestMatrixRows.of(matrix.numRows()), new FakeNativeBlas())) {
       float[] dotProducts = new float[2];
 
-      scorer.score(new float[] {0.5f, 2f}, dotProducts);
+      scorer.multiplyOneQuery(new float[] {0.5f, 2f}, SELECTION, dotProducts);
 
       assertArrayEquals(new float[] {4.5f, 9.5f}, dotProducts, DELTA);
     }
@@ -41,14 +44,14 @@ class NativeMatrixDotProductScorerTest {
     DenseMatrix matrix = TestDenseMatrices.of(new float[] {1f, 0f, 0f, 1f}, 2, 2);
     FakeNativeBlas blas = new FakeNativeBlas();
     try (NativeMatrixDotProductScorer<float[]> scorer =
-        new NativeMatrixDotProductScorer<>(matrix, blas)) {
+        new NativeMatrixDotProductScorer<>(matrix, TestMatrixRows.of(matrix.numRows()), blas)) {
       float[] dotProducts = new float[2];
-      scorer.score(new float[] {1f, 2f}, dotProducts);
+      scorer.multiplyOneQuery(new float[] {1f, 2f}, SELECTION, dotProducts);
       int afterFirstScore = blas.numAllocations.get();
 
       for (int i = 0; i < 100; ++i) {
         float[] repeated = new float[2];
-        scorer.score(new float[] {1f, 2f}, repeated);
+        scorer.multiplyOneQuery(new float[] {1f, 2f}, SELECTION, repeated);
 
         assertArrayEquals(dotProducts, repeated, DELTA, "score " + i + " differed");
       }
@@ -72,10 +75,10 @@ class NativeMatrixDotProductScorerTest {
     DenseMatrix matrix = TestDenseMatrices.of(values, numRows, 2);
     FakeNativeBlas blas = new FakeNativeBlas();
     try (NativeMatrixDotProductScorer<float[]> scorer =
-        new NativeMatrixDotProductScorer<>(matrix, blas)) {
+        new NativeMatrixDotProductScorer<>(matrix, TestMatrixRows.of(matrix.numRows()), blas)) {
       float[] dotProducts = new float[numRows];
 
-      scorer.score(new float[] {1f, 0f}, dotProducts);
+      scorer.multiplyOneQuery(new float[] {1f, 0f}, SELECTION, dotProducts);
 
       for (int row = 0; row < numRows; ++row) {
         assertEquals(row, dotProducts[row], DELTA, "row " + row + " landed in the wrong slice");
@@ -92,10 +95,10 @@ class NativeMatrixDotProductScorerTest {
     assertTrue(matrix.numChunks() > 1, "the test needs several chunks");
 
     try (NativeMatrixDotProductScorer<float[]> scorer =
-        new NativeMatrixDotProductScorer<>(matrix, new FakeNativeBlas())) {
+        new NativeMatrixDotProductScorer<>(matrix, TestMatrixRows.of(matrix.numRows()), new FakeNativeBlas())) {
       float[] dotProducts = new float[5];
 
-      scorer.score(new float[] {1f, 1f}, dotProducts);
+      scorer.multiplyOneQuery(new float[] {1f, 1f}, SELECTION, dotProducts);
 
       assertArrayEquals(new float[] {2f, 4f, 6f, 8f, 10f}, dotProducts, DELTA);
     }
@@ -106,12 +109,12 @@ class NativeMatrixDotProductScorerTest {
     // A second query must not observe the first query's values left in the buffer.
     DenseMatrix matrix = TestDenseMatrices.of(new float[] {1f, 1f, 1f, 1f, 1f, 1f}, 3, 2);
     try (NativeMatrixDotProductScorer<float[]> scorer =
-        new NativeMatrixDotProductScorer<>(matrix, new FakeNativeBlas())) {
+        new NativeMatrixDotProductScorer<>(matrix, TestMatrixRows.of(matrix.numRows()), new FakeNativeBlas())) {
       float[] first = new float[3];
       float[] second = new float[3];
 
-      scorer.score(new float[] {10f, 20f}, first);
-      scorer.score(new float[] {1f, 2f}, second);
+      scorer.multiplyOneQuery(new float[] {10f, 20f}, SELECTION, first);
+      scorer.multiplyOneQuery(new float[] {1f, 2f}, SELECTION, second);
 
       assertArrayEquals(new float[] {30f, 30f, 30f}, first, DELTA);
       assertArrayEquals(new float[] {3f, 3f, 3f}, second, DELTA);
@@ -134,20 +137,18 @@ class NativeMatrixDotProductScorerTest {
     DenseMatrix matrix = TestDenseMatrices.of(values, numRows, dimension);
 
     try (NativeMatrixDotProductScorer<float[]> scorer =
-        new NativeMatrixDotProductScorer<>(matrix, new FakeNativeBlas())) {
+        new NativeMatrixDotProductScorer<>(matrix, TestMatrixRows.of(matrix.numRows()), new FakeNativeBlas())) {
       int numThreads = 8;
       // Each thread owns a distinct query, and the products it must keep obtaining.
       List<float[]> queries = new ArrayList<>();
-      List<float[]> expected = new ArrayList<>();
+      List<List<RowNumAndSimilarity>> expected = new ArrayList<>();
       for (int thread = 0; thread < numThreads; ++thread) {
         float[] query = new float[dimension];
         for (int i = 0; i < dimension; ++i) {
           query[i] = thread + i;
         }
-        float[] products = new float[numRows];
-        scorer.score(query, products);
         queries.add(query);
-        expected.add(products);
+        expected.add(scorer.selectRows(query, SELECTION));
       }
 
       ConcurrentLinkedQueue<String> mismatches = new ConcurrentLinkedQueue<>();
@@ -160,11 +161,13 @@ class NativeMatrixDotProductScorerTest {
                 () -> {
                   try {
                     start.await();
-                    float[] products = new float[numRows];
                     for (int round = 0; round < 200; ++round) {
-                      scorer.score(queries.get(id), products);
-                      for (int row = 0; row < numRows; ++row) {
-                        if (Math.abs(products[row] - expected.get(id)[row]) > DELTA) {
+                      List<RowNumAndSimilarity> kept = scorer.selectRows(queries.get(id), SELECTION);
+                      for (int row = 0; row < kept.size(); ++row) {
+                        if (Math.abs(
+                                kept.get(row).getSimilarity()
+                                    - expected.get(id).get(row).getSimilarity())
+                            > DELTA) {
                           mismatches.add("thread " + id + " round " + round + " row " + row);
                           return;
                         }
@@ -192,7 +195,7 @@ class NativeMatrixDotProductScorerTest {
     DenseMatrix matrix = TestDenseMatrices.of(new float[] {1f, 1f, 1f, 1f}, 2, 2);
     FakeNativeBlas blas = new FakeNativeBlas();
     try (NativeMatrixDotProductScorer<float[]> scorer =
-        new NativeMatrixDotProductScorer<>(matrix, blas)) {
+        new NativeMatrixDotProductScorer<>(matrix, TestMatrixRows.of(matrix.numRows()), blas)) {
       int numThreads = 4;
       CountDownLatch start = new CountDownLatch(1);
       CountDownLatch finished = new CountDownLatch(numThreads);
@@ -203,7 +206,7 @@ class NativeMatrixDotProductScorerTest {
                   try {
                     start.await();
                     for (int round = 0; round < 50; ++round) {
-                      scorer.score(new float[] {1f, 1f}, new float[2]);
+                      scorer.selectRows(new float[] {1f, 1f}, SELECTION);
                     }
                   } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
@@ -230,8 +233,8 @@ class NativeMatrixDotProductScorerTest {
     DenseMatrix matrix = TestDenseMatrices.of(new float[] {1f, 2f}, 1, 2);
     FakeNativeBlas blas = new FakeNativeBlas();
     NativeMatrixDotProductScorer<float[]> scorer =
-        new NativeMatrixDotProductScorer<>(matrix, blas);
-    scorer.score(new float[] {1f, 1f}, new float[1]);
+        new NativeMatrixDotProductScorer<>(matrix, TestMatrixRows.of(matrix.numRows()), blas);
+    scorer.selectRows(new float[] {1f, 1f}, SELECTION);
 
     scorer.close();
 
@@ -248,12 +251,14 @@ class NativeMatrixDotProductScorerTest {
   void rejectsScoringAfterClose() {
     NativeMatrixDotProductScorer<float[]> scorer =
         new NativeMatrixDotProductScorer<>(
-            TestDenseMatrices.of(new float[] {1f}, 1, 1), new FakeNativeBlas());
+            TestDenseMatrices.of(new float[] {1f}, 1, 1),
+            TestMatrixRows.of(1),
+            new FakeNativeBlas());
 
     scorer.close();
 
     assertThrows(
-        IllegalStateException.class, () -> scorer.score(new float[] {1f}, new float[] {0f}));
+        IllegalStateException.class, () -> scorer.selectRows(new float[] {1f}, SELECTION));
   }
 
   /**

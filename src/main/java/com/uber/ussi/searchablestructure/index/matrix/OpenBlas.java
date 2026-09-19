@@ -7,7 +7,6 @@ import static org.bytedeco.openblas.global.openblas.CblasTrans;
 
 import com.uber.ussi.searchablestructure.utils.parallel.ParallelismBudget;
 import com.uber.ussi.utils.Utils;
-import java.util.function.BooleanSupplier;
 import java.util.function.IntConsumer;
 import javax.annotation.Nullable;
 import org.bytedeco.javacpp.FloatPointer;
@@ -122,20 +121,6 @@ final class OpenBlas implements NativeBlas<FloatPointer> {
     } catch (LinkageError | RuntimeException e) {
       return false;
     }
-  }
-
-  /**
-   * A dense scorer over this library.
-   *
-   * @throws IllegalStateException if the library is unavailable, since a scorer over an
-   *     unavailable library would fail on its first allocation rather than here.
-   */
-  static MatrixDotProductScorer createScorer(
-      DenseMatrix matrix, BooleanSupplier availabilitySupplier) {
-    if (!availabilitySupplier.getAsBoolean()) {
-      throw new IllegalStateException("OpenBLAS is not available on this platform.");
-    }
-    return new NativeMatrixDotProductScorer<>(matrix, shared());
   }
 
   /** Discards the memoized availability, so a test may vary what the probes report. */

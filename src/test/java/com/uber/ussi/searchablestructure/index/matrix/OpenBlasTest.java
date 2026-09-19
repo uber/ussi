@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 /** What is specific to OpenBLAS: whether it loads, what it rations, and its thread count. */
 class OpenBlasTest {
   private static final float DELTA = 1e-6f;
+  private static final RowSelection SELECTION = new RowSelection(0, Float.NEGATIVE_INFINITY, 10);
 
   @Test
   void isAvailableReturnsFalseOnUnsupportedPlatform() {
@@ -69,16 +70,6 @@ class OpenBlasTest {
         "availability must be memoized");
   }
 
-  @Test
-  void createScorerRejectsAnUnavailableLibrary() {
-    assertThrows(
-        IllegalStateException.class,
-        () ->
-            OpenBlas.createScorer(
-                TestDenseMatrices.of(new float[] {1f}, 1, 1),
-                /* availabilitySupplier */ () -> false));
-  }
-
   /**
    * The thread count is process-global to OpenBLAS, so the budget applies it and a score must
    * leave it alone.
@@ -92,15 +83,14 @@ class OpenBlasTest {
         () -> {
           OpenBlas blas = new OpenBlas();
           int numUpdatesAtConstruction = fakeOpenBlas.numThreadsUpdates.size();
+          DenseMatrix matrix = TestDenseMatrices.of(new float[] {1f}, 1, 1);
           try (MatrixDotProductScorer scorer =
-              new NativeMatrixDotProductScorer<>(
-                  TestDenseMatrices.of(new float[] {1f}, 1, 1), blas)) {
-            float[] dotProducts = new float[1];
-
-            scorer.score(new float[] {2f}, dotProducts);
-            scorer.score(new float[] {2f}, dotProducts);
-
-            assertEquals(2f, dotProducts[0], DELTA);
+              new NativeMatrixDotProductScorer<>(matrix, TestMatrixRows.of(1), blas)) {
+            assertEquals(1, scorer.selectRows(new float[] {2f}, SELECTION).size());
+            assertEquals(
+                2f,
+                scorer.selectRows(new float[] {2f}, SELECTION).get(0).getSimilarity(),
+                DELTA);
           }
 
           assertEquals(
@@ -168,18 +158,19 @@ class OpenBlasTest {
     }
 
     try (NativeMatrixDotProductScorer<FloatPointer> scorer =
-        new NativeMatrixDotProductScorer<>(matrix, OpenBlas.shared())) {
+        new NativeMatrixDotProductScorer<>(matrix, TestMatrixRows.of(numRows), OpenBlas.shared())) {
       float[][] expected = new float[queries.length][];
       for (int query = 0; query < queries.length; ++query) {
         expected[query] = new float[numRows];
-        scorer.multiplyOneQuery(queries[query], expected[query]);
+        scorer.multiplyOneQuery(queries[query], SELECTION, expected[query]);
       }
       float[][] batched = new float[queries.length][];
       for (int query = 0; query < queries.length; ++query) {
         batched[query] = new float[numRows];
       }
 
-      scorer.multiplyQueries(queries, batched, queries.length);
+      scorer.multiplyQueries(
+          queries, new RowSelection[queries.length], List.of(batched), queries.length);
 
       for (int query = 0; query < queries.length; ++query) {
         assertArrayEquals(

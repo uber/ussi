@@ -11,6 +11,8 @@ class MatrixDotProductScorerTest {
   private static final int RANDOM_PROFILE_PHOTO_NUM_ROWS = 1000;
   private static final int RANDOM_PROFILE_PHOTO_DIMENSION = 4096;
   private static final long RANDOM_PROFILE_PHOTO_SEED = 20260616L;
+  private static final RowSelection SELECTION =
+      new RowSelection(0, Float.NEGATIVE_INFINITY, 10);
   private static final float DELTA = 1e-3f;
 
   @Test
@@ -26,12 +28,12 @@ class MatrixDotProductScorerTest {
     float[] javaDots = new float[3];
     float[] openBlasDots = new float[3];
     JavaMatrixDotProductScorer javaScorer =
-        new JavaMatrixDotProductScorer(TestDenseMatrices.of(matrix, 3, 3));
-    try (MatrixDotProductScorer openBlasScorer =
-        OpenBlas.createScorer(
-            TestDenseMatrices.of(matrix, 3, 3), OpenBlas::isAvailable)) {
+        javaScorerOver(TestDenseMatrices.of(matrix, 3, 3));
+    try (NativeMatrixDotProductScorer<org.bytedeco.javacpp.FloatPointer> openBlasScorer =
+        new NativeMatrixDotProductScorer<>(
+            TestDenseMatrices.of(matrix, 3, 3), TestMatrixRows.of((TestDenseMatrices.of(matrix, 3, 3)).numRows()), OpenBlas.shared())) {
       javaScorer.score(query, javaDots);
-      openBlasScorer.score(query, openBlasDots);
+      openBlasScorer.multiplyOneQuery(query, SELECTION, openBlasDots);
     }
 
     for (int i = 0; i < javaDots.length; ++i) {
@@ -58,7 +60,7 @@ class MatrixDotProductScorerTest {
     float[] query = new float[] {0.25f, 0.5f, 0.75f};
 
     float[] reference = new float[numRows];
-    new JavaMatrixDotProductScorer(TestDenseMatrices.of(values, numRows, dimension))
+    javaScorerOver(TestDenseMatrices.of(values, numRows, dimension))
         .score(query, reference);
 
     // Two rows per chunk, so three chunks with the last one short.
@@ -66,16 +68,16 @@ class MatrixDotProductScorerTest {
     assertEquals(3, chunked.numChunks());
 
     float[] fromJava = new float[numRows];
-    new JavaMatrixDotProductScorer(chunked).score(query, fromJava);
+    new JavaMatrixDotProductScorer(chunked, TestMatrixRows.of(chunked.numRows())).score(query, fromJava);
 
     assertArrayEquals(reference, fromJava, DELTA);
 
-    try (MatrixDotProductScorer openBlasScorer =
-        OpenBlas.createScorer(
-            chunked, OpenBlas::isAvailable)) {
+    try (NativeMatrixDotProductScorer<org.bytedeco.javacpp.FloatPointer> openBlasScorer =
+        new NativeMatrixDotProductScorer<>(
+            chunked, TestMatrixRows.of((chunked).numRows()), OpenBlas.shared())) {
       float[] fromOpenBlas = new float[numRows];
 
-      openBlasScorer.score(query, fromOpenBlas);
+      openBlasScorer.multiplyOneQuery(query, SELECTION, fromOpenBlas);
 
       assertArrayEquals(reference, fromOpenBlas, DELTA);
     }
@@ -102,14 +104,13 @@ class MatrixDotProductScorerTest {
     float[] javaDots = new float[numRows];
     float[] openBlasDots = new float[numRows];
     JavaMatrixDotProductScorer javaScorer =
-        new JavaMatrixDotProductScorer(TestDenseMatrices.of(matrix, numRows, dimension));
+        javaScorerOver(TestDenseMatrices.of(matrix, numRows, dimension));
 
-    try (MatrixDotProductScorer openBlasScorer =
-        OpenBlas.createScorer(
-            TestDenseMatrices.of(matrix, numRows, dimension),
-            OpenBlas::isAvailable)) {
+    try (NativeMatrixDotProductScorer<org.bytedeco.javacpp.FloatPointer> openBlasScorer =
+        new NativeMatrixDotProductScorer<>(
+            TestDenseMatrices.of(matrix, numRows, dimension), TestMatrixRows.of((TestDenseMatrices.of(matrix, numRows, dimension)).numRows()), OpenBlas.shared())) {
       javaScorer.score(query, javaDots);
-      openBlasScorer.score(query, openBlasDots);
+      openBlasScorer.multiplyOneQuery(query, SELECTION, openBlasDots);
     }
 
     for (int i = 0; i < numRows; ++i) {
@@ -162,5 +163,9 @@ class MatrixDotProductScorerTest {
     private float[] getFirstRowAsQuery() {
       return Arrays.copyOfRange(rowMajorValues, 0, dimension);
     }
+  }
+
+  private static JavaMatrixDotProductScorer javaScorerOver(DenseMatrix matrix) {
+    return new JavaMatrixDotProductScorer(matrix, TestMatrixRows.of(matrix.numRows()));
   }
 }

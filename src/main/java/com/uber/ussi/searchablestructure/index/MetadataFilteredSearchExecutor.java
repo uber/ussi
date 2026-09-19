@@ -3,9 +3,9 @@ package com.uber.ussi.searchablestructure.index;
 
 import com.carrotsearch.hppc.LongHashSet;
 import com.uber.ussi.entity.meta.MetaFilter;
-import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
-import com.uber.ussi.searchablestructure.metadata.MetadataFilteringStrategy;
-import com.uber.ussi.searchablestructure.metadata.PreFilteringResult;
+import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
+import com.uber.ussi.searchablestructure.utils.metadata.MetadataFilteringStrategy;
+import com.uber.ussi.searchablestructure.utils.metadata.PreFilteringResult;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
 import java.util.Collections;
 import java.util.List;

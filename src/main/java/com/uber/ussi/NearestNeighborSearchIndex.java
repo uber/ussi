@@ -12,16 +12,16 @@ import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.TermsAndValues;
-import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
+import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.cache.Cache;
 import com.uber.ussi.searchablestructure.cache.CacheConfigValidator;
 import com.uber.ussi.searchablestructure.cache.CacheFactory;
 import com.uber.ussi.searchablestructure.index.Index;
 import com.uber.ussi.searchablestructure.index.IndexConfigValidator;
 import com.uber.ussi.searchablestructure.index.IndexFactory;
-import com.uber.ussi.searchablestructure.TopResults;
-import com.uber.ussi.searchablestructure.parallel.ParallelismBudget;
-import com.uber.ussi.searchablestructure.parallel.SearchThreads;
+import com.uber.ussi.searchablestructure.result.ResultHeaps;
+import com.uber.ussi.searchablestructure.utils.parallel.ParallelismBudget;
+import com.uber.ussi.searchablestructure.utils.parallel.SearchThreads;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -695,7 +695,7 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
     if (!rows.isFull()) {
       return floor;
     }
-    return Math.max(floor, (float) TopResults.getConservativeMinSimilarity(rows));
+    return Math.max(floor, (float) ResultHeaps.getConservativeMinSimilarity(rows));
   }
 
   private SearchResults mergeSearchResultsLocked(

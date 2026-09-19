@@ -16,18 +16,18 @@ import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.RecordType;
 import com.uber.ussi.error.IndexCreationError;
-import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
+import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.index.RowStoringIndex;
 import com.uber.ussi.searchablestructure.index.IndexType;
 import com.uber.ussi.searchablestructure.index.MetadataFilteredSearchExecutor;
 import com.uber.ussi.searchablestructure.index.inverted.generator.FilteredSearch;
 import com.uber.ussi.searchablestructure.index.inverted.generator.InvertedList;
 import com.uber.ussi.searchablestructure.index.inverted.generator.MergeSearch;
-import com.uber.ussi.searchablestructure.TopResults;
-import com.uber.ussi.searchablestructure.inverted.KeyAndPrefixFilteringData;
-import com.uber.ussi.searchablestructure.metadata.MetadataFilteringStrategy;
-import com.uber.ussi.searchablestructure.parallel.ParallelShardSearch;
-import com.uber.ussi.searchablestructure.parallel.SharedMinSimilarity;
+import com.uber.ussi.searchablestructure.result.ResultHeaps;
+import com.uber.ussi.searchablestructure.index.inverted.KeyAndPrefixFilteringData;
+import com.uber.ussi.searchablestructure.utils.metadata.MetadataFilteringStrategy;
+import com.uber.ussi.searchablestructure.utils.parallel.ParallelShardSearch;
+import com.uber.ussi.searchablestructure.utils.parallel.SharedMinSimilarity;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
 import com.uber.ussi.utils.ConfigKeys;
 import com.uber.ussi.utils.MathUtils;
@@ -466,7 +466,7 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
       @Nullable MetaFilter metadataFilter,
       float minSimilarity,
       int maxResults) {
-    BoundedSizeMaxHeap<RowNumAndSimilarity> rows = TopResults.newTopResultsHeap(maxResults);
+    BoundedSizeMaxHeap<RowNumAndSimilarity> rows = ResultHeaps.newTopResults(maxResults);
     double currentMinSimilarity = minSimilarity;
     for (LongCursor rowNum : candidateRowNums) {
       currentMinSimilarity =
@@ -510,7 +510,7 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
     if (!rows.isFull()) {
       return minSimilarity;
     }
-    return Math.max(minSimilarity, TopResults.getConservativeMinSimilarity(rows));
+    return Math.max(minSimilarity, ResultHeaps.getConservativeMinSimilarity(rows));
   }
 
   /** Lets tombstoned rows stay in the physical inverted lists without reaching search results. */

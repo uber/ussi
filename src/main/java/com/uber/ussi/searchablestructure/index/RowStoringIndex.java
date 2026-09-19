@@ -8,8 +8,8 @@ import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
-import com.uber.ussi.searchablestructure.metadata.MetadataFilteringModule;
-import com.uber.ussi.searchablestructure.metadata.PreFilteringResult;
+import com.uber.ussi.searchablestructure.utils.metadata.MetadataFilteringModule;
+import com.uber.ussi.searchablestructure.utils.metadata.PreFilteringResult;
 import java.util.Objects;
 
 /**

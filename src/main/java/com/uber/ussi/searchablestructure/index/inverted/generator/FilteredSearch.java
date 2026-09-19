@@ -5,10 +5,10 @@ import com.carrotsearch.hppc.LongHashSet;
 import com.uber.ussi.comparator.Comparator;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
-import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
-import com.uber.ussi.searchablestructure.TopResults;
-import com.uber.ussi.searchablestructure.inverted.KeyAndPrefixFilteringData;
-import com.uber.ussi.searchablestructure.parallel.SharedMinSimilarity;
+import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
+import com.uber.ussi.searchablestructure.result.ResultHeaps;
+import com.uber.ussi.searchablestructure.index.inverted.KeyAndPrefixFilteringData;
+import com.uber.ussi.searchablestructure.utils.parallel.SharedMinSimilarity;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
 import com.uber.ussi.utils.MathUtils;
 import java.util.Arrays;
@@ -52,7 +52,7 @@ public final class FilteredSearch {
       RowFilter rowFilter,
       LongFunction<LongTermsAndValues> verificationRowLookup,
       SharedMinSimilarity sharedMinSimilarity) {
-    BoundedSizeMaxHeap<RowNumAndSimilarity> rows = TopResults.newTopResultsHeap(maxResults);
+    BoundedSizeMaxHeap<RowNumAndSimilarity> rows = ResultHeaps.newTopResults(maxResults);
     double currentMinSimilarity = Math.max(minSimilarity, sharedMinSimilarity.get());
     // The prefix is chosen for the minimum similarity already proved rather than the one the
     // caller asked for. A prefix chosen for a lower one covers keys that no row reaching the
@@ -82,7 +82,7 @@ public final class FilteredSearch {
       }
       rows.add(new RowNumAndSimilarity(rowNum, (float) similarity));
       if (rows.isFull()) {
-        double tightenedMinSimilarity = TopResults.getConservativeMinSimilarity(rows);
+        double tightenedMinSimilarity = ResultHeaps.getConservativeMinSimilarity(rows);
         if (tightenedMinSimilarity > currentMinSimilarity) {
           currentMinSimilarity = tightenedMinSimilarity;
           candidates.setMinSimilarity(currentMinSimilarity);

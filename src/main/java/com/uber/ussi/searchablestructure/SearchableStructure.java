@@ -4,7 +4,8 @@ package com.uber.ussi.searchablestructure;
 import com.carrotsearch.hppc.LongObjectHashMap;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
-import com.uber.ussi.searchablestructure.parallel.ParallelismBudget;
+import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
+import com.uber.ussi.searchablestructure.utils.parallel.ParallelismBudget;
 import java.util.List;
 
 /** Common searchable structure API shared by caches and indexes. */

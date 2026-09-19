@@ -6,9 +6,9 @@ import com.uber.ussi.comparator.Comparator;
 import com.uber.ussi.comparator.ConjunctionScored;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
-import com.uber.ussi.searchablestructure.RowNumAndSimilarity;
-import com.uber.ussi.searchablestructure.TopResults;
-import com.uber.ussi.searchablestructure.parallel.SharedMinSimilarity;
+import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
+import com.uber.ussi.searchablestructure.result.ResultHeaps;
+import com.uber.ussi.searchablestructure.utils.parallel.SharedMinSimilarity;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
 import java.util.Arrays;
 import java.util.List;
@@ -56,7 +56,7 @@ public final class MergeSearch {
     double uniValue1 = context.stableSortedUniValue(indexedQuery);
     double[] unscannedKeysUniValue =
         scoresFromConjunction ? computeUnscannedKeysUniValue(conjunctionScored, queryKeys) : null;
-    BoundedSizeMaxHeap<RowNumAndSimilarity> rows = TopResults.newTopResultsHeap(maxResults);
+    BoundedSizeMaxHeap<RowNumAndSimilarity> rows = ResultHeaps.newTopResults(maxResults);
     double currentMinSimilarity = Math.max(minSimilarity, sharedMinSimilarity.get());
     // Each list is entered at the minimum similarity already proved rather than the one the caller
     // asked for, so the rows a search walks past are the rows that could still reach the answer.
@@ -116,7 +116,7 @@ public final class MergeSearch {
       rows.add(new RowNumAndSimilarity(rowNum, (float) similarity));
       if (rows.isFull()) {
         currentMinSimilarity =
-            Math.max(currentMinSimilarity, TopResults.getConservativeMinSimilarity(rows));
+            Math.max(currentMinSimilarity, ResultHeaps.getConservativeMinSimilarity(rows));
         sharedMinSimilarity.raiseTo((float) currentMinSimilarity);
       }
     }

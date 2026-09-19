@@ -12,12 +12,12 @@ final class RowSelection {
 
   private final double queryUniValue;
   private final float minSimilarity;
-  private final int maxNumRows;
+  private final int maxResults;
 
-  RowSelection(double queryUniValue, float minSimilarity, int maxNumRows) {
+  RowSelection(double queryUniValue, float minSimilarity, int maxResults) {
     this.queryUniValue = queryUniValue;
     this.minSimilarity = minSimilarity;
-    this.maxNumRows = maxNumRows;
+    this.maxResults = maxResults;
   }
 
   double getQueryUniValue() {
@@ -28,7 +28,7 @@ final class RowSelection {
     return minSimilarity;
   }
 
-  int getMaxNumRows() {
-    return maxNumRows;
+  int getMaxResults() {
+    return maxResults;
   }
 }

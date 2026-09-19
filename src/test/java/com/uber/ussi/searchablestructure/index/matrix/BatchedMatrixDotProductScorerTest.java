@@ -10,7 +10,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import org.junit.jupiter.api.Test;
 
-/** Combining waiting queries into one multiply, independent of what performs the multiply. */
+/** Batching waiting queries into one multiply, independent of what performs the multiply. */
 class BatchedMatrixDotProductScorerTest {
   private static final float DELTA = 1e-6f;
   private static final RowSelection SELECTION =
@@ -23,7 +23,7 @@ class BatchedMatrixDotProductScorerTest {
         () -> new RecordingScorer(TestDenseMatrices.of(new float[] {1f}, 1, 1), 0));
   }
 
-  /** An uncontended query is multiplied on its own, since one query does not repay combining. */
+  /** An uncontended query is multiplied on its own, since one query does not repay batching. */
   @Test
   void aLoneQueryTakesTheSingleQueryPath() {
     RecordingScorer scorer = new RecordingScorer(TestDenseMatrices.of(new float[] {2f}, 1, 1), 8);
@@ -39,7 +39,7 @@ class BatchedMatrixDotProductScorerTest {
 
   /**
    * Queries waiting while a multiply runs are taken together by whichever caller performs the
-   * next one, so the combined count follows the offered load without any caller waiting for an
+   * next one, so the batch size follows the offered load without any caller waiting for an
    * arrival.
    */
   @Test
@@ -76,7 +76,7 @@ class BatchedMatrixDotProductScorerTest {
         scorer.getNumMultiplies() <= scorer.getNumQueriesMultiplied(),
         "a multiply may carry several queries but never fewer than one");
     for (int numQueries : scorer.numQueriesPerMultiply) {
-      assertTrue(numQueries >= 1 && numQueries <= 8, "combined " + numQueries + " queries");
+      assertTrue(numQueries >= 1 && numQueries <= 8, "batched " + numQueries + " queries");
     }
   }
 
@@ -107,8 +107,8 @@ class BatchedMatrixDotProductScorerTest {
         new ConcurrentLinkedQueue<>();
     private int numReleases;
 
-    RecordingScorer(DenseMatrix matrix, int maxNumQueriesInAMultiply) {
-      super(matrix, TestMatrixRows.of(matrix.numRows()), maxNumQueriesInAMultiply);
+    RecordingScorer(DenseMatrix matrix, int maxNumQueriesInABatch) {
+      super(matrix, TestMatrixRows.of(matrix.numRows()), maxNumQueriesInABatch);
     }
 
     @Override
@@ -120,11 +120,10 @@ class BatchedMatrixDotProductScorerTest {
 
     @Override
     protected void multiplyQueries(
-        float[][] queryValues, RowSelection[] selections, List<float[]> dotProducts,
-        int numQueries) {
+        float[][] queryValues, RowSelection[] selections, float[][] dotProducts, int numQueries) {
       numQueriesPerMultiply.add(numQueries);
       for (int query = 0; query < numQueries; ++query) {
-        multiply(queryValues[query], dotProducts.get(query));
+        multiply(queryValues[query], dotProducts[query]);
       }
     }
 

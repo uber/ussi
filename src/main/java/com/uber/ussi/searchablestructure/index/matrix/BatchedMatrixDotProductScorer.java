@@ -2,9 +2,11 @@
 package com.uber.ussi.searchablestructure.index.matrix;
 
 import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
+import com.uber.ussi.searchablestructure.result.ResultHeaps;
+import com.uber.ussi.utils.BoundedSizeMaxHeap;
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.List;
+import javax.annotation.Nullable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -16,12 +18,12 @@ import java.util.concurrent.locks.ReentrantLock;
  * <p>A multiply against the whole matrix costs about what reading the matrix costs, so queries
  * that share one multiply share that cost, and the underlying implementation reaches an
  * arithmetic intensity a single query cannot give it. The gain grows with the number of queries
- * combined, which is why the alternative of dividing the machine between concurrent queries loses
+ * batched, which is why the alternative of dividing the machine between concurrent queries loses
  * as concurrency rises: it makes each multiply narrower exactly when there is most to share.
  *
  * <p>No query waits for a query that has not arrived. A caller enqueues its own and then contends
  * to perform the multiply; whichever caller acquires it multiplies everything enqueued at that
- * instant, and the others wait only for the multiply already running. The combined count is
+ * instant, and the others wait only for the multiply already running. The batch size is
  * therefore a measurement of the offered load rather than a configured window, it is one when the
  * machine is idle, and no arrival policy or timer is needed to obtain it.
  *
@@ -29,7 +31,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * rather than dividing it between concurrent multiplies.
  *
  * <p>{@code S} is what one multiply produces for one query, which an implementation reads back in
- * {@link #collectRows collectRows()} and nothing else interprets. An implementation computing its
+ * {@link #addRows addRows()} and nothing else interprets. An implementation computing its
  * products in memory this process cannot read returns whatever it kept there, and chooses rows
  * where it computed them rather than copying a product per row back.
  *
@@ -47,30 +49,29 @@ abstract class BatchedMatrixDotProductScorer<S> implements MatrixDotProductScore
 
   private final DenseMatrix matrix;
   private final MatrixRows rows;
-  private final int maxNumQueriesInAMultiply;
+  private final int maxNumQueriesInABatch;
   private final ReentrantLock multiplying = new ReentrantLock();
   private final ArrayDeque<Query<S>> waiting = new ArrayDeque<>();
   // Read and written only by the caller holding multiplying.
-  private final Query<S>[] taken;
-  private final float[][] takenQueryValues;
-  private final RowSelection[] takenSelections;
-  private final List<S> takenResults;
+  private final Query<S>[] batched;
+  private final float[][] batchedQueryValues;
+  private final RowSelection[] batchedSelections;
+  @Nullable private S[] batchedResults;
   private final AtomicLong numMultiplies = new AtomicLong();
   private final AtomicLong numQueriesMultiplied = new AtomicLong();
   private volatile boolean closed;
 
   @SuppressWarnings("unchecked")
-  BatchedMatrixDotProductScorer(DenseMatrix matrix, MatrixRows rows, int maxNumQueriesInAMultiply) {
-    if (maxNumQueriesInAMultiply < 1) {
-      throw new IllegalArgumentException("maxNumQueriesInAMultiply must be >= 1.");
+  BatchedMatrixDotProductScorer(DenseMatrix matrix, MatrixRows rows, int maxNumQueriesInABatch) {
+    if (maxNumQueriesInABatch < 1) {
+      throw new IllegalArgumentException("maxNumQueriesInABatch must be >= 1.");
     }
     this.matrix = matrix;
     this.rows = rows;
-    this.maxNumQueriesInAMultiply = maxNumQueriesInAMultiply;
-    this.taken = new Query[maxNumQueriesInAMultiply];
-    this.takenQueryValues = new float[maxNumQueriesInAMultiply][];
-    this.takenSelections = new RowSelection[maxNumQueriesInAMultiply];
-    this.takenResults = new ArrayList<>(maxNumQueriesInAMultiply);
+    this.maxNumQueriesInABatch = maxNumQueriesInABatch;
+    this.batched = new Query[maxNumQueriesInABatch];
+    this.batchedQueryValues = new float[maxNumQueriesInABatch][];
+    this.batchedSelections = new RowSelection[maxNumQueriesInABatch];
   }
 
   @Override
@@ -98,9 +99,14 @@ abstract class BatchedMatrixDotProductScorer<S> implements MatrixDotProductScore
         query.awaitBriefly();
       }
     }
-    RowCollector collector = new RowCollector(selection);
-    collectRows(query.result, selection, collector);
-    return collector.toList();
+    BoundedSizeMaxHeap<RowNumAndSimilarity> rows =
+        ResultHeaps.newTopResults(selection.getMaxResults());
+    try {
+      addRows(query.result, selection, rows);
+    } finally {
+      recycleMultiplyResult(query.result);
+    }
+    return rows.toList();
   }
 
   @Override
@@ -121,21 +127,29 @@ abstract class BatchedMatrixDotProductScorer<S> implements MatrixDotProductScore
    * Scores the first {@code numQueries} of {@code queryValues} against the whole matrix in one
    * multiply, each into its own entry of {@code into}.
    *
-   * <p>Never called with fewer than two queries, since one query does not repay what combining
+   * <p>Never called with fewer than two queries, since one query does not repay what batching
    * costs. The selections are given so that an implementation able to choose rows during the
    * multiply has what choosing needs.
    */
   protected abstract void multiplyQueries(
-      float[][] queryValues, RowSelection[] selections, List<S> into, int numQueries);
+      float[][] queryValues, RowSelection[] selections, S[] into, int numQueries);
 
   /**
-   * Offers to {@code collector} the rows worth keeping, from what this query's multiply produced.
+   * Adds to {@code rows} what this query keeps, from what its multiply produced.
    *
-   * <p>The bound and the ordering belong to the collector, so an implementation that has already
-   * reduced its rows offers what survived and one holding a similarity for every row offers every
-   * row, and both reach the same answer.
+   * <p>The bound and the ordering belong to the heap, so an implementation that has already
+   * reduced its rows adds what survived and one holding a similarity for every row adds every row
+   * reaching the minimum, and both reach the same answer. The heap holds its rows in a plain list
+   * until they exceed the bound, so adding no more than the bound never builds a queue.
    */
-  protected abstract void collectRows(S result, RowSelection selection, RowCollector collector);
+  protected abstract void addRows(
+      S result, RowSelection selection, BoundedSizeMaxHeap<RowNumAndSimilarity> rows);
+
+  /** Somewhere to return a result whose rows have been added, so the next query may reuse it. */
+  protected void recycleMultiplyResult(S result) {}
+
+  /** An array to hold one multiply's results, which only the implementation can create. */
+  protected abstract S[] newMultiplyResults(int numResults);
 
   /** Releases whatever the implementation allocated. Called once. */
   protected abstract void releaseResources();
@@ -148,7 +162,7 @@ abstract class BatchedMatrixDotProductScorer<S> implements MatrixDotProductScore
     return rows;
   }
 
-  /** Multiplies so far, and the queries they carried, which report how the load combined. */
+  /** Multiplies so far, and the queries they carried, which report how the load batched. */
   final long getNumMultiplies() {
     return numMultiplies.get();
   }
@@ -161,8 +175,8 @@ abstract class BatchedMatrixDotProductScorer<S> implements MatrixDotProductScore
   private void multiplyWhateverIsWaiting() {
     int numQueries = 0;
     synchronized (waiting) {
-      while (!waiting.isEmpty() && numQueries < maxNumQueriesInAMultiply) {
-        taken[numQueries++] = waiting.pollFirst();
+      while (!waiting.isEmpty() && numQueries < maxNumQueriesInABatch) {
+        batched[numQueries++] = waiting.pollFirst();
       }
     }
     if (numQueries == 0) {
@@ -170,15 +184,17 @@ abstract class BatchedMatrixDotProductScorer<S> implements MatrixDotProductScore
     }
     try {
       if (numQueries == 1) {
-        multiplyOneQuery(taken[0].queryValues, taken[0].selection, taken[0].result);
+        multiplyOneQuery(batched[0].queryValues, batched[0].selection, batched[0].result);
       } else {
-        takenResults.clear();
-        for (int i = 0; i < numQueries; ++i) {
-          takenQueryValues[i] = taken[i].queryValues;
-          takenSelections[i] = taken[i].selection;
-          takenResults.add(taken[i].result);
+        if (batchedResults == null) {
+          batchedResults = newMultiplyResults(maxNumQueriesInABatch);
         }
-        multiplyQueries(takenQueryValues, takenSelections, takenResults, numQueries);
+        for (int i = 0; i < numQueries; ++i) {
+          batchedQueryValues[i] = batched[i].queryValues;
+          batchedSelections[i] = batched[i].selection;
+          batchedResults[i] = batched[i].result;
+        }
+        multiplyQueries(batchedQueryValues, batchedSelections, batchedResults, numQueries);
       }
       numMultiplies.incrementAndGet();
       numQueriesMultiplied.addAndGet(numQueries);
@@ -186,8 +202,8 @@ abstract class BatchedMatrixDotProductScorer<S> implements MatrixDotProductScore
       // Released even when the multiply failed, so a caller is never left waiting on a multiply
       // that will not happen again.
       for (int i = 0; i < numQueries; ++i) {
-        taken[i].multiplied();
-        taken[i] = null;
+        batched[i].multiplied();
+        batched[i] = null;
       }
     }
   }

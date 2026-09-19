@@ -63,10 +63,10 @@ class NativeMatrixDotProductScorerTest {
     }
   }
 
-  /** A matrix of more rows than one slice is multiplied a slice at a time, in row order. */
+  /** A matrix of more rows than one range is multiplied a range at a time, in row order. */
   @Test
-  void aMatrixOfManySlicesIsMultipliedSliceBySlice() {
-    int numRows = NativeMatrixDotProductScorer.MAX_NUM_ROWS_IN_A_SLICE * 2 + 17;
+  void aMatrixOfManyRangesIsMultipliedRangeByRange() {
+    int numRows = NativeMatrixDotProductScorer.MAX_NUM_ROWS_IN_A_RANGE * 2 + 17;
     float[] values = new float[numRows * 2];
     for (int row = 0; row < numRows; ++row) {
       values[row * 2] = row;
@@ -81,7 +81,7 @@ class NativeMatrixDotProductScorerTest {
       scorer.multiplyOneQuery(new float[] {1f, 0f}, SELECTION, dotProducts);
 
       for (int row = 0; row < numRows; ++row) {
-        assertEquals(row, dotProducts[row], DELTA, "row " + row + " landed in the wrong slice");
+        assertEquals(row, dotProducts[row], DELTA, "row " + row + " landed in the wrong range");
       }
     }
   }

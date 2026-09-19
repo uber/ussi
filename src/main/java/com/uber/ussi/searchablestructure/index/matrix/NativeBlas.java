@@ -6,8 +6,8 @@ package com.uber.ussi.searchablestructure.index.matrix;
  * multiplies out of.
  *
  * <p>Supporting a further library requires implementing this interface and nothing else. A dense
- * scorer allocates the buffers, reuses them across scores, traverses the matrix a slice at a time
- * and combines the queries that are waiting, none of which depends on the library in use. An
+ * scorer allocates the buffers, reuses them across scores, traverses the matrix a range at a time
+ * and batchs the queries that are waiting, none of which depends on the library in use. An
  * implementation supplies the buffer operations and the two multiplies.
  *
  * <p>{@code B} is the implementation's own buffer handle, which a caller of this interface only
@@ -54,7 +54,7 @@ interface NativeBlas<B> {
    * in {@code queries}, writing each vector's {@code numRows} products end to end in {@code
    * products}, in the order the vectors are given.
    *
-   * <p>This is what combining queries is for, so an implementation whose library offers a
+   * <p>This is what batching queries is for, so an implementation whose library offers a
    * matrix-matrix multiply calls it here rather than looping over the single multiply.
    */
   void multiplyQueries(

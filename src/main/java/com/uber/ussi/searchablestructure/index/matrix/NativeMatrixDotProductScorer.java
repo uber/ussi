@@ -8,9 +8,9 @@ import java.util.List;
  * A dense matrix-vector dot-product scorer over a native library.
  *
  * <p>The matrix is copied into native buffers once, one per chunk and in the same order, so a
- * chunk is multiplied in place. A chunk is multiplied a slice of rows at a time rather than
- * whole, because the products of one slice are held for every query being multiplied at once and
- * a chunk holds as many rows as a Java array can index. Slicing bounds that buffer by the slice
+ * chunk is multiplied in place. A chunk is multiplied a range of rows at a time rather than
+ * whole, because the products of one range are held for every query being multiplied at once and
+ * a chunk holds as many rows as a Java array can index. Dividing the rows bounds that buffer by the range
  * rather than by the matrix, at no cost to the multiply, which still reads each row once.
  *
  * <p>One set of working buffers serves the whole scorer, since the caller serializes multiplies.
@@ -19,10 +19,10 @@ final class NativeMatrixDotProductScorer<B> extends HostProductsMatrixDotProduct
 
   /**
    * Rows multiplied at once. Wide enough that a multiply is worth its call and that a row is read
-   * once for every query in it, narrow enough that the products of a full combination stay a few
-   * megabytes. The measurements that chose combining over dividing were taken at this width.
+   * once for every query in it, narrow enough that the products of a full batch stay a few
+   * megabytes. The measurements that chose batching over dividing were taken at this width.
    */
-  static final int MAX_NUM_ROWS_IN_A_SLICE = 8_192;
+  static final int MAX_NUM_ROWS_IN_A_RANGE = 8_192;
 
   private final NativeBlas<B> blas;
   private final List<B> chunks;
@@ -35,21 +35,21 @@ final class NativeMatrixDotProductScorer<B> extends HostProductsMatrixDotProduct
   }
 
   /**
-   * @param maxNumQueriesInAMultiply the most queries to combine, which matches the searches that
+   * @param maxNumQueriesInABatch the most queries to batch, which matches the searches that
    *     may run at once, since no more than that can ever be waiting.
    */
   NativeMatrixDotProductScorer(
-      DenseMatrix matrix, MatrixRows rows, NativeBlas<B> blas, int maxNumQueriesInAMultiply) {
-    super(matrix, rows, maxNumQueriesInAMultiply);
+      DenseMatrix matrix, MatrixRows rows, NativeBlas<B> blas, int maxNumQueriesInABatch) {
+    super(matrix, rows, maxNumQueriesInABatch);
     this.blas = blas;
     this.chunks = new ArrayList<>(matrix.numChunks());
     for (int chunk = 0; chunk < matrix.numChunks(); ++chunk) {
       chunks.add(blas.allocate(matrix.chunk(chunk)));
     }
-    int numProductsInASlice = maxNumQueriesInAMultiply * MAX_NUM_ROWS_IN_A_SLICE;
-    this.queries = blas.allocate(maxNumQueriesInAMultiply * matrix.dimension());
-    this.products = blas.allocate(numProductsInASlice);
-    this.readBuffer = new float[numProductsInASlice];
+    int numProductsInARange = maxNumQueriesInABatch * MAX_NUM_ROWS_IN_A_RANGE;
+    this.queries = blas.allocate(maxNumQueriesInABatch * matrix.dimension());
+    this.products = blas.allocate(numProductsInARange);
+    this.readBuffer = new float[numProductsInARange];
   }
 
   @Override
@@ -57,45 +57,45 @@ final class NativeMatrixDotProductScorer<B> extends HostProductsMatrixDotProduct
       float[] queryValues, RowSelection selection, float[] dotProducts) {
     int dimension = getMatrix().dimension();
     blas.write(queries, 0, queryValues, dimension);
-    forEachSlice(
-        (chunk, firstRowInSlice, numRowsInSlice, firstRow) -> {
+    forEachRange(
+        (chunk, firstRowInRange, numRowsInRange, firstRow) -> {
           blas.multiply(
-              numRowsInSlice,
+              numRowsInRange,
               dimension,
               chunks.get(chunk),
-              (long) firstRowInSlice * dimension,
+              (long) firstRowInRange * dimension,
               queries,
               products);
-          blas.read(products, dotProducts, firstRow, numRowsInSlice);
+          blas.read(products, dotProducts, firstRow, numRowsInRange);
         });
   }
 
   @Override
   protected void multiplyQueries(
-      float[][] queryValues, RowSelection[] selections, List<float[]> dotProducts,
+      float[][] queryValues, RowSelection[] selections, float[][] dotProducts,
       int numQueries) {
     int dimension = getMatrix().dimension();
     for (int query = 0; query < numQueries; ++query) {
       blas.write(queries, (long) query * dimension, queryValues[query], dimension);
     }
-    forEachSlice(
-        (chunk, firstRowInSlice, numRowsInSlice, firstRow) -> {
+    forEachRange(
+        (chunk, firstRowInRange, numRowsInRange, firstRow) -> {
           blas.multiplyQueries(
               numQueries,
-              numRowsInSlice,
+              numRowsInRange,
               dimension,
               chunks.get(chunk),
-              (long) firstRowInSlice * dimension,
+              (long) firstRowInRange * dimension,
               queries,
               products);
-          blas.read(products, readBuffer, 0, numQueries * numRowsInSlice);
+          blas.read(products, readBuffer, 0, numQueries * numRowsInRange);
           for (int query = 0; query < numQueries; ++query) {
             System.arraycopy(
                 readBuffer,
-                query * numRowsInSlice,
-                dotProducts.get(query),
+                query * numRowsInRange,
+                dotProducts[query],
                 firstRow,
-                numRowsInSlice);
+                numRowsInRange);
           }
         });
   }
@@ -109,27 +109,27 @@ final class NativeMatrixDotProductScorer<B> extends HostProductsMatrixDotProduct
     blas.free(products);
   }
 
-  /** Walks every slice of every chunk, in row order. */
-  private void forEachSlice(SliceMultiply sliceMultiply) {
+  /** Walks every range of every chunk, in row order. */
+  private void forEachRange(RangeMultiply rangeMultiply) {
     DenseMatrix matrix = getMatrix();
     for (int chunk = 0; chunk < matrix.numChunks(); ++chunk) {
       int numRowsInChunk = matrix.numRowsInChunk(chunk);
-      for (int firstRowInSlice = 0;
-          firstRowInSlice < numRowsInChunk;
-          firstRowInSlice += MAX_NUM_ROWS_IN_A_SLICE) {
-        int numRowsInSlice =
-            Math.min(MAX_NUM_ROWS_IN_A_SLICE, numRowsInChunk - firstRowInSlice);
-        sliceMultiply.run(
+      for (int firstRowInRange = 0;
+          firstRowInRange < numRowsInChunk;
+          firstRowInRange += MAX_NUM_ROWS_IN_A_RANGE) {
+        int numRowsInRange =
+            Math.min(MAX_NUM_ROWS_IN_A_RANGE, numRowsInChunk - firstRowInRange);
+        rangeMultiply.run(
             chunk,
-            firstRowInSlice,
-            numRowsInSlice,
-            matrix.firstRowInChunk(chunk) + firstRowInSlice);
+            firstRowInRange,
+            numRowsInRange,
+            matrix.firstRowInChunk(chunk) + firstRowInRange);
       }
     }
   }
 
-  /** What to do with one slice of one chunk. */
-  private interface SliceMultiply {
-    void run(int chunk, int firstRowInSlice, int numRowsInSlice, int firstRow);
+  /** What to do with one range of one chunk. */
+  private interface RangeMultiply {
+    void run(int chunk, int firstRowInRange, int numRowsInRange, int firstRow);
   }
 }

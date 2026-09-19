@@ -2,20 +2,24 @@
 package com.uber.ussi.searchablestructure.index.matrix;
 
 /**
- * A native library that multiplies a matrix by a vector, and the buffers it multiplies out of.
+ * A native library that multiplies a matrix by one or several vectors, and the buffers it
+ * multiplies out of.
  *
  * <p>Supporting a further library requires implementing this interface and nothing else. A dense
- * scorer allocates the buffers, reuses them across scores, traverses the matrix one chunk at a
- * time and admits its callers, none of which depends on the library in use. An implementation
- * supplies the buffer operations, the multiply, and the admission bounding its concurrent
- * callers.
+ * scorer allocates the buffers, reuses them across scores, traverses the matrix a slice at a time
+ * and combines the queries that are waiting, none of which depends on the library in use. An
+ * implementation supplies the buffer operations and the two multiplies.
  *
  * <p>{@code B} is the implementation's own buffer handle, which a caller of this interface only
  * passes back. A library addressing memory the process cannot dereference is therefore supported
- * on the same terms as one addressing memory it can.
+ * on the same terms as one addressing memory it can, and the offsets this interface passes are in
+ * values rather than addresses for the same reason.
  *
- * <p>An implementation is instantiated once per process rather than once per matrix, because the
- * resources it rations, and any thread count it maintains, are process-global.
+ * <p>Calls are serialized by the caller, so an implementation holds whatever width the machine
+ * has for one multiply and need not be safe against concurrent multiplies of its own.
+ *
+ * <p>An implementation is instantiated once per process rather than once per matrix, because any
+ * thread count it maintains is process-global.
  */
 interface NativeBlas<B> {
 
@@ -28,8 +32,8 @@ interface NativeBlas<B> {
   /** Releases a buffer this interface allocated. A buffer is released once. */
   void free(B buffer);
 
-  /** Copies {@code numValues} of {@code values} into {@code buffer}. */
-  void write(B buffer, float[] values, int numValues);
+  /** Copies {@code numValues} of {@code values} into {@code buffer} at {@code bufferOffset}. */
+  void write(B buffer, long bufferOffset, float[] values, int numValues);
 
   /**
    * Copies {@code numValues} out of {@code buffer} into {@code values}, starting at {@code offset}
@@ -38,15 +42,22 @@ interface NativeBlas<B> {
   void read(B buffer, float[] values, int offset, int numValues);
 
   /**
-   * Multiplies the {@code numRows} by {@code numColumns} row-major {@code matrix} by {@code
-   * vector}, writing one product per row into {@code products}.
+   * Multiplies by {@code vector} the {@code numRows} by {@code numColumns} row-major matrix that
+   * begins {@code matrixOffset} values into {@code matrix}, writing one product per row into
+   * {@code products}.
    */
-  void multiply(int numRows, int numColumns, B matrix, B vector, B products);
+  void multiply(
+      int numRows, int numColumns, B matrix, long matrixOffset, B vector, B products);
 
   /**
-   * Bounds the callers inside this library at once. One of these covers the whole library, so
-   * every scorer over it is handed the same one, and a library rationing nothing hands out one
-   * bounded by {@link Integer#MAX_VALUE}.
+   * Multiplies that same matrix by each of {@code numQueries} row-major vectors held end to end
+   * in {@code queries}, writing each vector's {@code numRows} products end to end in {@code
+   * products}, in the order the vectors are given.
+   *
+   * <p>This is what combining queries is for, so an implementation whose library offers a
+   * matrix-matrix multiply calls it here rather than looping over the single multiply.
    */
-  NativeBlasAdmission getAdmission();
+  void multiplyQueries(
+      int numQueries, int numRows, int numColumns, B matrix, long matrixOffset, B queries,
+      B products);
 }

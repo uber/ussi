@@ -161,9 +161,20 @@ public final class ParallelismBudget {
     return Math.max(1, maxNumThreadsPerSearch / Math.max(1, numConcurrentSearches));
   }
 
-  /** The process-global threads to hold at the given number of concurrent searches. */
+  /**
+   * The process-global threads to hold at the given number of concurrent searches, which is every
+   * thread the holder may have whatever the concurrency.
+   *
+   * <p>Such a count is divided only where concurrent searches call the library at once, and the
+   * holders of one serialize their callers instead, so there is nothing to divide: one call holds
+   * the whole width and the searches behind it wait. Dividing would narrow every call exactly as
+   * load rises, which measurement showed to be the worse arrangement by a wide margin.
+   *
+   * <p>The count is therefore constant, which means it is applied once when its holder registers
+   * and never again, so no search is ever suspended to change it.
+   */
   int getNumSharedThreadsFor(int numConcurrentSearches) {
-    return Math.max(1, maxNumSharedThreads / Math.max(1, numConcurrentSearches));
+    return maxNumSharedThreads;
   }
 
   /**

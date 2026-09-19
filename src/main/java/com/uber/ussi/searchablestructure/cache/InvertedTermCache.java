@@ -165,7 +165,7 @@ public final class InvertedTermCache extends Cache {
     return ParallelRowScan.searchCandidates(
         matchingRowNums,
         query,
-        searchParallelism(),
+        getNumThreadsPerSearch(),
         maxResults,
         minSimilarity,
         (rowNum, rows, sharedMinSimilarity) -> {

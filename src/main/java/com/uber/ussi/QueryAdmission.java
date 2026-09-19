@@ -2,7 +2,6 @@
 package com.uber.ussi;
 
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Bounds how many searches run at once and admits waiting searches in the order they arrived.
@@ -27,8 +26,6 @@ final class QueryAdmission {
 
   private final int maxNumConcurrentSearches;
   private final Semaphore permits;
-  private final AtomicInteger peakNumConcurrentSearches = new AtomicInteger();
-
   QueryAdmission(int maxNumConcurrentSearches) {
     if (maxNumConcurrentSearches < 1) {
       throw new IllegalArgumentException("maxNumConcurrentSearches must be >= 1.");
@@ -49,7 +46,6 @@ final class QueryAdmission {
       Thread.currentThread().interrupt();
       throw new IllegalStateException("Interrupted while waiting to run a search.", e);
     }
-    peakNumConcurrentSearches.accumulateAndGet(getNumConcurrentSearches(), Math::max);
   }
 
   void release() {
@@ -68,18 +64,6 @@ final class QueryAdmission {
   /** Searches waiting for a turn. An estimate, used to observe that the bound is holding. */
   int getNumWaitingSearches() {
     return permits.getQueueLength();
-  }
-
-  /**
-   * The most concurrent searches since this was last called.
-   *
-   * <p>The number rises only when a search is admitted, so sampling it on admission catches every
-   * peak within an interval. The next interval is seeded with the number running now, because a
-   * search outlasting its interval is already running when the next one opens and would otherwise
-   * go uncounted until it finished.
-   */
-  int takePeakNumConcurrentSearches() {
-    return peakNumConcurrentSearches.getAndSet(getNumConcurrentSearches());
   }
 
   /**

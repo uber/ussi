@@ -165,6 +165,56 @@ class ParallelismBudgetTest {
   }
 
   @Test
+  void averagesTheReadingsOfOneWindowBeforeUpdating() {
+    // Ten readings averaging four concurrent searches, arriving as a burst and a lull, so a
+    // maximum would read eight and an average four.
+    int[] readings = {8, 8, 8, 8, 8, 0, 0, 0, 0, 0};
+    ParallelismBudget budget = new ParallelismBudget(CORES, CORES);
+    List<Integer> applied = new ArrayList<>();
+    budget.onChange(applied::add);
+    applied.clear();
+    attachThen(budget, Runnable::run);
+
+    for (int reading = 0; reading < readings.length - 1; reading++) {
+      budget.sample(readings[reading]);
+      assertEquals(
+          CORES,
+          budget.getNumThreadsPerSearch(),
+          "a window still filling must not move either count");
+    }
+    budget.sample(readings[readings.length - 1]);
+
+    assertEquals(CORES / 4, budget.getNumThreadsPerSearch(), "the average of the window");
+    assertEquals(List.of(CORES / 4), applied);
+  }
+
+  @Test
+  void changingOnlyTheBudgetDoesNotQuiesceTheEngine() {
+    // Four cores a socket, so eight concurrent searches and nine both leave the shared count at
+    // one while the budget falls from four to three.
+    ParallelismBudget budget = new ParallelismBudget(32, 4);
+    List<Integer> applied = new ArrayList<>();
+    budget.onChange(applied::add);
+    List<String> exclusiveCalls = new ArrayList<>();
+    attachThen(
+        budget,
+        task -> {
+          exclusiveCalls.add("entered");
+          task.run();
+        });
+    budget.update(8);
+    applied.clear();
+    exclusiveCalls.clear();
+
+    budget.update(9);
+
+    assertEquals(3, budget.getNumThreadsPerSearch(), "the budget follows the concurrency");
+    assertEquals(List.of(), applied, "the shared count is unchanged");
+    assertEquals(
+        List.of(), exclusiveCalls, "only a change of the shared count may quiesce the engine");
+  }
+
+  @Test
   void updateLeavesAnUnchangedBudgetAlone() {
     ParallelismBudget budget = new ParallelismBudget(CORES, CORES);
     List<Integer> applied = new ArrayList<>();

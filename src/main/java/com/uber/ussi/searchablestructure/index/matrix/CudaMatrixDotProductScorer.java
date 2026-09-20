@@ -56,11 +56,10 @@ import org.bytedeco.javacpp.SizeTPointer;
  * multiply produced and nothing else.
  *
  * <p>Not tuned, in ways worth naming. The reduction takes the largest remaining similarity once
- * per row it keeps, which is correct and costs a pass over the products for each of them, where
- * an implementation meant for use would select them in one pass with a warp-level primitive.
- * Host memory is pageable rather than pinned and every call runs on the default stream, so a
- * copy never overlaps a multiply. The matrix is held in single precision, where half precision
- * would halve what the multiply reads.
+ * per row it keeps, so it reads the products once for each of them, where an implementation
+ * meant for use would select them all in one pass. Host memory is pageable rather than pinned
+ * and every call runs on the default stream, so a copy never overlaps a multiply. The matrix is
+ * held in single precision, where half precision would halve what the multiply reads.
  *
  * <p>The rows a query may keep are fixed when the scorer is built, since the device reduces to
  * that many, so a query asking for more is refused rather than answered short.
@@ -68,6 +67,7 @@ import org.bytedeco.javacpp.SizeTPointer;
 final class CudaMatrixDotProductScorer
     extends BatchedMatrixDotProductScorer<CudaMatrixDotProductScorer.KeptRows> {
 
+  /** A whole number of warps, which the reduction requires, and within one block's limit. */
   private static final int NUM_THREADS_PER_BLOCK = 256;
 
   /** What the device reports when it has no room left, which is not a failure to ask properly. */
@@ -75,11 +75,16 @@ final class CudaMatrixDotProductScorer
 
   /**
    * One block a query. Each pass over the products finds the largest similarity the block has
-   * not taken yet, by a tree reduction in shared memory, and the thread that holds it records
-   * the row and writes the product out of range so the next pass passes over it.
+   * not taken yet. Each warp reduces its own lanes through register shuffles, every warp's
+   * leader records what it found in shared memory, and the first warp reduces those to the
+   * block's best row.
    *
    * <p>A deleted row carries a unilateral value that is not a number, so the similarity derived
-   * from it is not a number either and the comparison never prefers it.
+   * from it is not a number either, and a comparison against a value that is not a number is
+   * false, so the reduction never prefers it.
+   *
+   * <p>The shuffles take every lane of a warp, and the leaders occupy one shared slot each, so
+   * the block must be a whole number of warps and no more than the warps those slots hold.
    */
   private static final String REDUCTION_SOURCE =
       "extern \"C\" __global__ void keepBestRows(\n"
@@ -87,12 +92,15 @@ final class CudaMatrixDotProductScorer
           + "    const double* queryUniValues, unsigned char* taken, int numRows, int numKept,\n"
           + "    long long* keptRowNums, float* keptSimilarities) {\n"
           + "  const float infinity = __int_as_float(0x7f800000);\n"
-          + "  __shared__ float blockBestSimilarity[" + NUM_THREADS_PER_BLOCK + "];\n"
-          + "  __shared__ int blockBestRow[" + NUM_THREADS_PER_BLOCK + "];\n"
+          + "  __shared__ float warpBestSimilarity[32];\n"
+          + "  __shared__ int warpBestRow[32];\n"
           + "  int query = blockIdx.x;\n"
           + "  const float* queryProducts = products + (long long) query * numRows;\n"
           + "  unsigned char* queryTaken = taken + (long long) query * numRows;\n"
           + "  double queryUniValue = queryUniValues[query];\n"
+          + "  int laneId = threadIdx.x % 32;\n"
+          + "  int warpId = threadIdx.x / 32;\n"
+          + "  int numWarps = blockDim.x / 32;\n"
           + "  for (int row = threadIdx.x; row < numRows; row += blockDim.x) {\n"
           + "    queryTaken[row] = 0;\n"
           + "  }\n"
@@ -111,23 +119,42 @@ final class CudaMatrixDotProductScorer
           + "        bestRow = row;\n"
           + "      }\n"
           + "    }\n"
-          + "    blockBestSimilarity[threadIdx.x] = bestSimilarity;\n"
-          + "    blockBestRow[threadIdx.x] = bestRow;\n"
-          + "    __syncthreads();\n"
-          + "    for (int stride = blockDim.x / 2; stride > 0; stride /= 2) {\n"
-          + "      if (threadIdx.x < stride\n"
-          + "          && blockBestSimilarity[threadIdx.x + stride] > blockBestSimilarity[threadIdx.x]) {\n"
-          + "        blockBestSimilarity[threadIdx.x] = blockBestSimilarity[threadIdx.x + stride];\n"
-          + "        blockBestRow[threadIdx.x] = blockBestRow[threadIdx.x + stride];\n"
+          + "    // 1. Intra-warp reduction using register shuffles\n"
+          + "    for (int offset = 16; offset > 0; offset /= 2) {\n"
+          + "      float otherSimilarity = __shfl_down_sync(0xffffffff, bestSimilarity, offset);\n"
+          + "      int otherRow = __shfl_down_sync(0xffffffff, bestRow, offset);\n"
+          + "      if (otherSimilarity > bestSimilarity) {\n"
+          + "        bestSimilarity = otherSimilarity;\n"
+          + "        bestRow = otherRow;\n"
           + "      }\n"
-          + "      __syncthreads();\n"
           + "    }\n"
-          + "    if (threadIdx.x == 0) {\n"
-          + "      long long slot = (long long) query * numKept + kept;\n"
-          + "      keptRowNums[slot] = blockBestRow[0];\n"
-          + "      keptSimilarities[slot] = blockBestSimilarity[0];\n"
-          + "      if (blockBestRow[0] >= 0) {\n"
-          + "        queryTaken[blockBestRow[0]] = 1;\n"
+          + "    // 2. Warp leaders record their best result to shared memory\n"
+          + "    if (laneId == 0) {\n"
+          + "      warpBestSimilarity[warpId] = bestSimilarity;\n"
+          + "      warpBestRow[warpId] = bestRow;\n"
+          + "    }\n"
+          + "    __syncthreads();\n"
+          + "    // 3. Inter-warp reduction handled purely by the first warp\n"
+          + "    if (warpId == 0) {\n"
+          + "      bestSimilarity = (laneId < numWarps) ? warpBestSimilarity[laneId] : -infinity;\n"
+          + "      bestRow = (laneId < numWarps) ? warpBestRow[laneId] : -1;\n"
+          + "      for (int offset = 16; offset > 0; offset /= 2) {\n"
+          + "        float otherSimilarity =\n"
+          + "            __shfl_down_sync(0xffffffff, bestSimilarity, offset);\n"
+          + "        int otherRow = __shfl_down_sync(0xffffffff, bestRow, offset);\n"
+          + "        if (otherSimilarity > bestSimilarity) {\n"
+          + "          bestSimilarity = otherSimilarity;\n"
+          + "          bestRow = otherRow;\n"
+          + "        }\n"
+          + "      }\n"
+          + "      // 4. Thread 0 records the global winner and masks it for the next pass\n"
+          + "      if (laneId == 0) {\n"
+          + "        long long slot = (long long) query * numKept + kept;\n"
+          + "        keptRowNums[slot] = bestRow;\n"
+          + "        keptSimilarities[slot] = bestSimilarity;\n"
+          + "        if (bestRow >= 0) {\n"
+          + "          queryTaken[bestRow] = 1;\n"
+          + "        }\n"
           + "      }\n"
           + "    }\n"
           + "    __syncthreads();\n"

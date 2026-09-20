@@ -1,7 +1,11 @@
 name: tests
 
-# Every pull request, and every push to main so a merge that breaks the build is caught even if
-# the branch passed before it was rebased.
+# Every pull request, and every push to main.
+#
+# Merging is gated on both jobs below passing on the pull request's last commit, and on the
+# branch being up to date with main first, so the tree that lands is the tree that passed. The
+# run on main therefore confirms what landed rather than catching it, and it is kept for one
+# reason: it is the only run that exercises a change to this workflow as main will use it.
 on:
   pull_request:
   push:
@@ -14,6 +18,9 @@ concurrency:
 
 jobs:
   test:
+    # Branch protection requires "test on ubuntu-latest" and "test on macos-latest" by name.
+    # Renaming this job, or changing the matrix, leaves protection waiting for a check that no
+    # longer reports, which blocks every pull request until the required checks are updated.
     name: test on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:

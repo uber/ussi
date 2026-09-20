@@ -120,11 +120,12 @@ The structures are visited one after another rather than at the same time. Their
 sizes differ by orders of magnitude: an active cache is bounded by
 `maxCacheSize`, while a consolidated index holds everything that has graduated.
 The largest search therefore decides the latency whether or not the others run
-beside it, and threads spent on the small ones would buy nearly nothing.
-Visiting them in turn buys something the other arrangement cannot: searches
-running at the same time cannot narrow one another, because neither has results
-yet. Dividing a single structure's own search is a separate question, answered
-in [Threads Within One Search](#threads-within-one-search).
+beside it, and threads spent on the small ones would buy nearly nothing, which
+experiments confirmed. Visiting them in turn buys something the other
+arrangement cannot: searches running at the same time cannot narrow one another,
+because neither has results yet. Dividing a single structure's own search is a
+separate question, answered in [Threads Within One
+Search](#threads-within-one-search).
 
 The top-level index uses a single read/write lock. Searches run under the read
 lock and mutations under the write lock. Background builds snapshot under the
@@ -181,9 +182,9 @@ snapshot.
 the process, to the number of cores, and admits waiting searches in the order
 they arrived. Past the core count, searches contend for the same cores and none
 of them finishes sooner, so the bound gives up no throughput that was otherwise
-reachable. Arrival order keeps a search from losing its turn to one that arrived
-later. The bound is process-wide because the cores it rations are not divided
-between indexes.
+reachable. Experiments settled that, rather than reasoning alone. Arrival order
+keeps a search from losing its turn to one that arrived later. The bound is
+process-wide because the cores it rations are not divided between indexes.
 
 Keeping within the cores is sound practice on its own, and for some index
 implementations it is more than that. A native scorer may hold a resource its
@@ -203,7 +204,8 @@ dividing its own work stays within what the machine has left once the other
 searches are counted. One search running alone gets the whole machine, and the
 budget falls to a single thread once the concurrent searches already fill the
 cores. That is what turns dividing off under load, rather than letting
-concurrent searches multiply their own width against each other.
+concurrent searches multiply their own width against each other. Experiments
+across core counts and caller counts decided both the divisor and the floor.
 
 It derives two counts, for two ways of using threads that cannot share one
 number:
@@ -524,7 +526,8 @@ before scoring.
 `InvertedTermCache` is mutable and keeps inverted term lists in insertion order.
 It generates deduplicated candidates from query terms using prefix filtering,
 then scores them with the configured comparator. A metadata filter matching at
-most 1% of the cache uses a direct scan of those matching rows instead.
+most 1% of the cache uses a direct scan of those matching rows instead, a share
+drawn from experiments.
 
 Its searches only return rows sharing at least one non-discarded term with the
 query. High-popularity terms are discarded dynamically according to the
@@ -566,7 +569,7 @@ determined once per process, since the probe loads native code and a failing
 load would otherwise be repeated for every index built.
 `NearestNeighborSearchIndex.close()` releases any native dense-matrix memory.
 
-### Scoring Several Queries At Once
+#### Scoring Several Queries At Once
 
 A multiply against the whole matrix costs about what reading the matrix costs,
 so queries that share one multiply share that cost.
@@ -739,7 +742,7 @@ does not return such rows.
 At build time, terms occurring in more than `floor(numRows *
 max_fraction_ids_per_term)` rows are discarded.
 
-### Sequences On The Term Index
+#### Sequences On The Term Index
 
 Paired with a sequence comparator, that same `TermIndex` stores ordered
 sequences, whose terms arrive in order and with repeats rather than once each
@@ -801,8 +804,10 @@ make the signature index exact.
 
 `HybridIndex` combines a `TermIndex` and a `SignatureIndex`. During each build,
 rows with at most 270 terms go to its term index and longer rows to its
-signature index. The configured length range may fall entirely below, entirely
-above, or across this internal boundary.
+signature index. That boundary is the signature count a row stands in for, so a
+shorter row is cheaper to key by its own terms than by signatures. The
+configured length range may fall entirely below, entirely above, or across this
+internal boundary.
 
 Queries search the index matching the query length first. Jaccard's cardinality
 bounds can skip the other when no row on that side can reach the search's
@@ -878,6 +883,47 @@ divides through `ParallelRowScan` instead.
 Sharding is invisible to callers, which address rows only by the row numbers
 they inserted them under.
 
+### Candidate Generation
+
+The three inverted index types build the same uni-sorted inverted lists but can
+traverse them with either of two candidate generators, selected per namespace
+with the `candidate_generator` index parameter. Both return identical results
+and honor every metadata filtering strategy; they differ only in how much work
+they do to get there.
+
+`spars` is the default and is key-major. Its vertical scan visits the query's
+keys cheapest first, each horizontal scan narrows that key's inverted list to
+the rows length filtering admits, and every surviving candidate is scored with
+the comparator. Because it always scores through the comparator, it supports
+every inverted index type and every supported comparator.
+
+`spars_merge` is row-major. One frontier spans all of the query's keys and
+advances them in step, so every inverted-list entry belonging to a candidate row
+arrives together. That lets the generator accumulate the row's conjunction,
+which is the part of the similarity the query and the row derive from the keys
+they share, as it goes. What it holds mid-row is a partial conjunction, and
+`maxSimilarityFromPartialConjunction` bounds the best any completion of it could
+reach, using the unscanned keys' unilateral value to bound what the keys still
+to arrive can add. The row is abandoned as soon as that bound falls below the
+minimum similarity the search currently holds. It trades a priority queue over
+the query's keys for the ability to prune a row mid-scan, which pays off when a
+query has many keys and the minimum similarity rejects most rows early.
+
+When the keys are the terms of a sparse record, the inverted lists also carry
+the row's value at that key, so the accumulated conjunction is the row's exact
+similarity and no further comparison is needed. Signature keys carry no usable
+value, and a sequence's terms bound its similarity without determining it, so in
+both cases the merge generator scores each retained candidate with the
+comparator, exactly as the filtered scan does. `inverted_hybrid` applies the
+generator independently to each of the two, so its term index scores from the
+conjunction while its signature index verifies.
+
+A comparator opts into the merge generator by implementing its conjunction
+hooks. Jaccard, Ruzicka, and L2 all do, so `spars_merge` is available for every
+order-agnostic comparator; the inverted-list values it needs are only
+materialized where they are read. The sequence comparators do not, because a
+dynamic program over ordered sequences cannot be accumulated from shared keys.
+
 ## Discarding Popular Terms
 
 A term occurring in most rows generates most of the index as candidates without
@@ -933,47 +979,6 @@ a rate tracking the multiset similarity of the records behind them, so a
 signature in most rows reports a similarity worth keeping. Such a signature
 arises from a term dominating the multisets, and the term-level discard removes
 that term.
-
-## Candidate Generation
-
-The three inverted index types build the same uni-sorted inverted lists but can
-traverse them with either of two candidate generators, selected per namespace
-with the `candidate_generator` index parameter. Both return identical results
-and honor every metadata filtering strategy; they differ only in how much work
-they do to get there.
-
-`spars` is the default and is key-major. Its vertical scan visits the query's
-keys cheapest first, each horizontal scan narrows that key's inverted list to
-the rows length filtering admits, and every surviving candidate is scored with
-the comparator. Because it always scores through the comparator, it supports
-every inverted index type and every supported comparator.
-
-`spars_merge` is row-major. One frontier spans all of the query's keys and
-advances them in step, so every inverted-list entry belonging to a candidate row
-arrives together. That lets the generator accumulate the row's conjunction,
-which is the part of the similarity the query and the row derive from the keys
-they share, as it goes. What it holds mid-row is a partial conjunction, and
-`maxSimilarityFromPartialConjunction` bounds the best any completion of it could
-reach, using the unscanned keys' unilateral value to bound what the keys still
-to arrive can add. The row is abandoned as soon as that bound falls below the
-minimum similarity the search currently holds. It trades a priority queue over
-the query's keys for the ability to prune a row mid-scan, which pays off when a
-query has many keys and the minimum similarity rejects most rows early.
-
-When the keys are the terms of a sparse record, the inverted lists also carry
-the row's value at that key, so the accumulated conjunction is the row's exact
-similarity and no further comparison is needed. Signature keys carry no usable
-value, and a sequence's terms bound its similarity without determining it, so in
-both cases the merge generator scores each retained candidate with the
-comparator, exactly as the filtered scan does. `inverted_hybrid` applies the
-generator independently to each of the two, so its term index scores from the
-conjunction while its signature index verifies.
-
-A comparator opts into the merge generator by implementing its conjunction
-hooks. Jaccard, Ruzicka, and L2 all do, so `spars_merge` is available for every
-order-agnostic comparator; the inverted-list values it needs are only
-materialized where they are read. The sequence comparators do not, because a
-dynamic program over ordered sequences cannot be accumulated from shared keys.
 
 ## Metadata Filtering Strategies
 

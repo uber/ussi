@@ -206,7 +206,7 @@ the row that matches your records and the guarantee you need:
 | `indexType` | Records | Comparator | What you get |
 | --- | --- | --- | --- |
 | `scan` | any | `l2`, `jaccard`, `ruzicka`, `gld`, `ngld` | Exact. Scores every row. Start here when in doubt. |
-| `matrix` | dense | `l2` only | Exact, with OpenBLAS dot products where available and a Java fallback otherwise. |
+| `matrix` | dense | `l2` only | Exact. Dot products on a GPU where the CUDA bindings are present, otherwise OpenBLAS, otherwise Java. |
 | `inverted_term` | sparse | `l2`, `jaccard`, `ruzicka` | Exact, and much faster than `scan` when a term selects few rows. |
 | `inverted_term` | sequence | `gld`, `ngld` | Exact. Generates candidates from term multisets, then verifies with the edit distance. |
 | `inverted_signature` | sparse | `jaccard` or `ruzicka`, with `signature_generator` | Approximate. Qualifying rows can be missed; the scores that come back are exact. |
@@ -217,6 +217,10 @@ the row that matches your records and the guarantee you need:
 Any pairing not listed is reported when you create the namespace. Note that
 `matrix` takes `l2` and nothing else, even though it stores records `jaccard`
 and `ruzicka` can also read.
+
+`matrix` gathers the searches running at one moment into a single multiply, so
+a caller sending one query per request gets the throughput of a batch without
+batching anything itself.
 
 For the cache, `scan` works with dense or sparse records and is the right
 choice for sequences. `inverted_term` maintains mutable term lists for sparse

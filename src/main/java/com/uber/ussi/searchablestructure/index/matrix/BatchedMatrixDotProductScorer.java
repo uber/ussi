@@ -137,9 +137,10 @@ abstract class BatchedMatrixDotProductScorer<S> implements MatrixDotProductScore
    * Adds to {@code rows} what this query keeps, from what its multiply produced.
    *
    * <p>The bound and the ordering belong to the heap, so an implementation that has already
-   * reduced its rows adds what survived and one holding a similarity for every row adds every row
-   * reaching the minimum, and both reach the same answer. The heap holds its rows in a plain list
-   * until they exceed the bound, so adding no more than the bound never builds a queue.
+   * selected its rows adds what survived and one holding a similarity for every row adds every
+   * row reaching the minimum, and both reach the same answer. The heap holds its rows in a
+   * plain list until they exceed the bound, so adding no more than the bound never builds a
+   * queue.
    */
   protected abstract void addRows(
       S result, RowSelection selection, BoundedSizeMaxHeap<RowNumAndSimilarity> rows);

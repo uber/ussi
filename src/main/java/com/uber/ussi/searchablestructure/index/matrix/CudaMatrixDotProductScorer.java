@@ -44,21 +44,23 @@ import org.bytedeco.javacpp.SizeTPointer;
 /**
  * A dense matrix-vector dot-product scorer that holds the matrix in a GPU's memory.
  *
- * <p><b>Never run on a GPU.</b> It compiles, and no result it produces has been verified
- * against another scorer, because no machine available to this project has one. It leads the
- * preference order of {@link MatrixDotProductScorers}, since a GPU outruns a CPU at this, and
+ * <p><b>Never run on a GPU.</b> It compiles, and nothing it produces has been checked on the
+ * hardware it is written for, because no machine available to this project has one. It leads
+ * the
+ * preference order of {@link MatrixDotProductScorers}, since a GPU scores a dense matrix
+ * faster than a CPU does, and
  * reaching it takes the CUDA bindings on the runtime classpath, which this library depends on
  * at compile time alone. A deployment adding them is what selects it.
  *
  * <p>The matrix is copied to the GPU once and stays for the life of the scorer, so the GPU's
  * memory bounds the rows an index may hold. A batch's queries are copied in, multiplied
- * against the whole matrix at once, and reduced where they were computed, so what returns is the
- * rows a query keeps rather than a value for every row.
+ * against the whole matrix at once, and selected from where they were computed, so what
+ * returns is the rows a query keeps rather than a value for every row.
  *
  * <p>The multiply's products are read and never written, so a batch's products are what the
  * multiply produced and nothing else.
  *
- * <p>Not tuned, in ways worth naming. A batch multiplies against the whole matrix at once and
+ * <p>Not tuned. A batch multiplies against the whole matrix at once and
  * selects from the whole result, where an implementation meant for use would tile the multiply
  * over blocks of rows and select within each tile, which bounds the memory the products need
  * and keeps a tile in cache while it is selected from. Host memory is pageable rather than
@@ -84,6 +86,10 @@ final class CudaMatrixDotProductScorer
   /** Enough threads to cover the histogram the select counts into, and within a block. */
   private static final int NUM_THREADS_PER_BLOCK = 256;
 
+  /** What is reported when the compiler refused the kernel without saying what it objected to. */
+  private static final String NO_COMPILER_LOG =
+      "the compiler gave no account of what it objected to.";
+
   /** How far two similarities may differ and still be the same one, when probing. */
   private static final double COMPARATOR_PROBE_TOLERANCE = 1e-9;
 
@@ -94,18 +100,20 @@ final class CudaMatrixDotProductScorer
    * One block a query, selecting that query's best rows in a fixed number of passes rather
    * than one pass for each row kept.
    *
-   * <p>The passes are a radix select. Reading a similarity's bits as an unsigned number
-   * preserves its order, so four passes over the rows, each counting one byte of that number
-   * into a histogram, narrow the rows to the key of the last row to keep. A fifth pass writes
-   * out every row above that key, and enough of those equal to it to make the count up.
+   * <p>The passes are a radix select. A row ranks by the squared Euclidean distance between
+   * it and the query, negated, and reading the bits of that as an unsigned number preserves
+   * its order, so four passes over the rows, each counting one byte of that number into a
+   * histogram, narrow the rows to the key of the last row to keep. A fifth pass writes out
+   * every row above that key, and enough of those equal to it to make the count up.
    *
-   * <p>What it writes is the rows to keep in no particular order, which is all the caller
-   * needs, and fewer than asked for when the matrix holds fewer.
+   * <p>What it writes is the rows to keep, in no particular order, and the dot product of
+   * each, since the similarity is the comparator's to take and the comparator runs on the
+   * host. It writes fewer than asked for when the matrix holds fewer.
    *
-   * <p>A deleted row carries a unilateral value that is not a number, so the similarity
-   * derived from it is not a number either, and the passes drop it.
+   * <p>A deleted row carries a unilateral value that is not a number, so what it ranks by is
+   * not a number either, and the passes drop it.
    */
-  private static final String REDUCTION_SOURCE =
+  private static final String SELECT_SOURCE =
       "__device__ unsigned int orderedKey(float rankValue) {\n"
           + "  // Flipping the sign bit of a positive number and every bit of a negative\n"
           + "  // one makes the unsigned order of the bits the order of the numbers.\n"
@@ -236,10 +244,10 @@ final class CudaMatrixDotProductScorer
   private final int dimension;
   private final int numKeptPerQuery;
   private boolean isHandleCreated;
-  private boolean isReductionLoaded;
+  private boolean isSelectLoaded;
   private final cublasContext handle = new cublasContext();
   private final CUmod_st module = new CUmod_st();
-  private final CUfunc_st reduction = new CUfunc_st();
+  private final CUfunc_st select = new CUfunc_st();
   private final FloatPointer deviceMatrix = new FloatPointer();
   private final FloatPointer deviceRowUniValues = new FloatPointer();
   private final FloatPointer deviceQueryUniValues = new FloatPointer();
@@ -256,17 +264,22 @@ final class CudaMatrixDotProductScorer
    * scores only those, so a comparator ordering by anything else would be handed the wrong rows
    * to score.
    *
-   * <p>Two properties are required of it. The similarity has to depend on the dot product and
-   * the two unilateral values through that distance alone, so that two rows at equal distance
-   * score equally. And it must not rise with the distance, so that nearest is best. Both are
-   * settled by evaluating the comparator, since what it computes cannot be read off it.
+   * <p>Two properties are required of it, both stated on {@link DotProductScored}. The
+   * similarity has to depend on the dot product and the two unilateral values through that
+   * distance alone, so that two rows at equal distance score equally. And it must not rise
+   * with the distance, so that nearest is best.
+   *
+   * <p>Both are tested by evaluating the comparator at sample points, since what it computes
+   * cannot be read off it. That rejects a comparator breaking either property at one of those
+   * points rather than establishing that one keeps them everywhere.
    */
   static boolean doesComparatorOrderBySquaredDistance(DotProductScored comparator) {
-    // Triples chosen so each pair shares a squared distance while differing in every term.
+    // Pairs of triples sharing a squared distance while differing in all three terms, so a
+    // comparator reading any term on its own parts from one that reads the distance.
     double[][] atEqualDistance = {
-      {1.0, 2.0, 3.0, 2.0, 4.0, 3.0},
-      {0.5, 1.0, 1.0, 1.5, 3.0, 1.0},
-      {2.0, 5.0, 7.0, 4.0, 9.0, 7.0},
+      {1.0, 2.0, 3.0, 2.0, 3.0, 4.0},
+      {0.5, 1.0, 1.0, 1.5, 2.0, 2.0},
+      {2.0, 5.0, 7.0, 3.0, 6.0, 8.0},
     };
     for (double[] pair : atEqualDistance) {
       double first = comparator.similarityFromDotProduct(pair[0], pair[1], pair[2]);
@@ -339,7 +352,7 @@ final class CudaMatrixDotProductScorer
       allocate(deviceKeptRowNums, (long) maxNumQueriesInABatch * numKeptPerQuery * Long.BYTES);
       copyMatrixToDevice(matrix);
       copyToDevice(deviceRowUniValues, rows.getRowUniValues());
-      compileReduction();
+      compileSelect();
     } catch (Error | RuntimeException e) {
       // The memory the GPU holds is reached only through this scorer, and a constructor that
       // throws leaves nothing that would release it, so what was taken is released here. A
@@ -384,7 +397,7 @@ final class CudaMatrixDotProductScorer
             handle, CUBLAS_OP_T, CUBLAS_OP_N, numRows, numQueries, dimension, one, deviceMatrix,
             dimension, deviceQueries, dimension, zero, deviceProducts, numRows),
         "multiply");
-    launchReduction(numQueries);
+    launchSelect(numQueries);
     check(cudaDeviceSynchronize(), "finish");
     copyKeptRowsToHost(into, numQueries);
   }
@@ -394,6 +407,7 @@ final class CudaMatrixDotProductScorer
       KeptRows result, RowSelection selection, BoundedSizeMaxHeap<RowNumAndSimilarity> rows) {
     for (int kept = 0; kept < numKeptPerQuery; ++kept) {
       long matrixRowIndex = result.rowNums[kept];
+      // A slot holds no row when the matrix held fewer than the query asked for.
       if (matrixRowIndex < 0) {
         continue;
       }
@@ -418,11 +432,11 @@ final class CudaMatrixDotProductScorer
    */
   @Override
   protected void releaseResources() {
-    if (isReductionLoaded) {
+    if (isSelectLoaded) {
       cuModuleUnload(module);
     }
     module.deallocate();
-    reduction.deallocate();
+    select.deallocate();
     cudaFree(deviceKeptRowNums);
     cudaFree(deviceKeptDotProducts);
     cudaFree(deviceProducts);
@@ -460,7 +474,7 @@ final class CudaMatrixDotProductScorer
     }
   }
 
-  private void launchReduction(int numQueries) {
+  private void launchSelect(int numQueries) {
     // Every argument is read from the address given for it, so an argument that is itself an
     // address is handed over as a buffer holding it rather than as itself. Passing a device
     // address directly has it read as though it were a host one.
@@ -486,9 +500,9 @@ final class CudaMatrixDotProductScorer
                 keptDotProductsArgument)) {
       check(
           cuLaunchKernel(
-              reduction, numQueries, 1, 1, NUM_THREADS_PER_BLOCK, 1, 1, 0, null, arguments,
+              select, numQueries, 1, 1, NUM_THREADS_PER_BLOCK, 1, 1, 0, null, arguments,
               null),
-          "reduce");
+          "select");
     }
   }
 
@@ -546,30 +560,30 @@ final class CudaMatrixDotProductScorer
     }
   }
 
-  private void compileReduction() {
+  private void compileSelect() {
     _nvrtcProgram program = new _nvrtcProgram();
-    BytePointer source = new BytePointer(REDUCTION_SOURCE);
+    BytePointer source = new BytePointer(SELECT_SOURCE);
     BytePointer name = new BytePointer("keepBestRows.cu");
     SizeTPointer size = new SizeTPointer(1);
     BytePointer ptx = null;
     BytePointer functionName = null;
     try {
       check(nvrtcCreateProgram(program, source, name, 0, (PointerPointer<Pointer>) null, null),
-          "create the reduction");
+          "create the select");
       int compiled = nvrtcCompileProgram(program, 0, (PointerPointer<Pointer>) null);
       if (compiled != 0) {
         // The kernel is compiled where it runs, so what the compiler objected to is the only
         // account of why, and a status on its own would not identify the line.
         throw new IllegalStateException(
-            "CUDA failed to compile the reduction: " + readCompilerLog(program));
+            "CUDA failed to compile the select: " + readCompilerLog(program));
       }
-      check(nvrtcGetPTXSize(program, size), "size the reduction");
+      check(nvrtcGetPTXSize(program, size), "size the select");
       ptx = new BytePointer(size.get());
-      check(nvrtcGetPTX(program, ptx), "read the reduction");
-      check(cuModuleLoadData(module, ptx), "load the reduction");
-      isReductionLoaded = true;
+      check(nvrtcGetPTX(program, ptx), "read the select");
+      check(cuModuleLoadData(module, ptx), "load the select");
+      isSelectLoaded = true;
       functionName = new BytePointer("keepBestRows");
-      check(cuModuleGetFunction(reduction, module, functionName), "find it");
+      check(cuModuleGetFunction(select, module, functionName), "find it");
     } finally {
       // The compiler holds the program until told otherwise, which a failure part way through
       // would otherwise leave it holding for the life of the process.
@@ -592,13 +606,14 @@ final class CudaMatrixDotProductScorer
     BytePointer log = null;
     try {
       if (nvrtcGetProgramLogSize(program, size) != 0) {
-        return "the compiler gave no account of what it objected to.";
+        return NO_COMPILER_LOG;
       }
       log = new BytePointer(size.get());
       if (nvrtcGetProgramLog(program, log) != 0) {
-        return "the compiler gave no account of what it objected to.";
+        return NO_COMPILER_LOG;
       }
-      return log.getString();
+      String message = log.getString();
+      return message.isBlank() ? NO_COMPILER_LOG : message;
     } finally {
       if (log != null) {
         log.deallocate();

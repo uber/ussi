@@ -632,12 +632,13 @@ that list, which is the only existing code a further implementation needs to
 touch.
 
 `CudaMatrixDotProductScorer` is such a scorer, for a GPU reached through CUDA.
-It leads the preference order, since a GPU outruns a CPU at this. It compiles,
-and no result it produces has been verified against another scorer, because no
-machine available to this project has a GPU. Reaching it takes the bindings on
-the runtime classpath, and they are a compile-time dependency of this library,
-so a deployment that does not want it carries nothing and never builds it. A
-deployment that adds them is what selects it.
+It leads the preference order, since a GPU scores a dense matrix faster than a
+CPU does. It compiles, and nothing it produces has been checked on the hardware
+it is written for, because no machine available to this project has a GPU.
+Reaching it takes the bindings on the runtime classpath, and they are a
+compile-time dependency of this library, so a deployment that does not want it
+carries nothing and never builds it. A deployment that adds them is what
+selects it.
 
 A scorer may compute the dot products somewhere this process cannot read, which
 is why it returns the rows a query keeps rather than a value for every row. Such

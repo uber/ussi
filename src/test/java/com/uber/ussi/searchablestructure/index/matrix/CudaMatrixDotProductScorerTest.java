@@ -1,6 +1,7 @@
 package com.uber.ussi.searchablestructure.index.matrix;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
@@ -56,5 +57,17 @@ class CudaMatrixDotProductScorerTest {
 
   private static List<Long> sortedRowNums(List<RowNumAndSimilarity> rows) {
     return rows.stream().map(RowNumAndSimilarity::getRowNum).sorted().toList();
+  }
+
+  /** Refusing what it cannot keep needs no device, since it is settled before anything runs. */
+  @Test
+  void rejectsBeingBuiltToKeepNoRows() {
+    DenseMatrix matrix = TestDenseMatrices.of(new float[] {1f, 2f}, 1, 2);
+
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            new CudaMatrixDotProductScorer(
+                matrix, TestMatrixRows.of(1), /* maxNumQueriesInABatch */ 1, /* maxResults */ 0));
   }
 }

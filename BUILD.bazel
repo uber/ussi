@@ -67,6 +67,10 @@ java_library(
     deps = [
         ":src_main",
         "@maven//:com_carrotsearch_hppc",
+        # The device scorer's bindings, which the library compiles against but does not carry, so
+        # that a test may reach the class at all. Its native libraries are still absent, which is
+        # what makes the device tests skip.
+        "@maven//:org_bytedeco_cuda",
         "@maven//:org_bytedeco_javacpp",
         "@maven//:org_bytedeco_openblas",
         "@maven//:org_junit_jupiter_junit_jupiter_api",

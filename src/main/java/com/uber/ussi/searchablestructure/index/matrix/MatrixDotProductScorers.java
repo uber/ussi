@@ -48,7 +48,9 @@ final class MatrixDotProductScorers {
               matrix,
               rows,
               Math.max(1, Runtime.getRuntime().availableProcessors()),
-              /* maxResults */ 128);
+              // Every query asking for more rows than this is refused, so it bounds what a
+              // namespace may ask for rather than only what the device holds.
+              /* maxResults */ 1_024);
         }
       };
 

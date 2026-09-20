@@ -338,21 +338,40 @@ final class CudaMatrixDotProductScorer
   private void launchReduction(int numQueries) {
     IntPointer numRowsArgument = new IntPointer(1).put(numRows);
     IntPointer numKeptArgument = new IntPointer(1).put(numKeptPerQuery);
+    // Every argument is read from the address given for it, so an argument that is itself an
+    // address is handed over as a buffer holding it rather than as itself. Passing a device
+    // address directly has it read as though it were a host one.
+    PointerPointer<Pointer> productsArgument = new PointerPointer<>(1).put(deviceProducts);
+    PointerPointer<Pointer> rowUniValuesArgument =
+        new PointerPointer<>(1).put(deviceRowUniValues);
+    PointerPointer<Pointer> queryUniValuesArgument =
+        new PointerPointer<>(1).put(deviceQueryUniValues);
+    PointerPointer<Pointer> takenArgument = new PointerPointer<>(1).put(deviceTaken);
+    PointerPointer<Pointer> keptRowNumsArgument =
+        new PointerPointer<>(1).put(deviceKeptRowNums);
+    PointerPointer<Pointer> keptSimilaritiesArgument =
+        new PointerPointer<>(1).put(deviceKeptSimilarities);
     PointerPointer<Pointer> arguments =
         new PointerPointer<>(
-            deviceProducts,
-            deviceRowUniValues,
-            deviceQueryUniValues,
-            deviceTaken,
+            productsArgument,
+            rowUniValuesArgument,
+            queryUniValuesArgument,
+            takenArgument,
             numRowsArgument,
             numKeptArgument,
-            deviceKeptRowNums,
-            deviceKeptSimilarities);
+            keptRowNumsArgument,
+            keptSimilaritiesArgument);
     check(
         cuLaunchKernel(
             reduction, numQueries, 1, 1, NUM_THREADS_PER_BLOCK, 1, 1, 0, null, arguments, null),
         "reduce");
     arguments.deallocate();
+    productsArgument.deallocate();
+    rowUniValuesArgument.deallocate();
+    queryUniValuesArgument.deallocate();
+    takenArgument.deallocate();
+    keptRowNumsArgument.deallocate();
+    keptSimilaritiesArgument.deallocate();
     numRowsArgument.deallocate();
     numKeptArgument.deallocate();
   }

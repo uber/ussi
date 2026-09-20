@@ -3,3 +3,4 @@
 /bazel-testlogs
 /bazel-ussi
 MODULE.bazel.lock
+examples/device/gpgpusim/harness.cu

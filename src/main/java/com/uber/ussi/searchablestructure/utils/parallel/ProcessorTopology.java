@@ -18,16 +18,16 @@ import java.util.stream.Stream;
  *
  * <p>A socket's cores are counted from the whole machine, and the processors this process may run
  * on bound the result rather than dividing it. A process is held to a share of a machine by a
- * processor set, by a bandwidth quota, or by both, and each of those leaves the sockets and the
- * hardware threads of the machine as they are while lowering the processors the process may use.
+ * processor set, by a bandwidth quota, or by both. Each of those leaves the sockets and the
+ * hardware threads of the machine as they are, while lowering the processors the process may use.
  *
  * <p>A machine whose kernel names no processor is taken to carry every processor this process may
  * run on in one socket of single-threaded cores.
  *
  * <p>Two machines are described loosely. A socket divided into several cache domains holds cores
- * that reach one another's memory at differing cost, and all of them are counted as one socket's.
- * A process pinned to both hardware threads of one core runs on two processors of one core, and
- * two is what the processors bounding this count come to.
+ * that reach one another's memory at differing cost, and all of them are counted as one socket's. A
+ * process pinned to both hardware threads of one core runs on two processors of one core, and two
+ * is what the processors bounding this count come to.
  */
 final class ProcessorTopology {
 

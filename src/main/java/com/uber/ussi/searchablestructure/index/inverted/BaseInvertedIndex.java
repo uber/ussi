@@ -44,19 +44,17 @@ import javax.annotation.Nullable;
  *
  * <p>A record travels through a search in two forms, named consistently throughout this package:
  *
- * <ul>
- *   <li><b>indexed</b> is the form whose terms are the inverted-list keys, which candidate
- *       generation probes and the shared-key test reads. See {@link RecordIndexingStrategy}.
- *   <li><b>verification</b> is the form the comparator scores: the record as supplied, minus any
- *       high-popularity terms dropped at build time.
- * </ul>
+ * <ul> <li><b>indexed</b> is the form whose terms are the inverted-list keys, which candidate
+ * generation probes and the shared-key test reads. See {@link RecordIndexingStrategy}.
+ * <li><b>verification</b> is the form the comparator scores: the record as supplied, minus any
+ * high-popularity terms dropped at build time. </ul>
  *
  * <p>Both forms report the same Uni value, so length and prefix filtering read the same bound
  * whichever one reaches them.
  *
  * <p>Storage is two components. The inverted lists key rows by term or signature, and the forward
- * index holds the other side, mapping each row number to its two forms and its Uni value, so
- * candidate generation reads the lists and verification reads the forward index.
+ * index holds the other side, mapping each row number to its two forms and its Uni value. Candidate
+ * generation therefore reads the lists, and verification reads the forward index.
  */
 abstract class BaseInvertedIndex extends RowStoringIndex {
   private static final long[] EMPTY_ROW_NUMS = new long[0];
@@ -527,8 +525,8 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
 
   /**
    * The indexed form of a row is what verification reads, so it records the deletion too. The
-   * unilateral values the inverted lists are ordered by are left alone, since candidate
-   * generation prunes against them and an order it cannot compare would stop pruning working.
+   * unilateral values the inverted lists are ordered by are left alone, since candidate generation
+   * prunes against them and an order it cannot compare would stop pruning working.
    */
   @Override
   protected void onRowDeleted(long rowNum) {
@@ -659,8 +657,8 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
    * Builds the uni-sorted inverted list of every key, one set of lists per shard. Values are
    * materialized only when the merge generator will score from them.
    *
-   * <p>A row's lists go to the shard its row number falls in. Row numbers are assigned in turn,
-   * so the shards receive equal shares, which is what makes them cost the same to search as each
+   * <p>A row's lists go to the shard its row number falls in. Row numbers are assigned in turn, so
+   * the shards receive equal shares, which is what makes them cost the same to search as each
    * other.
    */
   private List<LongObjectHashMap<InvertedList>> buildInvertedLists(

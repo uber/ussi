@@ -87,8 +87,8 @@ public abstract class Comparator implements Serializable {
   public abstract double getUniTransformedValue(float value);
 
   /**
-   * Returns the unilateral value of a record's canonical arrays. Comparators whose records carry
-   * no values derive it from the terms instead.
+   * Returns the unilateral value of a record's canonical arrays. Comparators whose records carry no
+   * values derive it from the terms instead.
    */
   public double computeUniValue(long[] terms, float[] values) {
     return computeUniValue(values);
@@ -139,8 +139,8 @@ public abstract class Comparator implements Serializable {
    *
    * <p>One shape serves both key spaces. Keys are shared in proportion to the multiset similarity
    * of the records they were drawn from, whether they are the record's own terms or signatures
-   * drawn from it, so the fraction a measure bounds that similarity by caps the prefix over either
-   * one. Only the Uni value differs, being the record's own over terms and the number of
+   * drawn from it. The fraction a measure bounds that similarity by therefore caps the prefix over
+   * either one. Only the Uni value differs, being the record's own over terms and the number of
    * signatures over signatures, since each of those stands for one draw.
    *
    * <p>A fraction outside [0.0, 1.0] guarantees nothing, and is clamped rather than rejected: a
@@ -166,9 +166,9 @@ public abstract class Comparator implements Serializable {
    * <p>A measure with no useful bound of either shape returns {@code uniValue}, the whole record.
    * Traversal halts once the keys it has visited accumulate past the prefix sum, and their
    * accumulation reaches exactly the record's Uni value, so the whole record never halts it: every
-   * key generates candidates and nothing is pruned. That is sound rather than merely permitted,
-   * and it is what {@link #maxPrefixSumFromSharedFraction maxPrefixSumFromSharedFraction()}
-   * already returns for a measure that can oblige a candidate to share none of the keys.
+   * key generates candidates and nothing is pruned. That is sound rather than merely permitted, and
+   * it is what {@link #maxPrefixSumFromSharedFraction maxPrefixSumFromSharedFraction()} already
+   * returns for a measure that can oblige a candidate to share none of the keys.
    */
   protected abstract double getMaxPrefixSumForTermsAndValuesInternal(
       double uniValue, double comparatorValue);
@@ -203,8 +203,8 @@ public abstract class Comparator implements Serializable {
   /**
    * Returns every {@link RecordType} this comparator can read, which decides the searchable
    * structures it can be paired with. An index holds a type that both the comparator and the
-   * structure support, so a pairing whose sets are disjoint is a config violation. See
-   * {@code IndexType.resolveRecordTypes}.
+   * structure support, so a pairing whose sets are disjoint is a config violation. See {@code
+   * IndexType.resolveRecordTypes}.
    */
   public abstract Set<RecordType> getSupportedRecordTypes();
 }

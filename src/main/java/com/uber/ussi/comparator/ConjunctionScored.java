@@ -12,8 +12,8 @@ package com.uber.ussi.comparator;
  * <p>Merging walks the lists of the query's keys together, growing one row's conjunction a shared
  * key at a time. That is why a measure needs both halves of this interface: one to accumulate the
  * conjunction and turn a complete one into a similarity, and one to bound what a partial
- * conjunction can still reach, which is what lets the merge abandon a row before reading the rest
- * of its keys.
+ * conjunction can still reach. The second is what lets the merge abandon a row before reading the
+ * rest of its keys.
  */
 public interface ConjunctionScored {
 

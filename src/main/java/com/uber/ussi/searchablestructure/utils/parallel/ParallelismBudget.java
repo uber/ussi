@@ -21,23 +21,22 @@ import javax.annotation.Nullable;
  * number.
  *
  * <p>{@link #getNumThreadsPerSearch()} is read by a structure that divides its own search and
- * submits the pieces to {@link SearchThreads}. It is the processors the machine has divided by
- * the concurrent searches, because such work waits in a queue when the cores are busy and
- * otherwise spreads over every core, so the threads of all the concurrent searches together stay
- * within the cores.
+ * submits the pieces to {@link SearchThreads}. It is the processors the machine has divided by the
+ * concurrent searches. Such work waits in a queue when the cores are busy and otherwise spreads
+ * over every core, so the threads of all the concurrent searches together stay within the cores.
  *
- * <p>The threads per batch is held by a native library rather than by any one structure, and is
- * applied to it through {@link #onNumThreadsPerBatchChange onNumThreadsPerBatchChange()} rather
- * than read, because one setting serves every search and changing it while a call is dispatching
- * work may deadlock or corrupt memory. It is the cores of one socket that {@link
- * ProcessorTopology} reports, undivided: a library holding such a count serializes its callers
- * and multiplies the queries that accumulate as one batch, so one call at a time uses all of
- * those threads and there is nothing to divide. Threads of such a library gain nothing past one
- * socket, since two hardware threads of a core share that core's execution units and a socket
- * reaches another socket's memory over a link.
+ * <p>The threads per batch is held by a native library rather than by any one structure. It is
+ * applied to that library through {@link #onNumThreadsPerBatchChange onNumThreadsPerBatchChange()}
+ * rather than read, because one setting serves every search, and changing it while a call is
+ * dispatching work may deadlock or corrupt memory. It is the cores of one socket that {@link
+ * ProcessorTopology} reports, undivided: a library holding such a count serializes its callers and
+ * multiplies the queries that accumulate as one batch, so one call at a time uses all of those
+ * threads and there is nothing to divide. Threads of such a library gain nothing past one socket,
+ * since two hardware threads of a core share that core's execution units and a socket reaches
+ * another socket's memory over a link.
  *
- * <p>Being undivided, the threads per batch never changes after its holder registers, so no
- * search is suspended to apply it.
+ * <p>Being undivided, the threads per batch never changes after its holder registers, so no search
+ * is suspended to apply it.
  */
 public final class ParallelismBudget {
 
@@ -164,9 +163,9 @@ public final class ParallelismBudget {
   }
 
   /**
-   * The threads one search may use at the given number of concurrent searches. Rounding
-   * down keeps the threads of all of them within the core count. A number below one is treated as
-   * one, which covers an interval holding no search and leaves the divisor non-zero.
+   * The threads one search may use at the given number of concurrent searches. Rounding down keeps
+   * the threads of all of them within the core count. A number below one is treated as one, which
+   * covers an interval holding no search and leaves the divisor non-zero.
    */
   int getNumThreadsPerSearchFor(int numConcurrentSearches) {
     return Math.max(1, maxNumThreadsPerSearch / Math.max(1, numConcurrentSearches));
@@ -192,11 +191,11 @@ public final class ParallelismBudget {
    * Takes one reading of the concurrent searches, and re-derives both counts once {@link
    * #NUM_SAMPLES_PER_UPDATE} readings are in.
    *
-   * <p>The readings are averaged rather than maximised. A maximum over an interval is biased
-   * upward by the length of that interval, so the estimate it yields depends on the sampling
-   * window rather than on the load. The mean is invariant to the window: a process serving one
-   * long search at a time estimates one concurrent search under any number of readings, so the
-   * window is chosen for the cost of updating alone.
+   * <p>The readings are averaged rather than maximised. A maximum over an interval is biased upward
+   * by the length of that interval, so the estimate it yields depends on the sampling window rather
+   * than on the load. The mean is invariant to the window: a process serving one long search at a
+   * time estimates one concurrent search under any number of readings, so the window is chosen for
+   * the cost of updating alone.
    */
   void sample(int numConcurrentSearches) {
     numConcurrentSearchesSampled += Math.max(0, numConcurrentSearches);
@@ -213,16 +212,16 @@ public final class ParallelismBudget {
   /**
    * Re-derives both counts from the given number of concurrent searches.
    *
-   * <p>The threads one search may use is read by each search for itself, so it is assigned here
-   * and needs no moment without searches. A process-global thread count is one setting every
-   * concurrent search shares, and a library holding one may deadlock or corrupt memory when it is
-   * modified while a call is dispatching work, so it is applied with no search running and only
-   * when it differs from the count already in effect.
+   * <p>The threads one search may use is read by each search for itself, so it is assigned here and
+   * needs no moment without searches. A process-global thread count is one setting every concurrent
+   * search shares. A library holding one may deadlock or corrupt memory if it is modified while a
+   * call is dispatching work. It is therefore applied with no search running, and only when it
+   * differs from the count already in effect.
    *
-   * <p>Reaching a moment without searches suspends every search in the process, including those
-   * of structures holding no process-global count of their own. It is therefore reached only when
-   * such a count is registered and its value has changed. A process in which none is registered,
-   * and a process whose load leaves the count unchanged, are never suspended.
+   * <p>Reaching a moment without searches suspends every search in the process, including those of
+   * structures holding no process-global count of their own. It is therefore reached only when such
+   * a count is registered and its value has changed. A process in which none is registered, and a
+   * process whose load leaves the count unchanged, are never suspended.
    */
   void update(int numConcurrentSearches) {
     numThreadsPerSearch = getNumThreadsPerSearchFor(numConcurrentSearches);

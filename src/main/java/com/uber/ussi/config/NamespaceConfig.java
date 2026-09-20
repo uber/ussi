@@ -19,9 +19,9 @@ import javax.annotation.Nullable;
  */
 public final class NamespaceConfig {
   /**
-   * The most similarities a namespace may be configured to return. Every search reduces what
-   * it was asked for to what the namespace permits, so this bounds a result set however large
-   * a caller's k is, and it bounds what a scorer keeping a fixed number of rows has to hold.
+   * The most similarities a namespace may be configured to return. Every search reduces what it was
+   * asked for to what the namespace permits. This therefore bounds a result set however large a
+   * caller's k is, and bounds what a scorer keeping a fixed number of rows has to hold.
    */
   public static final int MAX_NUM_SIMILARITIES_CEILING = 1_024;
 

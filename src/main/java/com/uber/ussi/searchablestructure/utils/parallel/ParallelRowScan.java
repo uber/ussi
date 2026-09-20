@@ -22,20 +22,20 @@ import java.util.List;
  * set of candidate rows a metadata filter produced are scanned this way.
  *
  * <p>Only a scan whose rows all score against the same minimum similarity belongs here. A scan that
- * raises its minimum similarity as its heap fills prunes using what it has already scored, and
- * ranges each raising a minimum similarity from their own heap would prune less than the whole
- * scan does, so such a scan keeps its single heap and its pruning instead. How much pruning it
- * would lose depends on the data, so no measurement would settle it.
+ * raises its minimum similarity as its heap fills prunes using what it has already scored. Ranges
+ * each raising a minimum similarity from their own heap would prune less than the whole scan does,
+ * so such a scan keeps its single heap and its pruning instead. How much pruning it would lose
+ * depends on the data, so no measurement would settle it.
  *
  * <p>Whether to divide the scan at all is worth deciding, because a scan can be short enough that
- * submitting its ranges costs more than the scan. How finely to divide it is not, because that
- * cost does not grow with the number of ranges enough to matter. A scan below a minimum amount of
- * work therefore runs on the calling thread, and a scan above it uses every thread it may.
+ * submitting its ranges costs more than the scan. How finely to divide it is not, because that cost
+ * does not grow with the number of ranges enough to matter. A scan below a minimum amount of work
+ * therefore runs on the calling thread, and a scan above it uses every thread it may.
  *
  * <p>The minimum earns its place at high query rates rather than on an idle machine. The budget is
- * derived from the concurrent searches observed, and searches short enough to leave the cores idle
- * between them are counted as fewer concurrent searches than they impose, so the budget can stand
- * above one thread while a small cache serves hundreds of thousands of searches a second.
+ * derived from the concurrent searches observed. Searches short enough to leave the cores idle
+ * between them are counted as fewer concurrent searches than they impose. The budget can therefore
+ * stand above one thread while a small cache serves hundreds of thousands of searches a second.
  * Submitting ranges for each of those searches costs far more than it saves.
  */
 public final class ParallelRowScan {
@@ -125,10 +125,11 @@ public final class ParallelRowScan {
       }
       return rows.toList();
     }
-    // A set cannot be divided into slot ranges the way the row map can. The map marks an empty slot
-    // by holding no value in it, whereas a set holds only keys and keeps the zero key outside its
-    // slots without exposing whether it is there, so a slot range cannot tell row zero from an
-    // empty slot. Copying the candidates out gives the ranges something they can index.
+    // A set cannot be divided into slot ranges the way the row map can. The map marks an
+    // empty slot by holding no value in it. A set holds only keys, and keeps the zero key
+    // outside its slots without exposing whether it is there, so a slot range cannot tell
+    // row zero from an empty slot. Copying the candidates out gives the ranges something
+    // they can index.
     long[] rowNums = candidateRowNums.toArray();
     return scanInRanges(
         numRanges,

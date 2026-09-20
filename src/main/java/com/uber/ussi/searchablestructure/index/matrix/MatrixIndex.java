@@ -71,7 +71,8 @@ public final class MatrixIndex extends RowStoringIndex {
     this.dotProductScorer =
         MatrixDotProductScorers.create(
             matrix,
-            new MatrixRows(rowNums, rowUniValues, dotProductScored));
+            new MatrixRows(rowNums, rowUniValues, dotProductScored),
+            namespaceConfig.getMaxNumSimilarities());
     // Dense bulk scoring cannot push metadata filters down, so AUTO pre-filters or post-filters.
     this.metadataFilteredSearchExecutor =
         new MetadataFilteredSearchExecutor(

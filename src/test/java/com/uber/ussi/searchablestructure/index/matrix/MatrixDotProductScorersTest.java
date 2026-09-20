@@ -14,11 +14,13 @@ class MatrixDotProductScorersTest {
   private static final RowSelection SELECTION =
       new RowSelection(0, Float.NEGATIVE_INFINITY, 10);
 
+  private static final int MAX_NUM_SIMILARITIES = 10;
+
   @Test
   void createReturnsAUsableScorer() {
     DenseMatrix matrix = TestDenseMatrices.of(new float[] {1f, 2f, 3f, 4f}, 2, 2);
     try (MatrixDotProductScorer scorer =
-        MatrixDotProductScorers.create(matrix, TestMatrixRows.of(2))) {
+        MatrixDotProductScorers.create(matrix, TestMatrixRows.of(2), MAX_NUM_SIMILARITIES)) {
 
       List<RowNumAndSimilarity> kept = scorer.selectRows(new float[] {0.5f, 2f}, SELECTION);
 
@@ -104,7 +106,7 @@ class MatrixDotProductScorersTest {
   void theDefaultOrderAlwaysBuildsAScorer() {
     DenseMatrix matrix = TestDenseMatrices.of(new float[] {1f, 2f}, 1, 2);
     try (MatrixDotProductScorer scorer =
-        MatrixDotProductScorers.create(matrix, TestMatrixRows.of(1))) {
+        MatrixDotProductScorers.create(matrix, TestMatrixRows.of(1), MAX_NUM_SIMILARITIES)) {
       assertInstanceOf(MatrixDotProductScorer.class, scorer);
     }
   }
@@ -122,7 +124,7 @@ class MatrixDotProductScorersTest {
   private MatrixDotProductScorer createWith(MatrixDotProductScorers.Provider... providers) {
     return MatrixDotProductScorers.create(
         TestDenseMatrices.of(new float[] {1f, 2f}, 1, 2), TestMatrixRows.of(1),
-        List.of(providers));
+        MAX_NUM_SIMILARITIES, List.of(providers));
   }
 
   private static MatrixDotProductScorers.Provider provider(
@@ -139,7 +141,8 @@ class MatrixDotProductScorersTest {
       }
 
       @Override
-      public MatrixDotProductScorer create(DenseMatrix matrix, MatrixRows rows) {
+      public MatrixDotProductScorer create(
+          DenseMatrix matrix, MatrixRows rows, int maxNumSimilarities) {
         return scorer.get();
       }
     };

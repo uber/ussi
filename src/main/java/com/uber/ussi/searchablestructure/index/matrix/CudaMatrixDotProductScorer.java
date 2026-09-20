@@ -58,6 +58,9 @@ import org.bytedeco.javacpp.SizeTPointer;
  * Host memory is pageable rather than pinned and every call runs on the default stream, so a
  * copy never overlaps a multiply. The matrix is held in single precision, where half precision
  * would halve what the multiply reads.
+ *
+ * <p>The rows a query may keep are fixed when the scorer is built, since the device reduces to
+ * that many, so a query asking for more is refused rather than answered short.
  */
 final class CudaMatrixDotProductScorer
     extends BatchedMatrixDotProductScorer<CudaMatrixDotProductScorer.KeptRows> {
@@ -76,22 +79,23 @@ final class CudaMatrixDotProductScorer
       "extern \"C\" __global__ void keepBestRows(\n"
           + "    float* products, const double* rowUniValues, const double* queryUniValues,\n"
           + "    int numRows, int numKept, long long* keptRowNums, float* keptSimilarities) {\n"
+          + "  const float unreachable = __int_as_float(0x7f800000);\n"
           + "  __shared__ float blockBestSimilarity[256];\n"
           + "  __shared__ int blockBestRow[256];\n"
           + "  int query = blockIdx.x;\n"
           + "  float* queryProducts = products + (long long) query * numRows;\n"
           + "  double queryUniValue = queryUniValues[query];\n"
           + "  for (int kept = 0; kept < numKept; ++kept) {\n"
-          + "    float bestSimilarity = -INFINITY;\n"
+          + "    float bestSimilarity = -unreachable;\n"
           + "    int bestRow = -1;\n"
           + "    for (int row = threadIdx.x; row < numRows; row += blockDim.x) {\n"
           + "      float product = queryProducts[row];\n"
-          + "      if (!isfinite(product)) {\n"
+          + "      if (isinf(product)) {\n"
           + "        continue;\n"
           + "      }\n"
           + "      float similarity =\n"
           + "          (float) -(queryUniValue + rowUniValues[row] - 2.0 * (double) product);\n"
-          + "      if (isfinite(similarity) && similarity > bestSimilarity) {\n"
+          + "      if (similarity > bestSimilarity) {\n"
           + "        bestSimilarity = similarity;\n"
           + "        bestRow = row;\n"
           + "      }\n"
@@ -112,7 +116,7 @@ final class CudaMatrixDotProductScorer
           + "      keptRowNums[slot] = blockBestRow[0];\n"
           + "      keptSimilarities[slot] = blockBestSimilarity[0];\n"
           + "      if (blockBestRow[0] >= 0) {\n"
-          + "        queryProducts[blockBestRow[0]] = INFINITY;\n"
+          + "        queryProducts[blockBestRow[0]] = unreachable;\n"
           + "      }\n"
           + "    }\n"
           + "    __syncthreads();\n"
@@ -171,7 +175,10 @@ final class CudaMatrixDotProductScorer
     super(matrix, rows, maxNumQueriesInABatch);
     this.numRows = matrix.numRows();
     this.dimension = matrix.dimension();
-    this.numKeptPerQuery = Math.max(1, maxResults);
+    if (maxResults < 1) {
+      throw new IllegalArgumentException("maxResults must be >= 1.");
+    }
+    this.numKeptPerQuery = maxResults;
     check(cuInit(0), "start");
     check(cublasCreate_v2(handle), "create a handle");
     allocate(deviceMatrix, (long) numRows * dimension * Float.BYTES);
@@ -205,6 +212,14 @@ final class CudaMatrixDotProductScorer
   @Override
   protected void multiplyQueries(
       float[][] queryValues, RowSelection[] selections, KeptRows[] into, int numQueries) {
+    for (int query = 0; query < numQueries; ++query) {
+      if (selections[query].getMaxResults() > numKeptPerQuery) {
+        throw new IllegalArgumentException(
+            String.format(
+                "This scorer keeps %s rows a query and was asked for %s.",
+                numKeptPerQuery, selections[query].getMaxResults()));
+      }
+    }
     copyQueriesToDevice(queryValues, selections, numQueries);
     // The library is column-major and the matrix is row-major, so the rows read as their own
     // transpose and the products come back with each query's contiguous.
@@ -346,8 +361,11 @@ final class CudaMatrixDotProductScorer
     BytePointer ptx = new BytePointer(size.get());
     check(nvrtcGetPTX(program, ptx), "read the reduction");
     check(cuModuleLoadData(module, ptx), "load the reduction");
-    check(cuModuleGetFunction(reduction, module, new BytePointer("keepBestRows")), "find it");
+    BytePointer functionName = new BytePointer("keepBestRows");
+    check(cuModuleGetFunction(reduction, module, functionName), "find it");
     nvrtcDestroyProgram(program);
+    functionName.deallocate();
+    ptx.deallocate();
     source.deallocate();
     name.deallocate();
     size.deallocate();

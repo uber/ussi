@@ -257,6 +257,8 @@ final class CudaMatrixDotProductScorer
   @Override
   protected void releaseResources() {
     cuModuleUnload(module);
+    module.deallocate();
+    reduction.deallocate();
     cudaFree(deviceKeptRowNums);
     cudaFree(deviceKeptSimilarities);
     cudaFree(deviceProducts);
@@ -265,6 +267,7 @@ final class CudaMatrixDotProductScorer
     cudaFree(deviceRowUniValues);
     cudaFree(deviceMatrix);
     cublasDestroy_v2(handle);
+    handle.deallocate();
     one.deallocate();
     zero.deallocate();
   }
@@ -328,18 +331,20 @@ final class CudaMatrixDotProductScorer
       similarities.position((long) query * numKeptPerQuery).get(into[query].similarities);
       rowNums.position((long) query * numKeptPerQuery).get(into[query].rowNums);
     }
-    similarities.deallocate();
-    rowNums.deallocate();
+    similarities.position(0).deallocate();
+    rowNums.position(0).deallocate();
   }
 
   private void copyMatrixToDevice(DenseMatrix matrix) {
+    // A view of the device's memory, which holds none of its own and so is never released.
+    FloatPointer atChunk = new FloatPointer(deviceMatrix);
     long offset = 0;
     for (int chunk = 0; chunk < matrix.numChunks(); ++chunk) {
       float[] values = matrix.chunk(chunk);
       FloatPointer host = new FloatPointer(values);
       check(
           cudaMemcpy(
-              new FloatPointer(deviceMatrix).position(offset),
+              atChunk.position(offset),
               host,
               (long) values.length * Float.BYTES,
               cudaMemcpyHostToDevice),
@@ -372,6 +377,7 @@ final class CudaMatrixDotProductScorer
     BytePointer functionName = new BytePointer("keepBestRows");
     check(cuModuleGetFunction(reduction, module, functionName), "find it");
     nvrtcDestroyProgram(program);
+    program.deallocate();
     functionName.deallocate();
     ptx.deallocate();
     source.deallocate();

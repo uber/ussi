@@ -18,10 +18,10 @@ SCORER = pathlib.Path(__file__).parents[3] / (
 )
 
 
-def read_reduction_source(scorer_text):
+def read_select_source(scorer_text):
     """Returns the kernel the scorer compiles, taken from the Java string it is written as."""
     body = re.search(
-        r"REDUCTION_SOURCE\s*=\s*(.*?);\n", scorer_text, re.DOTALL
+        r"SELECT_SOURCE\s*=\s*(.*?);\n", scorer_text, re.DOTALL
     ).group(1)
     pieces = re.findall(r'"((?:[^"\\]|\\.)*)"', body)
     return "".join(pieces).encode().decode("unicode_escape")
@@ -296,7 +296,7 @@ int main() {
 def main():
     scorer_text = SCORER.read_text()
     check_multiply_matches(scorer_text)
-    kernel = read_reduction_source(scorer_text)
+    kernel = read_select_source(scorer_text)
     # The harness launches the kernel by name, which needs it compiled rather than named by a
     # string, so the extern "C" the runtime compiler wants is dropped.
     kernel = kernel.replace('extern "C" __global__', "__global__")

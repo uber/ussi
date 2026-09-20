@@ -72,7 +72,8 @@ final class MatrixDotProductScorers {
    * build is the fastest it can run. The Java scorer needs no native code and is therefore
    * always available, which is what makes the list terminate.
    *
-   * <p>The CUDA scorer leads it because a GPU outruns a CPU at this, and reaching it takes
+   * <p>The CUDA scorer leads it because a GPU scores a dense matrix faster than a CPU does,
+   * and reaching it takes
    * both a GPU and the bindings, which this library depends on at compile time alone. A
    * deployment adding them is what selects it, and no result it produces has been verified on
    * a GPU.

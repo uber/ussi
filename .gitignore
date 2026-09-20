@@ -4,4 +4,3 @@
 /bazel-ussi
 MODULE.bazel.lock
 examples/device/harness/harness.cu
-__pycache__/

@@ -7,9 +7,10 @@ library, and is neither compiled nor run.
 
 ## The state of the one in the library
 
-It compiles on Linux and macOS, and no result it produces has been verified against another
-scorer, because no machine available to this project has a GPU. It leads
-`MatrixDotProductScorers.PREFERENCE_ORDER`, since a GPU outruns a CPU at this, and reaching it
+It compiles on Linux and macOS, and nothing it produces has been checked on the hardware it is
+written for, because no machine available to this project has a GPU. It leads
+`MatrixDotProductScorers.PREFERENCE_ORDER`, since a GPU scores a dense matrix faster than a CPU
+does, and reaching it
 takes the CUDA bindings on the runtime classpath. They are a compile-time dependency of the
 library, so a deployment that does not add them never builds it, and a deployment that adds
 them is opting into a scorer whose results have not been checked on a GPU.
@@ -57,13 +58,13 @@ and the matrix is row-major, so the rows read as their own transpose and the mul
 `CUBLAS_OP_T, CUBLAS_OP_N` with the row count as the leading dimension, which leaves each
 query's products contiguous.
 
-A kernel compiled at construction by NVRTC then reduces each query's products where they are.
-One block takes one query, and each pass finds the largest similarity not yet taken: every warp
-reduces its own lanes through register shuffles, each warp's leader records what it found in
-shared memory, and the first warp reduces those to the block's best row, which it marks taken.
-Only the rows kept are copied back. A deleted row carries a unilateral value that is not a
-number, so the similarity derived from it is not a number, and a comparison against such a value
-is false, which is what keeps it out.
+A kernel compiled at construction by NVRTC then selects from each query's products where they
+are. One block takes one query and performs a radix select. Reading what a row ranks by as an
+unsigned number preserves its order, so four passes counting one byte each into a shared
+histogram narrow the rows to the key of the last row to keep, and a fifth writes out the rows
+at or above it. Only those rows, and the dot product of each, are copied back. A deleted row
+carries a unilateral value that is not a number, so what it ranks by is not a number either,
+and such a value is the only one unequal to itself, which is what keeps it out.
 
 ## What it does not do
 
@@ -98,5 +99,5 @@ ranks them by squared Euclidean distance, so the scorer refuses a namespace whos
 orders by anything else. The unilateral value of every row is copied to the GPU for that
 ranking, and it carries the deletions too.
 
-The rows a query may keep are fixed when the scorer is built, since the reduction keeps that
+The rows a query may keep are fixed when the scorer is built, since the select keeps that
 many, so a query asking for more is refused rather than answered short.

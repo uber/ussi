@@ -67,10 +67,13 @@ is false, which is what keeps it out.
 
 ## What it does not do
 
-It is not tuned. The reduction reads the products once for every row it keeps, where an
-implementation meant for use would select them all in one pass. Host memory is pageable rather
-than pinned and every call runs on the default stream, so a copy never overlaps a multiply. The
-matrix is held in single precision, where half precision would halve what the multiply reads.
+It is not tuned. A batch multiplies against the whole matrix and selects from the whole
+result, where an implementation meant for use would tile the multiply over blocks of rows and
+select within each tile, as FAISS does, which bounds the memory the products occupy and keeps
+a tile in cache while it is selected from. Host memory is pageable rather than pinned and every
+call runs on the default stream, so a copy never overlaps a multiply. The matrix is held in
+single precision, where half precision would halve both what the multiply reads and how large
+a matrix fits.
 
 ## Two things to settle before using one
 
@@ -87,11 +90,13 @@ more reports exhaustion rather than a status code.
 
 ## What the similarity costs
 
-`MatrixRows.getSimilarity()` runs the configured comparator, in Java. A scorer computing
-elsewhere cannot call it, so it reimplements the arithmetic for the comparators it supports and
-rejects a namespace configured with any other. The unilateral value of every row is available
-through `MatrixRows.getRowUniValues()` to be copied wherever the arithmetic runs, and it carries
-the deletions too.
+`MatrixRows.getSimilarity()` runs the configured comparator, in Java, and a scorer computing
+elsewhere cannot call it. Rather than reimplement it, this one returns the dot product of every
+row it keeps and lets the comparator run on the host over those alone, which costs one call per
+kept row and supports every comparator. What the GPU decides is which rows to keep, and it
+ranks them by squared Euclidean distance, so the scorer refuses a namespace whose comparator
+orders by anything else. The unilateral value of every row is copied to the GPU for that
+ranking, and it carries the deletions too.
 
 The rows a query may keep are fixed when the scorer is built, since the reduction keeps that
 many, so a query asking for more is refused rather than answered short.

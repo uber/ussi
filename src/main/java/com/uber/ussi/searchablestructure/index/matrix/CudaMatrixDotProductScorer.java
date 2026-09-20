@@ -22,6 +22,8 @@ import static org.bytedeco.cuda.global.nvrtc.nvrtcCreateProgram;
 import static org.bytedeco.cuda.global.nvrtc.nvrtcDestroyProgram;
 import static org.bytedeco.cuda.global.nvrtc.nvrtcGetPTX;
 import static org.bytedeco.cuda.global.nvrtc.nvrtcGetPTXSize;
+import static org.bytedeco.cuda.global.nvrtc.nvrtcGetProgramLog;
+import static org.bytedeco.cuda.global.nvrtc.nvrtcGetProgramLogSize;
 
 import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
@@ -31,7 +33,6 @@ import org.bytedeco.cuda.cudart.CUfunc_st;
 import org.bytedeco.cuda.cudart.CUmod_st;
 import org.bytedeco.cuda.nvrtc._nvrtcProgram;
 import org.bytedeco.javacpp.BytePointer;
-import org.bytedeco.javacpp.DoublePointer;
 import org.bytedeco.javacpp.FloatPointer;
 import org.bytedeco.javacpp.IntPointer;
 import org.bytedeco.javacpp.LongPointer;
@@ -55,111 +56,151 @@ import org.bytedeco.javacpp.SizeTPointer;
  * <p>The multiply's products are read and never written, so a batch's products are what the
  * multiply produced and nothing else.
  *
- * <p>Not tuned, in ways worth naming. The reduction takes the largest remaining similarity once
- * per row it keeps, so it reads the products once for each of them, where an implementation
- * meant for use would select them all in one pass. Host memory is pageable rather than pinned
- * and every call runs on the default stream, so a copy never overlaps a multiply. The matrix is
- * held in single precision, where half precision would halve what the multiply reads.
+ * <p>Not tuned, in ways worth naming. A batch multiplies against the whole matrix at once and
+ * selects from the whole result, where an implementation meant for use would tile the multiply
+ * over blocks of rows and select within each tile, which bounds the memory the products need
+ * and keeps a tile in cache while it is selected from. Host memory is pageable rather than
+ * pinned and every call runs on the default stream, so a copy never overlaps a multiply. The
+ * matrix is held in single precision, where half precision would halve both what the multiply
+ * reads and how large a matrix fits.
  *
- * <p>The rows a query may keep are fixed when the scorer is built, since the reduction on the
- * GPU keeps that many, so a query asking for more is refused rather than answered short.
+ * <p>The rows a query may keep are fixed when the scorer is built, since the select on the GPU
+ * keeps that many, so a query asking for more is refused rather than answered short.
  *
  * <p>CUDA calls a GPU's memory device memory, which the fields holding it are named for.
  */
 final class CudaMatrixDotProductScorer
     extends BatchedMatrixDotProductScorer<CudaMatrixDotProductScorer.KeptRows> {
 
-  /** A whole number of warps, which the reduction requires, and within one block's limit. */
+  /** Enough threads to cover the histogram the select counts into, and within a block. */
   private static final int NUM_THREADS_PER_BLOCK = 256;
 
   /** What CUDA reports when the GPU has no room left, which is not a failure to ask properly. */
   private static final int CUDA_ERROR_MEMORY_ALLOCATION = 2;
 
   /**
-   * One block a query. Each pass over the products finds the largest similarity the block has
-   * not taken yet. Each warp reduces its own lanes through register shuffles, every warp's
-   * leader records what it found in shared memory, and the first warp reduces those to the
-   * block's best row.
+   * One block a query, selecting that query's best rows in a fixed number of passes rather
+   * than one pass for each row kept.
    *
-   * <p>A deleted row carries a unilateral value that is not a number, so the similarity derived
-   * from it is not a number either, and a comparison against a value that is not a number is
-   * false, so the reduction never prefers it.
+   * <p>The passes are a radix select. Reading a similarity's bits as an unsigned number
+   * preserves its order, so four passes over the rows, each counting one byte of that number
+   * into a histogram, narrow the rows to the key of the last row to keep. A fifth pass writes
+   * out every row above that key, and enough of those equal to it to make the count up.
    *
-   * <p>The shuffles take every lane of a warp, and the leaders occupy one shared slot each, so
-   * the block must be a whole number of warps and no more than the warps those slots hold.
+   * <p>What it writes is the rows to keep in no particular order, which is all the caller
+   * needs, and fewer than asked for when the matrix holds fewer.
+   *
+   * <p>A deleted row carries a unilateral value that is not a number, so the similarity
+   * derived from it is not a number either, and the passes drop it.
    */
   private static final String REDUCTION_SOURCE =
-      "extern \"C\" __global__ void keepBestRows(\n"
-          + "    const float* products, const double* rowUniValues,\n"
-          + "    const double* queryUniValues, unsigned char* taken, int numRows, int numKept,\n"
-          + "    long long* keptRowNums, float* keptSimilarities) {\n"
-          + "  const float infinity = __int_as_float(0x7f800000);\n"
-          + "  __shared__ float warpBestSimilarity[32];\n"
-          + "  __shared__ int warpBestRow[32];\n"
+      "__device__ unsigned int orderedKey(float similarity) {\n"
+          + "  // Flipping the sign bit of a positive number and every bit of a negative\n"
+          + "  // one makes the unsigned order of the bits the order of the numbers.\n"
+          + "  unsigned int bits = __float_as_uint(similarity);\n"
+          + "  return (bits & 0x80000000u) ? ~bits : (bits | 0x80000000u);\n"
+          + "}\n"
+          + "\n"
+          + "extern \"C\" __global__ void keepBestRows(\n"
+          + "    const float* products, const float* rowUniValues, const float* queryUniValues,\n"
+          + "    int numRows, int numKept, long long* keptRowNums, float* keptSimilarities) {\n"
+          + "  __shared__ int histogram[256];\n"
+          + "  __shared__ unsigned int thresholdKey;\n"
+          + "  __shared__ int numToKeep;\n"
+          + "  __shared__ int numStillNeeded;\n"
+          + "  __shared__ int numAboveWritten;\n"
+          + "  __shared__ int numAtWritten;\n"
           + "  int query = blockIdx.x;\n"
           + "  const float* queryProducts = products + (long long) query * numRows;\n"
-          + "  unsigned char* queryTaken = taken + (long long) query * numRows;\n"
-          + "  double queryUniValue = queryUniValues[query];\n"
-          + "  int laneId = threadIdx.x % 32;\n"
-          + "  int warpId = threadIdx.x / 32;\n"
-          + "  int numWarps = blockDim.x / 32;\n"
-          + "  for (int row = threadIdx.x; row < numRows; row += blockDim.x) {\n"
-          + "    queryTaken[row] = 0;\n"
+          + "  float queryUniValue = queryUniValues[query];\n"
+          + "  long long base = (long long) query * numKept;\n"
+          + "  for (int slot = threadIdx.x; slot < numKept; slot += blockDim.x) {\n"
+          + "    keptRowNums[base + slot] = -1;\n"
+          + "    keptSimilarities[base + slot] = 0.0f;\n"
+          + "  }\n"
+          + "  if (threadIdx.x == 0) {\n"
+          + "    thresholdKey = 0u;\n"
+          + "    numToKeep = numKept;\n"
+          + "    numStillNeeded = numKept;\n"
           + "  }\n"
           + "  __syncthreads();\n"
-          + "  for (int kept = 0; kept < numKept; ++kept) {\n"
-          + "    float bestSimilarity = -infinity;\n"
-          + "    int bestRow = -1;\n"
+          + "  for (int digit = 0; digit < 4; ++digit) {\n"
+          + "    int shift = 24 - 8 * digit;\n"
+          + "    // Which bits the threshold has fixed, and none on the first digit, where\n"
+          + "    // shifting by the width of the type would not be defined.\n"
+          + "    unsigned int fixedBits = (digit == 0) ? 0u : (0xffffffffu << (shift + 8));\n"
+          + "    for (int bin = threadIdx.x; bin < 256; bin += blockDim.x) {\n"
+          + "      histogram[bin] = 0;\n"
+          + "    }\n"
+          + "    __syncthreads();\n"
           + "    for (int row = threadIdx.x; row < numRows; row += blockDim.x) {\n"
-          + "      if (queryTaken[row]) {\n"
+          + "      float similarity =\n"
+          + "          -(queryUniValue + rowUniValues[row] - 2.0f * queryProducts[row]);\n"
+          + "      // A deleted row's unilateral value is not a number, so neither is its\n"
+          + "      // similarity, and such a value is the only one unequal to itself.\n"
+          + "      if (similarity != similarity) {\n"
           + "        continue;\n"
           + "      }\n"
-          + "      float similarity = (float) -(queryUniValue + rowUniValues[row]\n"
-          + "          - 2.0 * (double) queryProducts[row]);\n"
-          + "      if (similarity > bestSimilarity) {\n"
-          + "        bestSimilarity = similarity;\n"
-          + "        bestRow = row;\n"
-          + "      }\n"
-          + "    }\n"
-          + "    // 1. Intra-warp reduction using register shuffles\n"
-          + "    for (int offset = 16; offset > 0; offset /= 2) {\n"
-          + "      float otherSimilarity = __shfl_down_sync(0xffffffff, bestSimilarity, offset);\n"
-          + "      int otherRow = __shfl_down_sync(0xffffffff, bestRow, offset);\n"
-          + "      if (otherSimilarity > bestSimilarity) {\n"
-          + "        bestSimilarity = otherSimilarity;\n"
-          + "        bestRow = otherRow;\n"
-          + "      }\n"
-          + "    }\n"
-          + "    // 2. Warp leaders record their best result to shared memory\n"
-          + "    if (laneId == 0) {\n"
-          + "      warpBestSimilarity[warpId] = bestSimilarity;\n"
-          + "      warpBestRow[warpId] = bestRow;\n"
-          + "    }\n"
-          + "    __syncthreads();\n"
-          + "    // 3. Inter-warp reduction handled purely by the first warp\n"
-          + "    if (warpId == 0) {\n"
-          + "      bestSimilarity = (laneId < numWarps) ? warpBestSimilarity[laneId] : -infinity;\n"
-          + "      bestRow = (laneId < numWarps) ? warpBestRow[laneId] : -1;\n"
-          + "      for (int offset = 16; offset > 0; offset /= 2) {\n"
-          + "        float otherSimilarity =\n"
-          + "            __shfl_down_sync(0xffffffff, bestSimilarity, offset);\n"
-          + "        int otherRow = __shfl_down_sync(0xffffffff, bestRow, offset);\n"
-          + "        if (otherSimilarity > bestSimilarity) {\n"
-          + "          bestSimilarity = otherSimilarity;\n"
-          + "          bestRow = otherRow;\n"
-          + "        }\n"
-          + "      }\n"
-          + "      // 4. Thread 0 records the global winner and masks it for the next pass\n"
-          + "      if (laneId == 0) {\n"
-          + "        long long slot = (long long) query * numKept + kept;\n"
-          + "        keptRowNums[slot] = bestRow;\n"
-          + "        keptSimilarities[slot] = bestSimilarity;\n"
-          + "        if (bestRow >= 0) {\n"
-          + "          queryTaken[bestRow] = 1;\n"
-          + "        }\n"
+          + "      unsigned int key = orderedKey(similarity);\n"
+          + "      if ((key & fixedBits) == (thresholdKey & fixedBits)) {\n"
+          + "        atomicAdd(&histogram[(key >> shift) & 0xffu], 1);\n"
           + "      }\n"
           + "    }\n"
           + "    __syncthreads();\n"
+          + "    if (threadIdx.x == 0) {\n"
+          + "      if (digit == 0) {\n"
+          + "        int numAlive = 0;\n"
+          + "        for (int bin = 0; bin < 256; ++bin) {\n"
+          + "          numAlive += histogram[bin];\n"
+          + "        }\n"
+          + "        // Fewer rows than asked for leaves the remaining slots as they were.\n"
+          + "        if (numAlive < numToKeep) {\n"
+          + "          numToKeep = numAlive;\n"
+          + "          numStillNeeded = numAlive;\n"
+          + "        }\n"
+          + "      }\n"
+          + "      int numAbove = 0;\n"
+          + "      for (int bin = 255; bin >= 0; --bin) {\n"
+          + "        if (numAbove + histogram[bin] >= numStillNeeded) {\n"
+          + "          thresholdKey |= ((unsigned int) bin) << shift;\n"
+          + "          numStillNeeded -= numAbove;\n"
+          + "          break;\n"
+          + "        }\n"
+          + "        numAbove += histogram[bin];\n"
+          + "      }\n"
+          + "    }\n"
+          + "    __syncthreads();\n"
+          + "  }\n"
+          + "  // The threshold is the key of the last row to keep. Every row above it is\n"
+          + "  // kept, and as many of those equal to it as the count is short by.\n"
+          + "  int numAboveThreshold = numToKeep - numStillNeeded;\n"
+          + "  int numAtThreshold = numStillNeeded;\n"
+          + "  if (threadIdx.x == 0) {\n"
+          + "    numAboveWritten = 0;\n"
+          + "    numAtWritten = 0;\n"
+          + "  }\n"
+          + "  __syncthreads();\n"
+          + "  for (int row = threadIdx.x; row < numRows; row += blockDim.x) {\n"
+          + "    float similarity =\n"
+          + "        -(queryUniValue + rowUniValues[row] - 2.0f * queryProducts[row]);\n"
+          + "    if (similarity != similarity) {\n"
+          + "      continue;\n"
+          + "    }\n"
+          + "    unsigned int key = orderedKey(similarity);\n"
+          + "    if (key > thresholdKey) {\n"
+          + "      int slot = atomicAdd(&numAboveWritten, 1);\n"
+          + "      // Defensive check: the histograms counted how many are above it.\n"
+          + "      if (slot < numAboveThreshold) {\n"
+          + "        keptRowNums[base + slot] = row;\n"
+          + "        keptSimilarities[base + slot] = similarity;\n"
+          + "      }\n"
+          + "    } else if (key == thresholdKey) {\n"
+          + "      int slot = atomicAdd(&numAtWritten, 1);\n"
+          + "      if (slot < numAtThreshold) {\n"
+          + "        keptRowNums[base + numAboveThreshold + slot] = row;\n"
+          + "        keptSimilarities[base + numAboveThreshold + slot] = similarity;\n"
+          + "      }\n"
+          + "    }\n"
           + "  }\n"
           + "}\n";
 
@@ -179,15 +220,15 @@ final class CudaMatrixDotProductScorer
   private final int numRows;
   private final int dimension;
   private final int numKeptPerQuery;
+  private boolean isReductionLoaded;
   private final cublasContext handle = new cublasContext();
   private final CUmod_st module = new CUmod_st();
   private final CUfunc_st reduction = new CUfunc_st();
   private final FloatPointer deviceMatrix = new FloatPointer();
-  private final DoublePointer deviceRowUniValues = new DoublePointer();
-  private final DoublePointer deviceQueryUniValues = new DoublePointer();
+  private final FloatPointer deviceRowUniValues = new FloatPointer();
+  private final FloatPointer deviceQueryUniValues = new FloatPointer();
   private final FloatPointer deviceQueries = new FloatPointer();
   private final FloatPointer deviceProducts = new FloatPointer();
-  private final BytePointer deviceTaken = new BytePointer();
   private final FloatPointer deviceKeptSimilarities = new FloatPointer();
   private final LongPointer deviceKeptRowNums = new LongPointer();
   private final FloatPointer one = new FloatPointer(1).put(1.0f);
@@ -225,19 +266,27 @@ final class CudaMatrixDotProductScorer
       throw new IllegalArgumentException("maxResults must be >= 1.");
     }
     this.numKeptPerQuery = maxResults;
-    check(cuInit(0), "start");
-    check(cublasCreate_v2(handle), "create a handle");
-    allocate(deviceMatrix, (long) numRows * dimension * Float.BYTES);
-    allocate(deviceRowUniValues, (long) numRows * Double.BYTES);
-    allocate(deviceQueryUniValues, (long) maxNumQueriesInABatch * Double.BYTES);
-    allocate(deviceQueries, (long) maxNumQueriesInABatch * dimension * Float.BYTES);
-    allocate(deviceProducts, (long) maxNumQueriesInABatch * numRows * Float.BYTES);
-    allocate(deviceTaken, (long) maxNumQueriesInABatch * numRows);
-    allocate(deviceKeptSimilarities, (long) maxNumQueriesInABatch * numKeptPerQuery * Float.BYTES);
-    allocate(deviceKeptRowNums, (long) maxNumQueriesInABatch * numKeptPerQuery * Long.BYTES);
-    copyMatrixToDevice(matrix);
-    copyToDevice(deviceRowUniValues, rows.getRowUniValues());
-    compileReduction();
+    try {
+      check(cuInit(0), "start");
+      check(cublasCreate_v2(handle), "create a handle");
+      allocate(deviceMatrix, (long) numRows * dimension * Float.BYTES);
+      allocate(deviceRowUniValues, (long) numRows * Float.BYTES);
+      allocate(deviceQueryUniValues, (long) maxNumQueriesInABatch * Float.BYTES);
+      allocate(deviceQueries, (long) maxNumQueriesInABatch * dimension * Float.BYTES);
+      allocate(deviceProducts, (long) maxNumQueriesInABatch * numRows * Float.BYTES);
+      allocate(
+          deviceKeptSimilarities, (long) maxNumQueriesInABatch * numKeptPerQuery * Float.BYTES);
+      allocate(deviceKeptRowNums, (long) maxNumQueriesInABatch * numKeptPerQuery * Long.BYTES);
+      copyMatrixToDevice(matrix);
+      copyToDevice(deviceRowUniValues, rows.getRowUniValues());
+      compileReduction();
+    } catch (Error | RuntimeException e) {
+      // The memory the GPU holds is reached only through this scorer, and a constructor that
+      // throws leaves nothing that would release it, so what was taken is released here. A
+      // matrix too large for the GPU makes this the expected path rather than a rare one.
+      releaseResources();
+      throw e;
+    }
   }
 
   @Override
@@ -293,14 +342,21 @@ final class CudaMatrixDotProductScorer
     }
   }
 
+  /**
+   * Releases what the scorer took, and is called by the constructor as well when construction
+   * fails partway, so it runs against whatever was taken by then. Freeing memory that was
+   * never allocated is defined and does nothing, where unloading a module that was never
+   * loaded is not, which is what the module is tracked for.
+   */
   @Override
   protected void releaseResources() {
-    cuModuleUnload(module);
+    if (isReductionLoaded) {
+      cuModuleUnload(module);
+    }
     module.deallocate();
     reduction.deallocate();
     cudaFree(deviceKeptRowNums);
     cudaFree(deviceKeptSimilarities);
-    cudaFree(deviceTaken);
     cudaFree(deviceProducts);
     cudaFree(deviceQueries);
     cudaFree(deviceQueryUniValues);
@@ -315,10 +371,10 @@ final class CudaMatrixDotProductScorer
   private void copyQueriesToDevice(
       float[][] queryValues, RowSelection[] selections, int numQueries) {
     FloatPointer queries = new FloatPointer((long) numQueries * dimension);
-    DoublePointer queryUniValues = new DoublePointer(numQueries);
+    FloatPointer queryUniValues = new FloatPointer(numQueries);
     for (int query = 0; query < numQueries; ++query) {
       queries.position((long) query * dimension).put(queryValues[query], 0, dimension);
-      queryUniValues.put(query, selections[query].getQueryUniValue());
+      queryUniValues.put(query, (float) selections[query].getQueryUniValue());
     }
     queries.position(0);
     check(
@@ -328,7 +384,7 @@ final class CudaMatrixDotProductScorer
         "copy the queries");
     check(
         cudaMemcpy(
-            deviceQueryUniValues, queryUniValues, (long) numQueries * Double.BYTES,
+            deviceQueryUniValues, queryUniValues, (long) numQueries * Float.BYTES,
             cudaMemcpyHostToDevice),
         "copy the query unilateral values");
     queries.deallocate();
@@ -346,7 +402,6 @@ final class CudaMatrixDotProductScorer
         new PointerPointer<>(1).put(deviceRowUniValues);
     PointerPointer<Pointer> queryUniValuesArgument =
         new PointerPointer<>(1).put(deviceQueryUniValues);
-    PointerPointer<Pointer> takenArgument = new PointerPointer<>(1).put(deviceTaken);
     PointerPointer<Pointer> keptRowNumsArgument =
         new PointerPointer<>(1).put(deviceKeptRowNums);
     PointerPointer<Pointer> keptSimilaritiesArgument =
@@ -356,7 +411,6 @@ final class CudaMatrixDotProductScorer
             productsArgument,
             rowUniValuesArgument,
             queryUniValuesArgument,
-            takenArgument,
             numRowsArgument,
             numKeptArgument,
             keptRowNumsArgument,
@@ -369,7 +423,6 @@ final class CudaMatrixDotProductScorer
     productsArgument.deallocate();
     rowUniValuesArgument.deallocate();
     queryUniValuesArgument.deallocate();
-    takenArgument.deallocate();
     keptRowNumsArgument.deallocate();
     keptSimilaritiesArgument.deallocate();
     numRowsArgument.deallocate();
@@ -414,10 +467,15 @@ final class CudaMatrixDotProductScorer
     }
   }
 
-  private void copyToDevice(DoublePointer device, double[] values) {
-    DoublePointer host = new DoublePointer(values);
+  private void copyToDevice(FloatPointer device, double[] values) {
+    // Narrowing leaves a value that is not a number as one, so a deleted row stays deleted.
+    float[] narrowed = new float[values.length];
+    for (int index = 0; index < values.length; ++index) {
+      narrowed[index] = (float) values[index];
+    }
+    FloatPointer host = new FloatPointer(narrowed);
     check(
-        cudaMemcpy(device, host, (long) values.length * Double.BYTES, cudaMemcpyHostToDevice),
+        cudaMemcpy(device, host, (long) narrowed.length * Float.BYTES, cudaMemcpyHostToDevice),
         "copy the unilateral values");
     host.deallocate();
   }
@@ -426,23 +484,61 @@ final class CudaMatrixDotProductScorer
     _nvrtcProgram program = new _nvrtcProgram();
     BytePointer source = new BytePointer(REDUCTION_SOURCE);
     BytePointer name = new BytePointer("keepBestRows.cu");
-    check(nvrtcCreateProgram(program, source, name, 0, (PointerPointer<Pointer>) null, null),
-        "create the reduction");
-    check(nvrtcCompileProgram(program, 0, (PointerPointer<Pointer>) null), "compile the reduction");
     SizeTPointer size = new SizeTPointer(1);
-    check(nvrtcGetPTXSize(program, size), "size the reduction");
-    BytePointer ptx = new BytePointer(size.get());
-    check(nvrtcGetPTX(program, ptx), "read the reduction");
-    check(cuModuleLoadData(module, ptx), "load the reduction");
-    BytePointer functionName = new BytePointer("keepBestRows");
-    check(cuModuleGetFunction(reduction, module, functionName), "find it");
-    nvrtcDestroyProgram(program);
-    program.deallocate();
-    functionName.deallocate();
-    ptx.deallocate();
-    source.deallocate();
-    name.deallocate();
-    size.deallocate();
+    BytePointer ptx = null;
+    BytePointer functionName = null;
+    try {
+      check(nvrtcCreateProgram(program, source, name, 0, (PointerPointer<Pointer>) null, null),
+          "create the reduction");
+      int compiled = nvrtcCompileProgram(program, 0, (PointerPointer<Pointer>) null);
+      if (compiled != 0) {
+        // The kernel is compiled where it runs, so what the compiler objected to is the only
+        // account of why, and a status on its own would not identify the line.
+        throw new IllegalStateException(
+            "CUDA failed to compile the reduction: " + readCompilerLog(program));
+      }
+      check(nvrtcGetPTXSize(program, size), "size the reduction");
+      ptx = new BytePointer(size.get());
+      check(nvrtcGetPTX(program, ptx), "read the reduction");
+      check(cuModuleLoadData(module, ptx), "load the reduction");
+      isReductionLoaded = true;
+      functionName = new BytePointer("keepBestRows");
+      check(cuModuleGetFunction(reduction, module, functionName), "find it");
+    } finally {
+      // The compiler holds the program until told otherwise, which a failure part way through
+      // would otherwise leave it holding for the life of the process.
+      nvrtcDestroyProgram(program);
+      program.deallocate();
+      if (functionName != null) {
+        functionName.deallocate();
+      }
+      if (ptx != null) {
+        ptx.deallocate();
+      }
+      source.deallocate();
+      name.deallocate();
+      size.deallocate();
+    }
+  }
+
+  private static String readCompilerLog(_nvrtcProgram program) {
+    SizeTPointer size = new SizeTPointer(1);
+    BytePointer log = null;
+    try {
+      if (nvrtcGetProgramLogSize(program, size) != 0) {
+        return "the compiler gave no account of what it objected to.";
+      }
+      log = new BytePointer(size.get());
+      if (nvrtcGetProgramLog(program, log) != 0) {
+        return "the compiler gave no account of what it objected to.";
+      }
+      return log.getString();
+    } finally {
+      if (log != null) {
+        log.deallocate();
+      }
+      size.deallocate();
+    }
   }
 
   private static void allocate(Pointer pointer, long numBytes) {

@@ -629,7 +629,31 @@ where it scored them, and returns only those. `examples/device` describes what
 such a scorer implements, and states the two things to settle first: the types
 it extends are visible only inside the matrix package, so it must be declared
 there, and the memory it holds the matrix in bounds the rows an index may hold.
-Nothing in that directory is compiled, run or tuned.
+It also holds a harness, generated from the scorer, that checks the kernels
+against a reference computed on the host wherever a GPU is. Nothing in that
+directory is built by this project.
+
+The scorer multiplies a batch against the whole matrix and selects from the
+whole result. An implementation meant for use tiles the multiply over blocks of
+rows and selects within each tile, as FAISS does, which bounds the memory the
+products occupy and keeps a tile in cache while it is selected from. Tiling is
+left for future work, as is holding the matrix in half precision.
+
+FAISS is not adopted here, because its architectural assumptions differ from
+this library's:
+
+- it batches the queries within one search call and not across concurrent
+  calls, so a service receiving one query per request aggregates them itself,
+  which is what `BatchedMatrixDotProductScorer` does
+- below a threshold on the query count times the dimension it does not reach
+  BLAS at all, and a selector takes it off that path at any size
+- it offers the metrics it implements, where a namespace here configures its
+  comparator
+- it makes no promise about where a value that is not a number orders, which
+  is what deletion here relies on
+- it has no Java API, so adopting it means owning a JNI layer and shipping a
+  native artifact for every platform, where these bindings are a compile-time
+  dependency that a deployment carries nothing of
 
 The native scorer is written against `NativeBlas`, not against OpenBLAS.
 `NativeMatrixDotProductScorer` allocates the buffers, reuses them across

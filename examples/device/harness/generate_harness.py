@@ -1,15 +1,12 @@
-"""Generates a harness that runs the scorer's multiply and reduction under GPGPU-Sim.
+"""Generates a harness that runs the scorer's multiply and reduction on a GPU.
 
-GPGPU-Sim reaches cuBLAS only through a static link, which is a C++ link-time arrangement that
-the bindings the scorer uses cannot take. The harness is therefore C++, and it takes the kernel
-from the Java file rather than a copy so the two cannot drift apart. The multiply is written out
-here, and checked against the arguments the Java passes.
+The harness is C++, so that it can be run wherever a GPU is without the bindings or a JVM. It
+takes the kernel from the Java file rather than a copy so the two cannot drift apart, and the
+multiply is written out here and checked against the arguments the Java passes.
 
-The simulator aborts partway through loading a current cuBLAS, on a device function it cannot
-resolve, so the harness is emitted twice. Defining USE_CUBLAS calls the library, which is what
-to run once a simulator or a GPU can load it. Leaving it undefined substitutes a multiply
-written here that produces what the cuBLAS call is specified to produce, which runs today and
-exercises the reduction, the part that is hand written.
+Defining USE_CUBLAS performs the multiply with the library, as the scorer does. Leaving it
+undefined substitutes a multiply written here that produces what the cuBLAS call is specified
+to produce, which exercises the reduction alone, the part that is hand written.
 """
 
 import pathlib
@@ -82,7 +79,7 @@ __global__ void multiplyQueries(const float* matrix, const float* queries, float
 static const int NUM_THREADS_PER_BLOCK = %(numThreadsPerBlock)d;
 
 int main() {
-  // Small enough to simulate in reasonable time, large enough that the reduction spans warps.
+  // Small enough to check by hand, large enough that the reduction spans several warps.
   const int numRows = 512;
   const int dimension = 8;
   const int numQueries = 3;

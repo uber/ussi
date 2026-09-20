@@ -39,7 +39,13 @@ class ConfigViolationsTest {
     new IntegerCheckCase("checkPositive", ConfigViolations::checkPositive, 0, false),
     new IntegerCheckCase("checkNonNegative", ConfigViolations::checkNonNegative, 0, true),
     new IntegerCheckCase("checkNonNegative", ConfigViolations::checkNonNegative, -1, false),
+    new IntegerCheckCase("checkAtMost", atMostTen(), 10, true),
+    new IntegerCheckCase("checkAtMost", atMostTen(), 11, false),
   };
+
+  private static IntegerCheck atMostTen() {
+    return (violations, name, value) -> ConfigViolations.checkAtMost(violations, name, value, 10);
+  }
 
   private static final FormatCase[] FORMAT_CASES = {
     new FormatCase(List.of("only one"), "only one"),

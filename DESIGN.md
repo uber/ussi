@@ -495,8 +495,25 @@ pieces in sub-packages of their own:
   comparator serves a scan unchanged, and it is one fraction across both key
   spaces, signatures colliding at the rate a record's own terms are shared at.
 
+A comparator implementing `DotProductScored` is required to depend on the dot
+product and the two unilateral values through the squared Euclidean distance
+between the records alone, and not to rise as that distance rises. Two records
+at equal distance therefore score equally, and the nearest record is the most
+similar one. `L2Comparator` satisfies this, taking the root of that distance
+and normalizing it.
+
+The requirement is what lets a structure decide which rows to return by
+distance and score only those. `CudaMatrixDotProductScorer` does exactly that:
+the GPU ranks every row by squared distance and returns the dot product of the
+rows it kept, and the comparator runs on the host over those alone, one call
+per returned row. A comparator ordering by anything else would be handed the
+wrong rows, so that scorer evaluates the comparator when it is built and
+refuses a namespace whose comparator does not meet the requirement.
+
 Normalizers are separate, under `com.uber.ussi.comparatornormalizer`, because a
-namespace configures one independently of its comparator.
+namespace configures one independently of its comparator. A normalizer is
+therefore part of what has to satisfy the requirement above, since it maps the
+comparator's value to the similarity a search returns.
 
 ## Caches
 

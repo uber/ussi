@@ -29,6 +29,29 @@ final class MatrixDotProductScorers {
         }
       };
 
+  /**
+   * Holds the matrix in a device's memory. <b>Never run on a device</b>, so it is listed below a
+   * scorer that is always available and is therefore never built. Moving this entry above the
+   * Java scorer selects it, which should follow its results being checked against another
+   * scorer on the hardware, not precede it.
+   */
+  private static final Provider CUDA =
+      new Provider() {
+        @Override
+        public boolean isAvailable() {
+          return CudaMatrixDotProductScorer.isAvailable();
+        }
+
+        @Override
+        public MatrixDotProductScorer create(DenseMatrix matrix, MatrixRows rows) {
+          return new CudaMatrixDotProductScorer(
+              matrix,
+              rows,
+              Math.max(1, Runtime.getRuntime().availableProcessors()),
+              /* maxResults */ 128);
+        }
+      };
+
   private static final Provider OPEN_BLAS =
       new Provider() {
         @Override
@@ -42,8 +65,11 @@ final class MatrixDotProductScorers {
         }
       };
 
-  /** Most preferred first. */
-  private static final List<Provider> PREFERENCE_ORDER = List.of(OPEN_BLAS, JAVA);
+  /**
+   * Most preferred first. The last entry needs no native code and is always available, so the
+   * list always ends somewhere, and anything after it is never reached.
+   */
+  private static final List<Provider> PREFERENCE_ORDER = List.of(OPEN_BLAS, JAVA, CUDA);
 
   private MatrixDotProductScorers() {}
 
@@ -54,10 +80,10 @@ final class MatrixDotProductScorers {
   static MatrixDotProductScorer create(
       DenseMatrix matrix, MatrixRows rows, List<Provider> preferenceOrder) {
     for (Provider provider : preferenceOrder) {
-      if (!provider.isAvailable()) {
-        continue;
-      }
       try {
+        if (!provider.isAvailable()) {
+          continue;
+        }
         return provider.create(matrix, rows);
       } catch (LinkageError e) {
         continue;

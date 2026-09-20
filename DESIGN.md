@@ -614,6 +614,14 @@ to load as one that was never available. Adding a scorer is adding an entry to
 that list, which is the only existing code a further implementation needs to
 touch.
 
+`CudaMatrixDotProductScorer` is such a scorer, and it has never run on a
+device. It compiles, and its results have been checked against nothing, so it
+is listed below a scorer that is always available and is therefore never built.
+Promoting it means moving that entry above the Java scorer, which should follow
+its results being checked against another scorer on the hardware rather than
+precede it. Its bindings are a compile-time dependency, so a deployment that
+does not want it carries nothing.
+
 A scorer may compute the dot products somewhere this process cannot read, which
 is why it returns the rows a query keeps rather than a value for every row. Such
 a scorer extends `BatchedMatrixDotProductScorer` directly, reduces its rows

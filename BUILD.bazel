@@ -22,6 +22,14 @@ java_library(
     exports = ["@maven//:org_projectlombok_lombok"],
 )
 
+# The CUDA bindings are compile-time only. A deployment that wants the device scorer adds the
+# platform jar itself, and every other deployment carries nothing.
+java_library(
+    name = "cuda_compile_only",
+    neverlink = True,
+    exports = ["@maven//:org_bytedeco_cuda"],
+)
+
 java_library(
     name = "src_main",
     srcs = glob(["src/main/java/**/*.java"]),
@@ -40,6 +48,7 @@ java_library(
         "@maven//:org_bytedeco_openblas_macosx_x86_64",
     ],
     deps = [
+        ":cuda_compile_only",
         ":lombok_compile_only",
         "@maven//:com_carrotsearch_hppc",
         "@maven//:com_google_code_findbugs_jsr305",

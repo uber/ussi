@@ -97,8 +97,13 @@ final class OpenBlas implements NativeBlas<FloatPointer> {
   static boolean isAvailable() {
     Boolean memoized = isAvailable;
     if (memoized == null) {
-      memoized = isAvailable(IS_SUPPORTED_PLATFORM, blasNativeLoadProbe);
-      isAvailable = memoized;
+      synchronized (OpenBlas.class) {
+        memoized = isAvailable;
+        if (memoized == null) {
+          memoized = isAvailable(IS_SUPPORTED_PLATFORM, blasNativeLoadProbe);
+          isAvailable = memoized;
+        }
+      }
     }
     return memoized;
   }

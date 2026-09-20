@@ -67,6 +67,9 @@ final class CudaMatrixDotProductScorer
 
   private static final int NUM_THREADS_PER_BLOCK = 256;
 
+  /** What the device reports when it has no room left, which is not a failure to ask properly. */
+  private static final int CUDA_ERROR_MEMORY_ALLOCATION = 2;
+
   /**
    * One block a query. Each pass over the products finds the largest similarity the block has
    * not taken yet, by a tree reduction in shared memory, and the thread that holds it records
@@ -80,8 +83,8 @@ final class CudaMatrixDotProductScorer
           + "    float* products, const double* rowUniValues, const double* queryUniValues,\n"
           + "    int numRows, int numKept, long long* keptRowNums, float* keptSimilarities) {\n"
           + "  const float unreachable = __int_as_float(0x7f800000);\n"
-          + "  __shared__ float blockBestSimilarity[256];\n"
-          + "  __shared__ int blockBestRow[256];\n"
+          + "  __shared__ float blockBestSimilarity[" + NUM_THREADS_PER_BLOCK + "];\n"
+          + "  __shared__ int blockBestRow[" + NUM_THREADS_PER_BLOCK + "];\n"
           + "  int query = blockIdx.x;\n"
           + "  float* queryProducts = products + (long long) query * numRows;\n"
           + "  double queryUniValue = queryUniValues[query];\n"
@@ -90,7 +93,7 @@ final class CudaMatrixDotProductScorer
           + "    int bestRow = -1;\n"
           + "    for (int row = threadIdx.x; row < numRows; row += blockDim.x) {\n"
           + "      float product = queryProducts[row];\n"
-          + "      if (isinf(product)) {\n"
+          + "      if (product == unreachable) {\n"
           + "        continue;\n"
           + "      }\n"
           + "      float similarity =\n"
@@ -160,12 +163,17 @@ final class CudaMatrixDotProductScorer
   static boolean isAvailable() {
     Boolean memoized = isAvailable;
     if (memoized == null) {
-      try {
-        memoized = cuInit(0) == 0;
-      } catch (LinkageError | RuntimeException e) {
-        memoized = false;
+      synchronized (CudaMatrixDotProductScorer.class) {
+        memoized = isAvailable;
+        if (memoized == null) {
+          try {
+            memoized = cuInit(0) == 0;
+          } catch (LinkageError | RuntimeException e) {
+            memoized = false;
+          }
+          isAvailable = memoized;
+        }
       }
-      isAvailable = memoized;
     }
     return memoized;
   }
@@ -372,7 +380,13 @@ final class CudaMatrixDotProductScorer
   }
 
   private static void allocate(Pointer pointer, long numBytes) {
-    check(cudaMalloc(pointer, numBytes), "allocate " + numBytes + " bytes");
+    int status = cudaMalloc(pointer, numBytes);
+    if (status == CUDA_ERROR_MEMORY_ALLOCATION) {
+      throw new OutOfMemoryError(
+          "The device has no room for " + numBytes + " bytes, which bounds the rows an index "
+              + "may hold.");
+    }
+    check(status, "allocate " + numBytes + " bytes");
   }
 
   private static void check(int status, String what) {

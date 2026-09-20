@@ -115,9 +115,9 @@ public final class HybridIndex extends Index {
 
   @Override
   public boolean delete(long rowNum) {
-    // A row is held by whichever index keys rows of its length, and a delete carries no record to
-    // tell which that is, so the term index is asked first and the signature index only if it did
-    // not hold the row.
+    // A row is held by whichever index keys rows of its length, and a delete carries no
+    // record to tell which that is. The term index is therefore asked first, and the
+    // signature index only if it did not hold the row.
     return termIndex.delete(rowNum) || signatureIndex.delete(rowNum);
   }
 

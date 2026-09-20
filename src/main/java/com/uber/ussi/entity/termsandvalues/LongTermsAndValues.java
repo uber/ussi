@@ -79,10 +79,9 @@ public final class LongTermsAndValues {
   }
 
   /**
-   * Returns this record as a deleted row, which an index keeps in place of the original until
-   * it is rebuilt. Its unilateral value is no longer a number, which is how the row is
-   * recognised as deleted and, where a similarity is derived from that value, how the row is
-   * excluded.
+   * Returns this record as a deleted row, which an index keeps in place of the original until it is
+   * rebuilt. Its unilateral value is no longer a number, which is how the row is recognised as
+   * deleted and, where a similarity is derived from that value, how the row is excluded.
    */
   public LongTermsAndValues markAsDeleted() {
     return new LongTermsAndValues(terms, values, Double.NaN);
@@ -145,10 +144,10 @@ public final class LongTermsAndValues {
   }
 
   /**
-   * Returns this sequence's term multiset as a sparse record: distinct terms ascending,
-   * values are occurrence counts. Candidate generation for an order-sensitive distance runs over
-   * this form because two sequences within a given edit distance have multisets within a bounded
-   * L1 distance, and the counts sum to the sequence length so the Uni value is unchanged.
+   * Returns this sequence's term multiset as a sparse record: distinct terms ascending, values are
+   * occurrence counts. Candidate generation for an order-sensitive distance runs over this form,
+   * because two sequences within a given edit distance have multisets within a bounded L1 distance.
+   * The counts sum to the sequence length, so the Uni value is unchanged.
    */
   public LongTermsAndValues toTermMultiset(Comparator comparator) {
     Objects.requireNonNull(comparator, "comparator is null.");

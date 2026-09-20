@@ -33,7 +33,7 @@ import javax.annotation.Nullable;
  *
  * <p>High-popularity terms are filtered dynamically. The cache sees an incrementally changing
  * sample rather than a complete dataset, so each cached row is a Bernoulli trial for containing a
- * term, and a term is excluded from comparisons when the upper bound of the one-sided confidence
+ * term. A term is excluded from comparisons when the upper bound of the one-sided confidence
  * interval of its true popularity exceeds max_fraction_ids_per_term. Decisions are reversible,
  * since lists and stored rows retain all terms. They are updated incrementally after mutations and
  * fully reevaluated once the cache shrinks enough for the lower denominator to matter.
@@ -258,8 +258,8 @@ public final class InvertedTermCache extends Cache {
 
   /**
    * Returns the row in the form the comparator scores it in, or null when the row is absent or the
-   * discard leaves it with no terms. The form is derived per call because which terms are
-   * discarded changes as the cache mutates.
+   * discard leaves it with no terms. The form is derived per call because which terms are discarded
+   * changes as the cache mutates.
    */
   @Nullable
   private LongTermsAndValues getVerificationRow(long rowNum) {

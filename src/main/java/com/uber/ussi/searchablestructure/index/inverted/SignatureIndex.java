@@ -12,8 +12,8 @@ import javax.annotation.Nullable;
 
 /**
  * Approximate inverted index whose keys are similarity-preserving signatures rather than the terms
- * they were generated from, so sharing a key says nothing about the values behind it and every
- * candidate's similarity has to be verified through the comparator.
+ * they were generated from. Sharing a key therefore says nothing about the values behind it, and
+ * every candidate's similarity has to be verified through the comparator.
  *
  * <p>Popular terms are discarded while they are still terms. A row's signatures are generated from
  * the row those terms have already been removed from, so a discard moves a row's signatures rather

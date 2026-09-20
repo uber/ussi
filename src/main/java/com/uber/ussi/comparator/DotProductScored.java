@@ -13,13 +13,12 @@ package com.uber.ussi.comparator;
  * over them, does not decompose this way: Jaccard and Ruzicka weigh each shared position against
  * the larger of the two values, which no sum over either record alone recovers.
  *
- * <p>An implementation is required to depend on its three arguments through the squared
- * Euclidean distance between the two records alone, which is {@code uniValue1 + uniValue2 - 2 *
- * dotProduct}, and not to rise as that distance rises. Two records at equal distance therefore
- * score equally, and the nearest record is the most similar one. A structure is free to find
- * the rows to return by that distance and to score only those, which is what a scorer computing
- * on hardware this process cannot read does, so a measure ordering by anything else is not
- * served by one.
+ * <p>An implementation is required to depend on its three arguments through the squared Euclidean
+ * distance between the two records alone, which is {@code uniValue1 + uniValue2 - 2 * dotProduct}.
+ * It must also not rise as that distance rises. Two records at equal distance therefore score
+ * equally, and the nearest record is the most similar one. A structure is free to find the rows to
+ * return by that distance and to score only those. That is what a scorer computing on hardware this
+ * process cannot read does, so a measure ordering by anything else is not served by one.
  */
 public interface DotProductScored {
 

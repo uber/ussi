@@ -52,9 +52,9 @@ final class JavaMatrixDotProductScorer implements MatrixDotProductScorer {
 
   /**
    * Batching queries was measured and not adopted here. The gain elsewhere comes from sharing a
-   * cost a library pays once per call whatever the query count, and this multiply has no such
-   * cost: it moves a few gigabytes a second, far below what one core can read, so there is no
-   * traffic for queries to share.
+   * cost a library pays once per call whatever the query count, and this multiply has no such cost:
+   * it moves a few gigabytes a second, far below what one core can read, so there is no traffic for
+   * queries to share.
    */
   void score(float[] queryValues, float[] dotProducts) {
     MatrixDotProductScorers.validateQueryLength(matrix, queryValues);

@@ -15,28 +15,28 @@ import java.util.concurrent.locks.ReentrantLock;
 /**
  * Scores several queries against one matrix in a single multiply, when several are waiting.
  *
- * <p>A multiply against the whole matrix costs about what reading the matrix costs, so queries
- * that share one multiply share that cost, and the underlying implementation reaches an
+ * <p>A multiply against the whole matrix costs about what reading the matrix costs. Queries that
+ * share one multiply therefore share that cost, and the underlying implementation reaches an
  * arithmetic intensity a single query cannot give it. The gain grows with the number of queries
- * batched, which is why the alternative of dividing the machine between concurrent queries loses
- * as concurrency rises: it makes each multiply narrower exactly when there is most to share.
+ * batched, which is why the alternative of dividing the machine between concurrent queries loses as
+ * concurrency rises: it makes each multiply narrower exactly when there is most to share.
  *
  * <p>No query waits for a query that has not arrived. A caller enqueues its own and then contends
- * to perform the multiply; whichever caller acquires it multiplies everything enqueued at that
- * instant, and the others wait only for the multiply already running. The batch size is
- * therefore a measurement of the offered load rather than a configured window, it is one when the
- * machine is idle, and no arrival policy or timer is needed to obtain it.
+ * to perform the multiply. Whichever caller acquires it multiplies everything enqueued at that
+ * instant, and the others wait only for the multiply already running. The batch size is therefore a
+ * measurement of the offered load rather than a configured window. It is one when the machine is
+ * idle, and no arrival policy or timer is needed to obtain it.
  *
- * <p>Callers are serialized, so one multiply at a time may use every thread the implementation
- * is configured for, rather than the threads being divided among concurrent multiplies.
+ * <p>Callers are serialized, so one multiply at a time may use every thread the implementation is
+ * configured for, rather than the threads being divided among concurrent multiplies.
  *
- * <p>{@code S} is what one multiply produces for one query, which the implementation reads back
- * in {@link #addRows addRows()} and nothing else interprets. An implementation that discards
- * rows as it scores them therefore returns only what it kept, rather than one value per row.
+ * <p>{@code S} is what one multiply produces for one query, which the implementation reads back in
+ * {@link #addRows addRows()} and nothing else interprets. An implementation that discards rows as
+ * it scores them therefore returns only what it kept, rather than one value per row.
  *
- * <p>Selecting runs on the thread that asked for the query, after the multiply that scored it
- * has finished and released the next one. Several queries therefore select at the same time and
- * overlap the following multiply, which a serialized multiply cannot do.
+ * <p>Selecting runs on the thread that asked for the query, after the multiply that scored it has
+ * finished and released the next one. Several queries therefore select at the same time and overlap
+ * the following multiply, which a serialized multiply cannot do.
  */
 abstract class BatchedMatrixDotProductScorer<S> implements MatrixDotProductScorer {
 
@@ -127,8 +127,8 @@ abstract class BatchedMatrixDotProductScorer<S> implements MatrixDotProductScore
    * multiply, each into its own entry of {@code into}.
    *
    * <p>Never called with fewer than two queries, since one query does not repay what batching
-   * costs. The selections are given so that an implementation able to select its rows during
-   * the multiply has what selecting needs.
+   * costs. The selections are given so that an implementation able to select its rows during the
+   * multiply has what selecting needs.
    */
   protected abstract void multiplyQueries(
       float[][] queryValues, RowSelection[] selections, S[] into, int numQueries);
@@ -136,11 +136,10 @@ abstract class BatchedMatrixDotProductScorer<S> implements MatrixDotProductScore
   /**
    * Adds to {@code rows} what this query keeps, from what its multiply produced.
    *
-   * <p>The bound and the ordering belong to the heap, so an implementation that has already
-   * selected its rows adds what survived and one holding a similarity for every row adds every
-   * row reaching the minimum, and both reach the same answer. The heap holds its rows in a
-   * plain list until they exceed the bound, so adding no more than the bound never builds a
-   * queue.
+   * <p>The bound and the ordering belong to the heap. An implementation that has already selected
+   * its rows adds what survived, one holding a similarity for every row adds every row reaching the
+   * minimum, and both reach the same answer. The heap holds its rows in a plain list until they
+   * exceed the bound, so adding no more than the bound never builds a queue.
    */
   protected abstract void addRows(
       S result, RowSelection selection, BoundedSizeMaxHeap<RowNumAndSimilarity> rows);

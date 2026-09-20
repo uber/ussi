@@ -52,6 +52,9 @@ import org.bytedeco.javacpp.SizeTPointer;
  * against the whole matrix at once, and reduced where they were computed, so what returns is the
  * rows a query keeps rather than a value for every row.
  *
+ * <p>The multiply's products are read and never written, so a batch's products are what the
+ * multiply produced and nothing else.
+ *
  * <p>Not tuned, in ways worth naming. The reduction takes the largest remaining similarity once
  * per row it keeps, which is correct and costs a pass over the products for each of them, where
  * an implementation meant for use would select them in one pass with a warp-level primitive.
@@ -80,24 +83,29 @@ final class CudaMatrixDotProductScorer
    */
   private static final String REDUCTION_SOURCE =
       "extern \"C\" __global__ void keepBestRows(\n"
-          + "    float* products, const double* rowUniValues, const double* queryUniValues,\n"
-          + "    int numRows, int numKept, long long* keptRowNums, float* keptSimilarities) {\n"
-          + "  const float unreachable = __int_as_float(0x7f800000);\n"
+          + "    const float* products, const double* rowUniValues,\n"
+          + "    const double* queryUniValues, unsigned char* taken, int numRows, int numKept,\n"
+          + "    long long* keptRowNums, float* keptSimilarities) {\n"
+          + "  const float infinity = __int_as_float(0x7f800000);\n"
           + "  __shared__ float blockBestSimilarity[" + NUM_THREADS_PER_BLOCK + "];\n"
           + "  __shared__ int blockBestRow[" + NUM_THREADS_PER_BLOCK + "];\n"
           + "  int query = blockIdx.x;\n"
-          + "  float* queryProducts = products + (long long) query * numRows;\n"
+          + "  const float* queryProducts = products + (long long) query * numRows;\n"
+          + "  unsigned char* queryTaken = taken + (long long) query * numRows;\n"
           + "  double queryUniValue = queryUniValues[query];\n"
+          + "  for (int row = threadIdx.x; row < numRows; row += blockDim.x) {\n"
+          + "    queryTaken[row] = 0;\n"
+          + "  }\n"
+          + "  __syncthreads();\n"
           + "  for (int kept = 0; kept < numKept; ++kept) {\n"
-          + "    float bestSimilarity = -unreachable;\n"
+          + "    float bestSimilarity = -infinity;\n"
           + "    int bestRow = -1;\n"
           + "    for (int row = threadIdx.x; row < numRows; row += blockDim.x) {\n"
-          + "      float product = queryProducts[row];\n"
-          + "      if (product == unreachable) {\n"
+          + "      if (queryTaken[row]) {\n"
           + "        continue;\n"
           + "      }\n"
-          + "      float similarity =\n"
-          + "          (float) -(queryUniValue + rowUniValues[row] - 2.0 * (double) product);\n"
+          + "      float similarity = (float) -(queryUniValue + rowUniValues[row]\n"
+          + "          - 2.0 * (double) queryProducts[row]);\n"
           + "      if (similarity > bestSimilarity) {\n"
           + "        bestSimilarity = similarity;\n"
           + "        bestRow = row;\n"
@@ -119,7 +127,7 @@ final class CudaMatrixDotProductScorer
           + "      keptRowNums[slot] = blockBestRow[0];\n"
           + "      keptSimilarities[slot] = blockBestSimilarity[0];\n"
           + "      if (blockBestRow[0] >= 0) {\n"
-          + "        queryProducts[blockBestRow[0]] = unreachable;\n"
+          + "        queryTaken[blockBestRow[0]] = 1;\n"
           + "      }\n"
           + "    }\n"
           + "    __syncthreads();\n"
@@ -150,6 +158,7 @@ final class CudaMatrixDotProductScorer
   private final DoublePointer deviceQueryUniValues = new DoublePointer();
   private final FloatPointer deviceQueries = new FloatPointer();
   private final FloatPointer deviceProducts = new FloatPointer();
+  private final BytePointer deviceTaken = new BytePointer();
   private final FloatPointer deviceKeptSimilarities = new FloatPointer();
   private final LongPointer deviceKeptRowNums = new LongPointer();
   private final FloatPointer one = new FloatPointer(1).put(1.0f);
@@ -194,6 +203,7 @@ final class CudaMatrixDotProductScorer
     allocate(deviceQueryUniValues, (long) maxNumQueriesInABatch * Double.BYTES);
     allocate(deviceQueries, (long) maxNumQueriesInABatch * dimension * Float.BYTES);
     allocate(deviceProducts, (long) maxNumQueriesInABatch * numRows * Float.BYTES);
+    allocate(deviceTaken, (long) maxNumQueriesInABatch * numRows);
     allocate(deviceKeptSimilarities, (long) maxNumQueriesInABatch * numKeptPerQuery * Float.BYTES);
     allocate(deviceKeptRowNums, (long) maxNumQueriesInABatch * numKeptPerQuery * Long.BYTES);
     copyMatrixToDevice(matrix);
@@ -261,6 +271,7 @@ final class CudaMatrixDotProductScorer
     reduction.deallocate();
     cudaFree(deviceKeptRowNums);
     cudaFree(deviceKeptSimilarities);
+    cudaFree(deviceTaken);
     cudaFree(deviceProducts);
     cudaFree(deviceQueries);
     cudaFree(deviceQueryUniValues);
@@ -303,6 +314,7 @@ final class CudaMatrixDotProductScorer
             deviceProducts,
             deviceRowUniValues,
             deviceQueryUniValues,
+            deviceTaken,
             numRowsArgument,
             numKeptArgument,
             deviceKeptRowNums,

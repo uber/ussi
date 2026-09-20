@@ -44,9 +44,10 @@ import org.bytedeco.javacpp.SizeTPointer;
  * A dense matrix-vector dot-product scorer that holds the matrix in a GPU's memory.
  *
  * <p><b>Never run on a GPU.</b> It compiles, and no result it produces has been verified
- * against another scorer, because no machine available to this project has one. It is therefore
- * not reached by {@link MatrixDotProductScorers}, which lists it after a scorer that is always
- * available, and promoting it means moving that entry ahead of the Java scorer.
+ * against another scorer, because no machine available to this project has one. It leads the
+ * preference order of {@link MatrixDotProductScorers}, since a GPU outruns a CPU at this, and
+ * reaching it takes the CUDA bindings on the runtime classpath, which this library depends on
+ * at compile time alone. A deployment adding them is what selects it.
  *
  * <p>The matrix is copied to the GPU once and stays for the life of the scorer, so the GPU's
  * memory bounds the rows an index may hold. A batch's queries are copied in, multiplied
@@ -65,7 +66,8 @@ import org.bytedeco.javacpp.SizeTPointer;
  * reads and how large a matrix fits.
  *
  * <p>The rows a query may keep are fixed when the scorer is built, since the select on the GPU
- * keeps that many, so a query asking for more is refused rather than answered short.
+ * keeps that many, so a query asking for more is refused rather than answered short. It is
+ * built to keep the most a namespace may ask for, which is what makes the refusal unreachable.
  *
  * <p>Every buffer is allocated once and reused by every batch, which is safe because the base
  * class performs one multiply at a time, under a lock, whichever caller wins it.

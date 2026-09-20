@@ -24,16 +24,16 @@ final class MatrixDotProductScorers {
         }
 
         @Override
-        public MatrixDotProductScorer create(DenseMatrix matrix, MatrixRows rows) {
+        public MatrixDotProductScorer create(
+            DenseMatrix matrix, MatrixRows rows, int maxNumSimilarities) {
           return new JavaMatrixDotProductScorer(matrix, rows);
         }
       };
 
   /**
-   * Holds the matrix in a GPU's memory and scores there. <b>Never run on a GPU</b>, so it is
-   * listed after a scorer that is always available and is therefore never built. Moving this
-   * entry ahead of the Java scorer selects it, which should follow verifying its results on a
-   * GPU rather than precede it.
+   * Holds the matrix in a GPU's memory and scores there, which is the fastest of these where a
+   * GPU is present. Available only where the CUDA bindings are on the runtime classpath, which
+   * is a deliberate addition, since this library depends on them at compile time alone.
    */
   private static final Provider CUDA =
       new Provider() {
@@ -43,14 +43,13 @@ final class MatrixDotProductScorers {
         }
 
         @Override
-        public MatrixDotProductScorer create(DenseMatrix matrix, MatrixRows rows) {
+        public MatrixDotProductScorer create(
+            DenseMatrix matrix, MatrixRows rows, int maxNumSimilarities) {
           return new CudaMatrixDotProductScorer(
               matrix,
               rows,
               Math.max(1, Runtime.getRuntime().availableProcessors()),
-              // Every query asking for more rows than this is refused, so it bounds what a
-              // namespace may ask for rather than only what the device holds.
-              /* maxResults */ 1_024);
+              maxNumSimilarities);
         }
       };
 
@@ -62,36 +61,40 @@ final class MatrixDotProductScorers {
         }
 
         @Override
-        public MatrixDotProductScorer create(DenseMatrix matrix, MatrixRows rows) {
+        public MatrixDotProductScorer create(
+            DenseMatrix matrix, MatrixRows rows, int maxNumSimilarities) {
           return new NativeMatrixDotProductScorer<>(matrix, rows, OpenBlas.shared());
         }
       };
 
   /**
    * Ordered by how fast a scorer is where it can be built, so the first one this machine can
-   * build is the fastest it can run.
+   * build is the fastest it can run. The Java scorer needs no native code and is therefore
+   * always available, which is what makes the list terminate.
    *
-   * <p>The Java scorer needs no native code and is therefore always available, which is what
-   * makes the list terminate. Nothing after it is ever reached, which is where the CUDA scorer
-   * sits: it is faster than both where a GPU is present, and it stays unreachable until its
-   * results have been verified on one.
+   * <p>The CUDA scorer leads it because a GPU outruns a CPU at this, and reaching it takes
+   * both a GPU and the bindings, which this library depends on at compile time alone. A
+   * deployment adding them is what selects it, and no result it produces has been verified on
+   * a GPU.
    */
-  private static final List<Provider> PREFERENCE_ORDER = List.of(OPEN_BLAS, JAVA, CUDA);
+  private static final List<Provider> PREFERENCE_ORDER = List.of(CUDA, OPEN_BLAS, JAVA);
 
   private MatrixDotProductScorers() {}
 
-  static MatrixDotProductScorer create(DenseMatrix matrix, MatrixRows rows) {
-    return create(matrix, rows, PREFERENCE_ORDER);
+  static MatrixDotProductScorer create(
+      DenseMatrix matrix, MatrixRows rows, int maxNumSimilarities) {
+    return create(matrix, rows, maxNumSimilarities, PREFERENCE_ORDER);
   }
 
   static MatrixDotProductScorer create(
-      DenseMatrix matrix, MatrixRows rows, List<Provider> preferenceOrder) {
+      DenseMatrix matrix, MatrixRows rows, int maxNumSimilarities,
+      List<Provider> preferenceOrder) {
     for (Provider provider : preferenceOrder) {
       try {
         if (!provider.isAvailable()) {
           continue;
         }
-        return provider.create(matrix, rows);
+        return provider.create(matrix, rows, maxNumSimilarities);
       } catch (LinkageError e) {
         continue;
       } catch (RuntimeException e) {
@@ -129,6 +132,10 @@ final class MatrixDotProductScorers {
     /** Whether this machine can run it, which building it may still disprove. */
     boolean isAvailable();
 
-    MatrixDotProductScorer create(DenseMatrix matrix, MatrixRows rows);
+    /**
+     * Builds the scorer. The bound is the most rows any query against this namespace may ask
+     * for, which a scorer that fixes how many it keeps is built to keep.
+     */
+    MatrixDotProductScorer create(DenseMatrix matrix, MatrixRows rows, int maxNumSimilarities);
   }
 }

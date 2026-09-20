@@ -8,10 +8,11 @@ library, and is neither compiled nor run.
 ## The state of the one in the library
 
 It compiles on Linux and macOS, and no result it produces has been verified against another
-scorer, because no machine available to this project has a GPU. It is therefore last in
-`MatrixDotProductScorers.PREFERENCE_ORDER`, after the Java scorer, which is always available and
-so makes everything after it unreachable. Moving it ahead of the Java scorer selects it, and
-should follow that verification rather than precede it.
+scorer, because no machine available to this project has a GPU. It leads
+`MatrixDotProductScorers.PREFERENCE_ORDER`, since a GPU outruns a CPU at this, and reaching it
+takes the CUDA bindings on the runtime classpath. They are a compile-time dependency of the
+library, so a deployment that does not add them never builds it, and a deployment that adds
+them is opting into a scorer whose results have not been checked on a GPU.
 
 `CudaMatrixDotProductScorerTest` scores the same rows through it and through the Java scorer and
 asserts they keep the same rows. It skips wherever no GPU is present, which is everywhere today.

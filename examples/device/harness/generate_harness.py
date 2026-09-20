@@ -137,14 +137,14 @@ int main() {
   float* deviceRowUniValues;
   float* deviceQueryUniValues;
   long long* deviceKeptRowNums;
-  float* deviceKeptSimilarities;
+  float* deviceKeptDotProducts;
   CHECK(cudaMalloc(&deviceMatrix, sizeof(float) * numRows * dimension));
   CHECK(cudaMalloc(&deviceQueries, sizeof(float) * numQueries * dimension));
   CHECK(cudaMalloc(&deviceProducts, sizeof(float) * numQueries * numRows));
   CHECK(cudaMalloc(&deviceRowUniValues, sizeof(float) * numRows));
   CHECK(cudaMalloc(&deviceQueryUniValues, sizeof(float) * numQueries));
   CHECK(cudaMalloc(&deviceKeptRowNums, sizeof(long long) * numQueries * numKept));
-  CHECK(cudaMalloc(&deviceKeptSimilarities, sizeof(float) * numQueries * numKept));
+  CHECK(cudaMalloc(&deviceKeptDotProducts, sizeof(float) * numQueries * numKept));
   CHECK(cudaMemcpy(deviceMatrix, matrix.data(), sizeof(float) * numRows * dimension,
                    cudaMemcpyHostToDevice));
   CHECK(cudaMemcpy(deviceQueries, queries.data(), sizeof(float) * numQueries * dimension,
@@ -178,15 +178,15 @@ int main() {
 
   keepBestRows<<<numQueries, NUM_THREADS_PER_BLOCK>>>(
       deviceProducts, deviceRowUniValues, deviceQueryUniValues, numRows, numKept,
-      deviceKeptRowNums, deviceKeptSimilarities);
+      deviceKeptRowNums, deviceKeptDotProducts);
   CHECK(cudaGetLastError());
   CHECK(cudaDeviceSynchronize());
 
   std::vector<long long> keptRowNums((size_t) numQueries * numKept);
-  std::vector<float> keptSimilarities((size_t) numQueries * numKept);
+  std::vector<float> keptDotProducts((size_t) numQueries * numKept);
   CHECK(cudaMemcpy(keptRowNums.data(), deviceKeptRowNums,
                    sizeof(long long) * numQueries * numKept, cudaMemcpyDeviceToHost));
-  CHECK(cudaMemcpy(keptSimilarities.data(), deviceKeptSimilarities,
+  CHECK(cudaMemcpy(keptDotProducts.data(), deviceKeptDotProducts,
                    sizeof(float) * numQueries * numKept, cudaMemcpyDeviceToHost));
 
   // The reference: every similarity on the host, sorted, with the deleted rows dropped.
@@ -202,9 +202,10 @@ int main() {
         product += (double) queries[(size_t) query * dimension + d]
             * matrix[(size_t) row * dimension + d];
       }
-      float similarity =
+      // What the select ranks by, which is the squared distance negated.
+      float rankValue =
           (float) -((double) queryUniValues[query] + rowUniValues[row] - 2.0 * product);
-      reference.push_back({similarity, row});
+      reference.push_back({rankValue, row});
     }
     std::sort(reference.begin(), reference.end(),
               [](const std::pair<float, int>& a, const std::pair<float, int>& b) {
@@ -212,11 +213,15 @@ int main() {
               });
     // The select keeps the best rows in no particular order, so what it kept is ordered here
     // before being compared rank by rank.
+    // What the kernel writes is a dot product, so what it ranked by is taken back from it.
     std::vector<std::pair<float, long long>> kept;
     for (int slot = 0; slot < numKept; ++slot) {
       long long row = keptRowNums[(size_t) query * numKept + slot];
       if (row >= 0) {
-        kept.push_back({keptSimilarities[(size_t) query * numKept + slot], row});
+        float dotProduct = keptDotProducts[(size_t) query * numKept + slot];
+        float rankValue =
+            (float) -((double) queryUniValues[query] + rowUniValues[row] - 2.0 * dotProduct);
+        kept.push_back({rankValue, row});
       }
     }
     std::sort(kept.begin(), kept.end(),
@@ -229,9 +234,8 @@ int main() {
       printf("query %%d kept %%d rows, wanted %%d\n", query, (int) kept.size(), numWanted);
       continue;
     }
-    // Rows of equal similarity are interchangeable, so the check is that the similarities kept
-    // are the best ones, and that each row kept is distinct, alive, and reported with the
-    // similarity it actually has.
+    // Rows ranking equally are interchangeable, so the check is that the rows kept rank
+    // highest, and that each is distinct, alive, and reported with the dot product it has.
     for (int rank = 0; rank < numWanted; ++rank) {
       if (fabsf(kept[rank].first - reference[rank].first) > 1e-3f) {
         ++numWrong;
@@ -258,12 +262,12 @@ int main() {
         product += (double) queries[(size_t) query * dimension + d]
             * matrix[(size_t) row * dimension + d];
       }
-      float similarity =
+      float rankValue =
           (float) -((double) queryUniValues[query] + rowUniValues[row] - 2.0 * product);
-      if (fabsf(kept[rank].first - similarity) > 1e-3f) {
+      if (fabsf(kept[rank].first - rankValue) > 1e-3f) {
         ++numWrong;
         printf("query %%d: row %%lld reported %%f but has %%f\n", query, row, kept[rank].first,
-               similarity);
+               rankValue);
       }
     }
   }
@@ -277,7 +281,7 @@ int main() {
   cudaFree(deviceRowUniValues);
   cudaFree(deviceQueryUniValues);
   cudaFree(deviceKeptRowNums);
-  cudaFree(deviceKeptSimilarities);
+  cudaFree(deviceKeptDotProducts);
 
   if (numWrong == 0) {
     printf("PASS every kept row matches the host\n");

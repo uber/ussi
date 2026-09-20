@@ -43,6 +43,11 @@ final class MatrixRows {
   }
 
   /** The similarity a dot product implies for the given row. */
+  /** The measure the namespace configured, which a scorer may need to decide whether it serves. */
+  DotProductScored getDotProductScored() {
+    return dotProductScored;
+  }
+
   float getSimilarity(double dotProduct, double queryUniValue, int matrixRowIndex) {
     return (float)
         dotProductScored.similarityFromDotProduct(

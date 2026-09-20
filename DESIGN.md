@@ -614,11 +614,11 @@ to load as one that was never available. Adding a scorer is adding an entry to
 that list, which is the only existing code a further implementation needs to
 touch.
 
-`CudaMatrixDotProductScorer` is such a scorer, and it has never run on a
-device. It compiles, and its results have been checked against nothing, so it
-is listed below a scorer that is always available and is therefore never built.
-Promoting it means moving that entry above the Java scorer, which should follow
-its results being checked against another scorer on the hardware rather than
+`CudaMatrixDotProductScorer` is such a scorer, for a GPU reached through CUDA.
+It compiles, and no result it produces has been verified against another
+scorer, because no machine available to this project has a GPU. It is therefore
+listed after a scorer that is always available, which makes it unreachable, and
+moving it ahead of the Java scorer should follow that verification rather than
 precede it. Its bindings are a compile-time dependency, so a deployment that
 does not want it carries nothing.
 

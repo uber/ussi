@@ -1,7 +1,30 @@
-# A dense scorer that computes elsewhere
+# Scoring dense rows on a GPU
 
-This directory holds an illustration, not a build target. Nothing here is compiled, run or
-tested, and it has not been tuned.
+`CudaMatrixDotProductScorer`, in the matrix package, scores dense rows on a GPU reached through
+CUDA. This directory describes what such a scorer implements and what remains to be settled
+before one is used. The Java file beside this one is an outline of a scorer for a different
+library, and is neither compiled nor run.
+
+## The state of the one in the library
+
+It compiles on Linux and macOS, and no result it produces has been verified against another
+scorer, because no machine available to this project has a GPU. It is therefore last in
+`MatrixDotProductScorers.PREFERENCE_ORDER`, after the Java scorer, which is always available and
+so makes everything after it unreachable. Moving it ahead of the Java scorer selects it, and
+should follow that verification rather than precede it.
+
+`CudaMatrixDotProductScorerTest` scores the same rows through it and through the Java scorer and
+asserts they keep the same rows. It skips wherever no GPU is present, which is everywhere today.
+
+## What it costs to carry
+
+The CUDA bindings, `org.bytedeco:cuda:12.6-9.5-1.5.11`, are a compile-time dependency of one
+megabyte, declared through the `cuda_compile_only` target so that nothing reaches a consumer's
+runtime classpath. Running the scorer additionally needs the platform library,
+`org.bytedeco:cuda:12.6-9.5-1.5.11:linux-x86_64`, which is under seven megabytes and expects a
+CUDA toolkit installed on the machine. The variant bundling the toolkit,
+`org.bytedeco:cuda:12.6-9.5-1.5.11:linux-x86_64-redist`, is nearly two gigabytes and is not
+needed on a machine that has a GPU.
 
 ## What a scorer of this kind implements
 
@@ -25,7 +48,30 @@ the rows it kept rather than a value per row, so `addRows` copies back only thos
 point of the shape: a million-row matrix would otherwise return four megabytes for every query,
 and a batch multiplies that by its size.
 
-## Two things to settle before writing one
+## How this one works
+
+The matrix is copied to the GPU once and stays for the life of the scorer. A batch's queries are
+copied in and multiplied against the whole matrix with one `cublasSgemm`. CUDA is column-major
+and the matrix is row-major, so the rows read as their own transpose and the multiply is given
+`CUBLAS_OP_T, CUBLAS_OP_N` with the row count as the leading dimension, which leaves each
+query's products contiguous.
+
+A kernel compiled at construction by NVRTC then reduces each query's products where they are.
+One block takes one query, and each pass finds the largest similarity not yet taken: every warp
+reduces its own lanes through register shuffles, each warp's leader records what it found in
+shared memory, and the first warp reduces those to the block's best row, which it marks taken.
+Only the rows kept are copied back. A deleted row carries a unilateral value that is not a
+number, so the similarity derived from it is not a number, and a comparison against such a value
+is false, which is what keeps it out.
+
+## What it does not do
+
+It is not tuned. The reduction reads the products once for every row it keeps, where an
+implementation meant for use would select them all in one pass. Host memory is pageable rather
+than pinned and every call runs on the default stream, so a copy never overlaps a multiply. The
+matrix is held in single precision, where half precision would halve what the multiply reads.
+
+## Two things to settle before using one
 
 **The extension point is package-private.** Every type involved — the base class, the scorer
 interface, `MatrixRows`, `RowSelection` — is visible only inside
@@ -33,10 +79,10 @@ interface, `MatrixRows`, `RowSelection` — is visible only inside
 package. Publishing the seam, so that a scorer may live in another jar, is a deliberate change to
 what the library exports and has not been made.
 
-**The device memory bounds the index.** The matrix is resident for the life of the scorer, so a
+**The GPU's memory bounds the index.** The matrix is resident for the life of the scorer, so a
 card of sixteen gigabytes holds a matrix of four million rows of a thousand dimensions and no
-more. That is a limit on what the feature can serve, not on how fast it serves it, and it is
-worth settling before any of the rest.
+more. That is a limit on what the feature can serve, not on how fast it serves it. Asking for
+more reports exhaustion rather than a status code.
 
 ## What the similarity costs
 
@@ -44,19 +90,7 @@ worth settling before any of the rest.
 elsewhere cannot call it, so it reimplements the arithmetic for the comparators it supports and
 rejects a namespace configured with any other. The unilateral value of every row is available
 through `MatrixRows.getRowUniValues()` to be copied wherever the arithmetic runs, and it carries
-the deletions too: a deleted row's value is not a number, so a similarity derived from it is not
-a number either and no minimum admits it.
+the deletions too.
 
-## Selecting where the rows were scored
-
-Only the rows a query keeps should come back. A reduction that compares rows pairwise, on
-whether each is deleted and then on similarity, halves the survivors each pass until the count
-reaches the power of two above the number of results asked for, and only those are returned for
-`addRows` to offer to the heap. Reducing on the host instead would return a value per row and
-give up what the shape was for.
-
-## Where it would sit
-
-`MatrixDotProductScorers.PREFERENCE_ORDER` is tried in order and the first available scorer is
-built, so a scorer of this kind is an entry ahead of OpenBLAS whose availability check asks
-whether the hardware and its libraries are present. Nothing else in the library changes.
+The rows a query may keep are fixed when the scorer is built, since the reduction keeps that
+many, so a query asking for more is refused rather than answered short.

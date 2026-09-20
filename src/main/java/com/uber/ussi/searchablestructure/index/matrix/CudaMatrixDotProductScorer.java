@@ -40,15 +40,15 @@ import org.bytedeco.javacpp.PointerPointer;
 import org.bytedeco.javacpp.SizeTPointer;
 
 /**
- * A dense matrix-vector dot-product scorer that holds the matrix in a device's memory.
+ * A dense matrix-vector dot-product scorer that holds the matrix in a GPU's memory.
  *
- * <p><b>Never run on a device.</b> It compiles, and its results have never been checked against
- * anything, because no machine available to this project has the hardware. It is therefore not
- * reached by {@link MatrixDotProductScorers}, which lists it below a scorer that is always
- * available, and promoting it means moving that entry above the Java scorer.
+ * <p><b>Never run on a GPU.</b> It compiles, and no result it produces has been verified
+ * against another scorer, because no machine available to this project has one. It is therefore
+ * not reached by {@link MatrixDotProductScorers}, which lists it after a scorer that is always
+ * available, and promoting it means moving that entry ahead of the Java scorer.
  *
- * <p>The matrix is copied to the device once and stays for the life of the scorer, so the
- * device's memory bounds the rows an index may hold. A batch's queries are copied in, multiplied
+ * <p>The matrix is copied to the GPU once and stays for the life of the scorer, so the GPU's
+ * memory bounds the rows an index may hold. A batch's queries are copied in, multiplied
  * against the whole matrix at once, and reduced where they were computed, so what returns is the
  * rows a query keeps rather than a value for every row.
  *
@@ -61,8 +61,10 @@ import org.bytedeco.javacpp.SizeTPointer;
  * and every call runs on the default stream, so a copy never overlaps a multiply. The matrix is
  * held in single precision, where half precision would halve what the multiply reads.
  *
- * <p>The rows a query may keep are fixed when the scorer is built, since the device reduces to
- * that many, so a query asking for more is refused rather than answered short.
+ * <p>The rows a query may keep are fixed when the scorer is built, since the reduction on the
+ * GPU keeps that many, so a query asking for more is refused rather than answered short.
+ *
+ * <p>CUDA calls a GPU's memory device memory, which the fields holding it are named for.
  */
 final class CudaMatrixDotProductScorer
     extends BatchedMatrixDotProductScorer<CudaMatrixDotProductScorer.KeptRows> {
@@ -70,7 +72,7 @@ final class CudaMatrixDotProductScorer
   /** A whole number of warps, which the reduction requires, and within one block's limit. */
   private static final int NUM_THREADS_PER_BLOCK = 256;
 
-  /** What the device reports when it has no room left, which is not a failure to ask properly. */
+  /** What CUDA reports when the GPU has no room left, which is not a failure to ask properly. */
   private static final int CUDA_ERROR_MEMORY_ALLOCATION = 2;
 
   /**
@@ -161,7 +163,7 @@ final class CudaMatrixDotProductScorer
           + "  }\n"
           + "}\n";
 
-  /** The rows a query kept, which is all that crosses back from the device. */
+  /** The rows a query kept, which is all that crosses back from the GPU. */
   static final class KeptRows {
     private final long[] rowNums;
     private final float[] similarities;
@@ -192,9 +194,9 @@ final class CudaMatrixDotProductScorer
   private final FloatPointer zero = new FloatPointer(1).put(0.0f);
 
   /**
-   * Whether a device and its libraries are present, which asking the driver settles. Memoized,
-   * since the answer cannot change within a process, and false when the bindings are absent
-   * altogether, which is how a deployment that did not ask for them behaves.
+   * Whether a GPU and the libraries reaching it are present, which asking the driver settles.
+   * Memoized, since the answer cannot change within a process, and false when the bindings are
+   * absent altogether, which is how a deployment that did not ask for them behaves.
    */
   static boolean isAvailable() {
     Boolean memoized = isAvailable;
@@ -428,15 +430,15 @@ final class CudaMatrixDotProductScorer
     int status = cudaMalloc(pointer, numBytes);
     if (status == CUDA_ERROR_MEMORY_ALLOCATION) {
       throw new OutOfMemoryError(
-          "The device has no room for " + numBytes + " bytes, which bounds the rows an index "
-              + "may hold.");
+          "The GPU has no room for " + numBytes + " bytes, which bounds the rows an index may "
+              + "hold.");
     }
     check(status, "allocate " + numBytes + " bytes");
   }
 
   private static void check(int status, String what) {
     if (status != 0) {
-      throw new IllegalStateException("The device failed to " + what + ", status " + status + ".");
+      throw new IllegalStateException("CUDA failed to " + what + ", status " + status + ".");
     }
   }
 }

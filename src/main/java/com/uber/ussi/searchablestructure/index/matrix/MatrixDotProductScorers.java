@@ -30,10 +30,10 @@ final class MatrixDotProductScorers {
       };
 
   /**
-   * Holds the matrix in a device's memory. <b>Never run on a device</b>, so it is listed below a
-   * scorer that is always available and is therefore never built. Moving this entry above the
-   * Java scorer selects it, which should follow its results being checked against another
-   * scorer on the hardware, not precede it.
+   * Holds the matrix in a GPU's memory and scores there. <b>Never run on a GPU</b>, so it is
+   * listed after a scorer that is always available and is therefore never built. Moving this
+   * entry ahead of the Java scorer selects it, which should follow verifying its results on a
+   * GPU rather than precede it.
    */
   private static final Provider CUDA =
       new Provider() {
@@ -68,8 +68,13 @@ final class MatrixDotProductScorers {
       };
 
   /**
-   * Most preferred first. The last entry needs no native code and is always available, so the
-   * list always ends somewhere, and anything after it is never reached.
+   * Ordered by how fast a scorer is where it can be built, so the first one this machine can
+   * build is the fastest it can run.
+   *
+   * <p>The Java scorer needs no native code and is therefore always available, which is what
+   * makes the list terminate. Nothing after it is ever reached, which is where the CUDA scorer
+   * sits: it is faster than both where a GPU is present, and it stays unreachable until its
+   * results have been verified on one.
    */
   private static final List<Provider> PREFERENCE_ORDER = List.of(OPEN_BLAS, JAVA, CUDA);
 

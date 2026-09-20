@@ -13,24 +13,23 @@ managing any of the structures below directly.
 Four names sit close enough together to look like duplicates. They are four
 levels of one thing.
 
-A **row** is the unit a searchable structure stores: a record together with
-its metadata, the extra data a filter matches on. A row is identified by a
-`rowNum`, which is the handle the internals pass around in place of the row
-itself.
+A **row** is the unit a searchable structure stores: a record together with its
+metadata, the extra data a filter matches on. A row is identified by a `rowNum`,
+which is the handle the internals pass around in place of the row itself.
 
-A **record** is the feature data of a row. It is a concept, not a type, and
-it can take the shape of a vector, a time series, a histogram, a sparse
+A **record** is the feature data of a row. It is a concept, not a type, and it
+can take the shape of a vector, a time series, a histogram, a sparse
 (multi-)set, or a sequence of terms. `RecordType` names which shape a given
-record is in; a comparator declares the shapes it reads and a structure
-declares the one it stores, so the two pair up by agreeing on one.
+record is in; a comparator declares the shapes it reads and a structure declares
+the one it stores, so the two pair up by agreeing on one.
 
-`TermsAndValues` is the public data structure a record arrives in: two
-parallel arrays, `String[] terms` and `float[] values`, which between them
-express every shape above depending on how they are populated. Terms alone
-is a sequence, values alone is dense, both together is sparse.
+`TermsAndValues` is the public data structure a record arrives in: two parallel
+arrays, `String[] terms` and `float[] values`, which between them express every
+shape above depending on how they are populated. Terms alone is a sequence,
+values alone is dense, both together is sparse.
 
-`LongTermsAndValues` is the internal form of the same pair, with terms
-hashed to `long` and the comparator-derived `uniValue` cached alongside them.
+`LongTermsAndValues` is the internal form of the same pair, with terms hashed to
+`long` and the comparator-derived `uniValue` cached alongside them.
 
 So a record is the idea and a `TermsAndValues` is the array pair implementing
 it, which is why the enum is `RecordType` and not `TermsAndValuesType`.
@@ -77,33 +76,33 @@ When the total number of searchable structures reaches
 
 Each searchable structure and the final merge keep only `maxNumSimilarities`
 results, accumulated in a `BoundedSizeMaxHeap`. A minimum similarity search is
-therefore a **capped range query**, returning the best `maxNumSimilarities`
-rows meeting the minimum similarity rather than every row that meets it.
+therefore a **capped range query**, returning the best `maxNumSimilarities` rows
+meeting the minimum similarity rather than every row that meets it.
 
 ### Searching Several Structures
 
 A query visits the active cache, the graduating caches, and the indexes, and
 merges what they return. Each is told the weakest score the answer already holds
-enough of, and may decline to score any row beneath it: once the merge holds its
-full complement of results, a weaker row cannot reach the answer, so scoring it
-is wasted work. That minimum similarity starts at whatever the caller asked for,
-rises as structures return results, and never falls, which is what lets a
-structure treat it as a bound rather than a hint. It is one step below the
+enough of, and may decline to score any row beneath it. Once the merge holds a
+full set of results, a weaker row cannot reach the answer, so scoring it is
+wasted work. That minimum similarity starts at whatever the caller asked for,
+rises as structures return results, and never falls. Because it never falls, a
+structure can treat it as a bound rather than a hint. It is one step below the
 weakest result held, so a row scoring exactly as well still qualifies. Passing
-it requires no additional mechanism, because every structure already prunes on
-a minimum similarity to answer a minimum similarity search. A nearest-neighbour
+it requires no additional mechanism, because every structure already prunes on a
+minimum similarity to answer a minimum similarity search. A nearest-neighbour
 search used to pass zero.
 
 Order therefore matters, and the structures are visited oldest first. Caches
 graduate at one size and older indexes are consolidated into larger ones, so the
-oldest structure holds the most rows and is the likeliest to hold the answer's
-best, and raising the minimum similarity there is what every structure after it
-spends. The
-active cache holds the newest rows, which have no reason to be the best matches,
-so it is searched last. Ordering this way is free rather than a trade: an update
-deletes a row before re-inserting it, so one structure holds any given row and
-no order can change the version a search finds. Deletes still scan newest first,
-where the first structure holding a row must be the current one.
+oldest structure holds the most rows. It is therefore the likeliest to hold the
+answer's best rows, and the minimum similarity it raises is what every structure
+after it spends. The active cache holds the newest rows, which have no reason to
+be the best matches, so it is searched last. Ordering this way is free rather
+than a trade: an update deletes a row before re-inserting it, so one structure
+holds any given row and no order can change the version a search finds. Deletes
+still scan newest first, where the first structure holding a row must be the
+current one.
 
 The saving depends on the number of structures, because a minimum similarity
 must have somewhere to be spent. An inverted index holds, for each key, a list
@@ -117,15 +116,15 @@ The hybrid index already searched its term index and signature index in this
 order. It now also accepts a minimum similarity from its caller, in addition to
 raising one between the two.
 
-The structures are visited one after another rather than at the same time.
-Their sizes differ by orders of magnitude, since an active cache is bounded by
-`maxCacheSize` while a consolidated index holds everything that has graduated,
-so the largest search decides the latency whether or not the others run beside
-it, and threads spent on the small ones would buy nearly nothing. Visiting them
-in turn buys something the other arrangement cannot: searches running at the
-same time cannot narrow one another, because neither has results yet. Dividing
-a single structure's own search is a separate question, answered in [Threads
-Within One Search](#threads-within-one-search).
+The structures are visited one after another rather than at the same time. Their
+sizes differ by orders of magnitude: an active cache is bounded by
+`maxCacheSize`, while a consolidated index holds everything that has graduated.
+The largest search therefore decides the latency whether or not the others run
+beside it, and threads spent on the small ones would buy nearly nothing.
+Visiting them in turn buys something the other arrangement cannot: searches
+running at the same time cannot narrow one another, because neither has results
+yet. Dividing a single structure's own search is a separate question, answered
+in [Threads Within One Search](#threads-within-one-search).
 
 The top-level index uses a single read/write lock. Searches run under the read
 lock and mutations under the write lock. Background builds snapshot under the
@@ -135,9 +134,9 @@ swap and tombstone replay.
 ## Inserts, Deletes, and Updates
 
 The top-level index is mutable even though graduated indexes are delete-only.
-Delete-only is enough for graduated data because such an index only has to
-serve searches over the snapshot it was built from and hide rows that are no
-longer current.
+Delete-only is enough for graduated data because such an index only has to serve
+searches over the snapshot it was built from and hide rows that are no longer
+current.
 
 A delete removes the row from the active cache if it is there. Otherwise the
 structures are scanned newest to oldest and the record is tombstoned in the
@@ -150,9 +149,9 @@ A tombstone is recorded in the row's own unilateral value, which is set to a
 value that is not a number, rather than in a set of deleted row numbers. A set
 is the cleaner representation, since it states the fact it holds and nothing
 else, and it is what an index would use if deletion stood alone. The unilateral
-value is used instead because the dense scorer needs it regardless: it derives
-every similarity from that value, so a value no similarity can be derived from
-excludes the row through arithmetic the search already performs, where asking a
+value is used instead because the dense scorer needs it regardless. Every
+similarity is derived from that value, so a value no similarity can be derived
+from excludes the row through arithmetic the search already performs. Asking a
 set would add a lookup for every row of every search. Having paid for the
 representation there, every structure uses it, and each recognises a tombstone
 from the record it has already read rather than from a second lookup.
@@ -167,8 +166,8 @@ cannot compare would stop pruning working.
 An update is a delete of the old version followed by an insert of the new one
 under the same `rowNum`, so the active cache always holds the latest version.
 
-A delete arriving while a graduation or consolidation is building is recorded
-in a per-build tombstone set and replayed onto the new index when the build
+A delete arriving while a graduation or consolidation is building is recorded in
+a per-build tombstone set and replayed onto the new index when the build
 completes, so rows deleted during a build do not reappear after the swap.
 
 An index implementation therefore supports search and tombstone-style deletes,
@@ -180,30 +179,30 @@ snapshot.
 
 `QueryAdmission` bounds the concurrent searches, across every index and cache in
 the process, to the number of cores, and admits waiting searches in the order
-they arrived. Past the core count searches contend for the same cores without
-any of them finishing sooner, so the bound gives up no throughput that was
-otherwise reachable, and arrival order keeps a search from losing its turn to
-one that arrived later. The bound is process-wide because the cores it rations
-are not divided between indexes.
+they arrived. Past the core count, searches contend for the same cores and none
+of them finishes sooner, so the bound gives up no throughput that was otherwise
+reachable. Arrival order keeps a search from losing its turn to one that arrived
+later. The bound is process-wide because the cores it rations are not divided
+between indexes.
 
 Keeping within the cores is sound practice on its own, and for some index
-implementations it is more than that. A native scorer may hold a per-thread
-resource whose supply its library fixes when the binary is built and does not
-check before using: OpenBLAS keeps one memory buffer per thread inside the
-library, and past that count its allocator faults rather than failing, so enough
-concurrent dense searches abort the process rather than merely slowing it down.
-The supply the shipped binaries are built with is above the core count on the
-machines tested, so a bound of the cores keeps them inside it. The dense scorer
-does not rely on that either, since it serializes its calls into the library
-and only one thread is ever inside it.
+implementations it is more than that. A native scorer may hold a resource its
+library allocates per thread. The library fixes how many of them exist when the
+binary is built, and does not check before taking one. OpenBLAS keeps one memory
+buffer per thread, and past that count its allocator faults rather than failing,
+so enough concurrent dense searches abort the process rather than slow it down.
+The shipped binaries are built with more buffers than the machines tested have
+cores, so a bound of the cores keeps them inside it. The dense scorer does not
+rely on that either, since it serializes its calls into the library and only one
+thread is ever inside it.
 
 ### Threads Within One Search
 
 `ParallelismBudget` divides the cores among the concurrent searches, so a search
 dividing its own work stays within what the machine has left once the other
-searches are counted. The budget is the whole machine while one search runs
-alone and falls to a single thread once the concurrent searches already fill the
-cores, which is what turns dividing off under load rather than letting
+searches are counted. One search running alone gets the whole machine, and the
+budget falls to a single thread once the concurrent searches already fill the
+cores. That is what turns dividing off under load, rather than letting
 concurrent searches multiply their own width against each other.
 
 It derives two counts, for two ways of using threads that cannot share one
@@ -216,28 +215,27 @@ number:
   dividing keeps the threads of all the concurrent searches within the cores.
 - **The threads per batch** is held by a native library rather than by any one
   structure, and is applied to it through `onNumThreadsPerBatchChange()` rather
-  than read. It takes the cores of *one socket*, undivided: such a library
+  than read. It takes the cores of *one socket*, undivided. Such a library
   serializes its callers and multiplies the queries that accumulate as one
-  batch, so one call at a time uses all of those threads and there is nothing
-  to divide. Its threads gain nothing past one socket, since two hardware
-  threads of a core share that core's execution units and a socket reaches
-  another socket's memory over a link. `ProcessorTopology` reads the socket
-  count and the widest core from the kernel and bounds the result by the
-  processors this process may run on, so a machine of two sockets carrying two
-  hardware threads a core gives this count a quarter of what the first one
-  gets, and a machine of one socket of single-threaded cores gives the two
-  counts the same number.
+  batch, so one call at a time uses all of those threads and there is nothing to
+  divide. Its threads gain nothing past one socket, since two hardware threads
+  of a core share that core's execution units and a socket reaches another
+  socket's memory over a link. `ProcessorTopology` reads the socket count and
+  the widest core from the kernel, then bounds the result by the processors this
+  process may run on. On a machine of two sockets whose cores carry two hardware
+  threads each, this count is a quarter of the first one. On a machine of one
+  socket of single-threaded cores, the two counts are equal.
 
 Only the second count is expensive to modify, and it is now constant, so it is
 applied once when its holder registers and never again. The machinery that
-applies it remains because the constraint has not gone away: a library holding
-such a count may deadlock or corrupt memory when it changes while a call is
-dispatching work, as OpenBLAS does behind the native dense scorer, so it is
-applied with no search running, which requires draining the concurrent searches
-and admitting none behind them until it is applied. Those searches are every
-search in the process, including searches of structures holding no such count
-of their own, so three conditions make the drain rare. A process in which no
-structure holds a process-global count is never drained at all, which covers
+applies it remains because the constraint has not gone away. A library holding
+such a count may deadlock or corrupt memory if the count changes while a call is
+dispatching work, as OpenBLAS does behind the native dense scorer. The count is
+therefore applied with no search running, which means draining the concurrent
+searches and admitting none behind them until it is applied. Those searches are
+every search in the process, including searches of structures holding no such
+count of their own, so three conditions make the drain rare. A process in which
+no structure holds a process-global count is never drained at all, which covers
 every engine built without a dense index. Otherwise the count is applied only
 when it differs from the one in effect, so the many concurrency changes that
 move the first count and not the second incur no cost. And the concurrent
@@ -246,8 +244,8 @@ count changes, which bounds the update rate and attenuates the variance of a
 workload whose searches overlap only occasionally.
 
 Averaging rather than taking the maximum is what makes that window sound. The
-maximum over an interval increases with the length of the interval, so a
-ten-second maximum would estimate several concurrent searches on a process
+maximum over an interval increases with the length of the interval. A ten-second
+maximum would therefore estimate several concurrent searches on a process
 serving one long search at a time, and would divide the machine among searches
 that were never concurrent.
 
@@ -260,44 +258,41 @@ range covers its slots, with the empty ones skipped.
 A scan of the candidate rows a metadata filter produced divides the same way,
 which covers pre-filtering in the scan index and the direct scan the inverted
 term cache falls back to. Candidates arrive as a set rather than a map, and a
-set cannot be divided into slot ranges: it holds no values to mark an empty slot
+set cannot be divided into slot ranges. It holds no values to mark an empty slot
 with, and it keeps the zero key outside its slots without exposing whether that
-key is present, so a slot range cannot tell row zero from an empty slot. The
-candidates are copied out instead, which gives the ranges something to index and
-costs one pass. A candidate scan not worth dividing is scanned where it lies,
-so it pays for no copy.
+key is present. A slot range therefore cannot tell row zero from an empty slot.
+The candidates are copied out instead, which gives the ranges something to index
+and costs one pass. A candidate scan not worth dividing is scanned where it
+lies, so it pays for no copy.
 
-Only a scan whose rows all score against the same minimum similarity is
-divided. A scan that raises its minimum similarity as its heap fills prunes
-using what it
-has already scored, and ranges each raising a minimum similarity from their own
-heap would prune less than the whole scan does, so such a scan keeps its single
-heap and its pruning. An inverted index scores its candidates against a rising
+Only a scan whose rows all score against the same minimum similarity is divided.
+A scan that raises its minimum similarity as its heap fills prunes using what it
+has already scored. Ranges each raising a minimum similarity from their own heap
+would prune less than the whole scan does, so such a scan keeps its single heap
+and its pruning. An inverted index scores its candidates against a rising
 tightened minimum similarity, so no phase of a single inverted search runs in
-parallel. The
-pruning that would forfeit depends on the data rather than the machine, so no
-measurement settles it.
+parallel. The pruning that would forfeit depends on the data rather than the
+machine, so no measurement settles it.
 
 An inverted index runs in parallel by sharding instead. It searches several
 shards at once, and each shard search is complete in itself, with its own heap
-and its
-own minimum similarity. This forfeits the same pruning, and here the loss is
-accepted: a sharded search does more total work and receives concurrency in
-return. See Sharded Inverted Index.
+and its own minimum similarity. This forfeits the same pruning, and here the
+loss is accepted: a sharded search does more total work and receives concurrency
+in return. See Sharded Inverted Index.
 
 Whether to divide at all is worth deciding, because a scan can be short enough
 that submitting its ranges costs more than the scan. How finely to divide it is
 not, because that cost does not grow with the number of ranges enough to matter.
 A scan barely past the minimum still gains from as many ranges as there are
 cores, so holding ranges back to keep each one large loses more than it
-protects. A scan
-below a minimum amount of work therefore stays on the calling thread, and one
-above it uses every thread it may. The minimum is expressed in work rather than
-in rows so that it holds for records an order of magnitude apart in length,
-since a scan of few long records costs as much as one of many short ones.
+protects. A scan below a minimum amount of work therefore stays on the calling
+thread, and one above it uses every thread it may. The minimum is expressed in
+work rather than in rows so that it holds for records an order of magnitude
+apart in length, since a scan of few long records costs as much as one of many
+short ones.
 
 The minimum earns its place at high query rates rather than on an idle machine.
-The budget is derived from the concurrent searches observed, and searches short
+The budget is derived from the concurrent searches observed. Searches short
 enough to leave the cores idle between them read as lower concurrency than they
 impose, so the budget can sit above one thread while a small cache serves
 hundreds of thousands of searches a second. Submitting ranges for each of those
@@ -327,7 +322,7 @@ work unit:
 
 **A work unit begins from the value current when it starts, not from the value
 current when the search began.** This matters because work units do not start
-together: the pool runs as many as it has threads, and the rest wait, so a work
+together. The pool runs as many as it has threads and the rest wait, so a work
 unit can start after its siblings have already proved a great deal. The two
 kinds of work unit take it at different granularities, and both are correct:
 
@@ -344,25 +339,24 @@ kinds of work unit take it at different granularities, and both are correct:
 What a shard does with the value is more than compare scores against it. A
 rising minimum similarity tightens length and prefix filtering, so it narrows
 the sub-range each inverted list is scanned over and can halt the vertical scan
-outright. Seeding therefore chooses the prefix for what has already been
-proved, rather than for what the caller asked for, and a prefix chosen for a
-lower value covers keys no row reaching the answer can be found under.
+outright. Seeding therefore chooses the prefix for what has already been proved,
+rather than for what the caller asked for, and a prefix chosen for a lower value
+covers keys no row reaching the answer can be found under.
 
 Both candidate generators re-read as they go, at the granularity each traverses
 in. `FilteredSearch` re-reads once per candidate and feeds the value back into
-that narrowing. `MergeSearch` re-reads once per frontier step, where it tightens
-the length-filtering test that ends the walk and the bound a row is merged
-under, but not the uni value each list was entered at, which is fixed when the
-frontier is built.
+that narrowing. `MergeSearch` re-reads once per frontier step. That tightens the
+length-filtering test which ends the walk, and the bound a row is merged under,
+but not the uni value each list was entered at, which is fixed when the frontier
+is built.
 
 Publishing is never deferred to the end of a work unit. Each work unit keeps its
-own minimum similarity, uses that local copy for its own pruning, and writes to
-the shared value as the local one improves, so its siblings can spend what it
-proved while it is still running. Only a work unit that raises the shared value
-writes to it: a scan range consults the value for every row, and a row proving
-nothing new is the common case, so the value is read before it is written and a
-write reaches the cache line the other work units read only when it carries
-something.
+own minimum similarity and prunes with that local copy. It writes to the shared
+value as the local one improves, so its siblings can spend what it proved while
+it is still running. Only a work unit that raises the shared value writes to it.
+A scan range consults the value for every row, and most rows prove nothing new,
+so the value is read far more often than it is written. A write reaches the
+cache line the other work units read only when it carries something.
 
 The matrix index takes no part in this. It scores every row with one bulk
 multiply and keeps a single heap on the calling thread, so it has no second work
@@ -373,12 +367,13 @@ nothing.
 ## Configuration Validation
 
 A namespace validates its whole configuration before building any layer, so
-every violation is reported in one list. Five families of rule are
-config-answerable and therefore checked here: a value naming no structure,
-comparator, or normalizer; a structure and a comparator with no record type in
-common; a structure paired with a comparator other than the one whose
-arithmetic it implements; a structure whose keys the comparator cannot
-generate; and a candidate generator the comparator does not support.
+every violation is reported in one list. Five families of rule can be answered
+from the configuration alone, and are therefore checked here. A value may name
+no structure, comparator, or normalizer. A structure and a comparator may share
+no record type. A structure may be paired with a comparator other than the one
+whose arithmetic it implements. A comparator may be unable to generate the keys
+a structure needs. And a candidate generator may be one the comparator does not
+support.
 
 Most of these ask the comparator what it supports, so they stay silent when its
 params leave it unbuildable and let `ComparatorConfigValidator` report that
@@ -401,16 +396,16 @@ The word covers two levels, and both are correct in their place.
 
 The library is an index: `NearestNeighborSearchIndex` is the whole searchable
 thing, which is the sense the project's own name carries in Uber Similarity
-Search Index. It stores rows, answers queries, and is the only type an
-embedder needs.
+Search Index. It stores rows, answers queries, and is the only type an embedder
+needs.
 
-An `Index` is one searchable structure inside it, a sibling of a `Cache` and
-a `SearchableStructure` like it. The facade owns a list of these and a list
-of caches, and merges their results.
+An `Index` is one searchable structure inside it, a sibling of a `Cache` and a
+`SearchableStructure` like it. The facade owns a list of these and a list of
+caches, and merges their results.
 
-So the facade holding indexes rather than being one is not a contradiction.
-A reader who expects `NearestNeighborSearchIndex` to extend `Index` has the
-narrow sense in mind; nothing does, and nothing should.
+So the facade holding indexes rather than being one is not a contradiction. A
+reader who expects `NearestNeighborSearchIndex` to extend `Index` has the narrow
+sense in mind; nothing does, and nothing should.
 
 ## Package Layout
 
@@ -439,12 +434,12 @@ store, and an index holds the one record type its comparator also reads.
   record type the family gains is one new strategy.
 - `index.inverted.generator`: the two generators every inverted index draws its
   candidates from, `FilteredSearch` (key-major) and `MergeSearch` (row-major),
-  along with the inverted list they walk and the search context, row filter,
-  and results heap they walk it with. A generator only ever reads keys and uni
+  along with the inverted list they walk and the search context, row filter, and
+  results heap they walk it with. A generator only ever reads keys and uni
   values, so sequences reuse both unchanged: a sequence is indexed by the
-  multiset of its terms, and only the comparator that scores a candidate
-  cares about their order. Every type here is public only to be reachable from
-  the indexes in the parent packages.
+  multiset of its terms, and only the comparator that scores a candidate cares
+  about their order. Every type here is public only to be reachable from the
+  indexes in the parent packages.
 
 The shared `Index` base class, `IndexFactory`, and
 `MetadataFilteredSearchExecutor` stay in the `index` package itself.
@@ -453,11 +448,11 @@ cache both order their query keys with, lives with the inverted family in
 `index.inverted`, which the cache depends on in the one direction. Mutable
 `ScanCache` and `InvertedTermCache` live under `searchablestructure.cache`.
 
-`searchablestructure.utils` gathers what serves the structures without
-belonging to any of them. `utils.metadata` holds the metadata filtering
-vocabulary, and `utils.parallel` holds everything that divides one search
-between threads, so that a structure reaches all of it through one package and
-none of it lives beside the structures it serves:
+`searchablestructure.utils` gathers what serves the structures without belonging
+to any of them. `utils.metadata` holds the metadata filtering vocabulary, and
+`utils.parallel` holds everything that divides one search between threads, so
+that a structure reaches all of it through one package and none of it lives
+beside the structures it serves:
 
 - `SearchThreads` owns the pool every structure submits its work units to, and
   the ticket ordering that serves them at their query's arrival.
@@ -471,10 +466,10 @@ none of it lives beside the structures it serves:
   the work units of one search prune against each other with.
 
 `searchablestructure.result` holds `RowNumAndSimilarity` and `ResultHeaps`,
-since a result and the operations over the heap holding it are the vocabulary
-of every structure rather than of the divided search. Every structure builds
-its heap with `ResultHeaps.newTopResults()`, so two searches of the same
-rows keep the same rows and merge into what one heap would have held.
+since a result and the operations over the heap holding it are the vocabulary of
+every structure rather than of the divided search. Every structure builds its
+heap with `ResultHeaps.newTopResults()`, so two searches of the same rows keep
+the same rows and merge into what one heap would have held.
 `SearchableStructure` itself stays at the root of the package it names.
 
 ### Comparators
@@ -490,25 +485,26 @@ pieces in sub-packages of their own:
   of them says anything depends on the measure, but which no comparator holds.
   Drawing signatures belongs to the structure keyed by them, so a comparator
   contributes only `KeyShareBounded`: the share of a record's keys a qualifying
-  candidate has to share with it. That is a property of the measure and holds
-  whether or not any structure is keyed by signatures, which is why the same
-  comparator serves a scan unchanged, and it is one fraction across both key
-  spaces, signatures colliding at the rate a record's own terms are shared at.
+  candidate has to share with it. That is a property of the measure, and it
+  holds whether or not any structure is keyed by signatures, which is why the
+  same comparator serves a scan unchanged. It is one fraction across both key
+  spaces, since signatures collide at the rate a record's own terms are shared
+  at.
 
 A comparator implementing `DotProductScored` is required to depend on the dot
 product and the two unilateral values through the squared Euclidean distance
 between the records alone, and not to rise as that distance rises. Two records
 at equal distance therefore score equally, and the nearest record is the most
-similar one. `L2Comparator` satisfies this, taking the root of that distance
-and normalizing it.
+similar one. `L2Comparator` satisfies this, taking the root of that distance and
+normalizing it.
 
-The requirement is what lets a structure decide which rows to return by
-distance and score only those. `CudaMatrixDotProductScorer` does exactly that:
-the GPU ranks every row by squared distance and returns the dot product of the
-rows it kept, and the comparator runs on the host over those alone, one call
-per returned row. A comparator ordering by anything else would be handed the
-wrong rows, so that scorer evaluates the comparator when it is built and
-refuses a namespace whose comparator does not meet the requirement.
+The requirement is what lets a structure decide which rows to return by distance
+and score only those. `CudaMatrixDotProductScorer` does exactly that: the GPU
+ranks every row by squared distance and returns the dot product of the rows it
+kept, and the comparator runs on the host over those alone, one call per
+returned row. A comparator ordering by anything else would be handed the wrong
+rows, so that scorer evaluates the comparator when it is built and refuses a
+namespace whose comparator does not meet the requirement.
 
 Normalizers are separate, under `com.uber.ussi.comparatornormalizer`, because a
 namespace configures one independently of its comparator. A normalizer is
@@ -520,16 +516,15 @@ comparator's value to the similarity a search returns.
 ### Scan Cache
 
 `ScanCache` is mutable and supports insert, update, delete, kNN search, and
-minimum-similarity search. It scans all cached rows and applies metadata
-filters before scoring.
+minimum-similarity search. It scans all cached rows and applies metadata filters
+before scoring.
 
 ### Inverted Term Cache
 
-`InvertedTermCache` is mutable and keeps inverted term lists in insertion
-order. It generates deduplicated candidates from query terms using prefix
-filtering, then scores them with the configured comparator. A metadata filter
-matching at most 1% of the cache uses a direct scan of those matching rows
-instead.
+`InvertedTermCache` is mutable and keeps inverted term lists in insertion order.
+It generates deduplicated candidates from query terms using prefix filtering,
+then scores them with the configured comparator. A metadata filter matching at
+most 1% of the cache uses a direct scan of those matching rows instead.
 
 Its searches only return rows sharing at least one non-discarded term with the
 query. High-popularity terms are discarded dynamically according to the
@@ -537,10 +532,10 @@ configured one-sided confidence bound; see [Discarding Popular
 Terms](#discarding-popular-terms). The stored records and inverted lists retain
 those terms, so the decisions can be reversed as the cache changes.
 
-Popularity decisions are updated incrementally. Deletions recheck terms from
-the deleted row and the currently filtered set. Once the cache has shrunk by
-`full_reevaluation_cache_size_decrease_fraction` from the last exact
-evaluation, every term is reevaluated against the smaller denominator.
+Popularity decisions are updated incrementally. Deletions recheck terms from the
+deleted row and the currently filtered set. Once the cache has shrunk by
+`full_reevaluation_cache_size_decrease_fraction` from the last exact evaluation,
+every term is reevaluated against the smaller denominator.
 
 ## Indexes
 
@@ -565,8 +560,8 @@ derives L2 distance from:
 ||query - row||^2 = ||query||^2 + ||row||^2 - 2 * dot(query, row)
 ```
 
-The dense scorer tries OpenBLAS on supported Linux and macOS platforms and
-falls back to the Java scorer when OpenBLAS cannot be loaded. Availability is
+The dense scorer tries OpenBLAS on supported Linux and macOS platforms and falls
+back to the Java scorer when OpenBLAS cannot be loaded. Availability is
 determined once per process, since the probe loads native code and a failing
 load would otherwise be repeated for every index built.
 `NearestNeighborSearchIndex.close()` releases any native dense-matrix memory.
@@ -578,47 +573,47 @@ so queries that share one multiply share that cost.
 `BatchedMatrixDotProductScorer` therefore scores together whatever queries are
 waiting: a caller enqueues its query and then contends to perform the multiply,
 whichever caller wins takes everything enqueued at that instant, and the rest
-wait only for the multiply already running. No query ever waits for a query
-that has not arrived, so the batch size measures the offered load rather
-than a configured window, it is one when the machine is idle, and there is no
-arrival timer to tune.
+wait only for the multiply already running. No query ever waits for a query that
+has not arrived. The batch size therefore measures the offered load rather than
+a configured window, it is one when the machine is idle, and there is no arrival
+timer to tune.
 
-One query does not repay the packing a matrix-matrix multiply performs first,
-so a batch of one is multiplied as a vector instead. That branch is what makes
-the arrangement cost nothing when no queries are concurrent: it was measured to
-match dividing the threads at a single concurrent search, and to exceed it in
-both throughput and tail latency at every higher concurrency.
+One query does not repay the packing a matrix-matrix multiply performs first, so
+a batch of one is multiplied as a vector instead. That branch is what makes the
+arrangement incur no cost when no queries are concurrent. It was measured to
+match dividing the threads at a single concurrent search, and to beat it in both
+throughput and tail latency at every higher concurrency.
 
 Serializing the callers is what lets one multiply use every thread the library
 holds, and it is also why the process-global thread count is no longer divided.
-Serializing alone, without batching, was measured to be worse than dividing:
-the multiplies then form a single queue served one at a time, whose service
-rate the offered load reaches. The gain comes from batching, and running one
-multiply on every thread is what makes a batch worth forming.
+Serializing alone, without batching, was measured to be worse than dividing: the
+multiplies then form a single queue served one at a time, whose service rate the
+offered load reaches. The gain comes from batching, and running one multiply on
+every thread is what makes a batch worth forming.
 
 A chunk is a contiguous span of whole rows of the matrix, of which there is one
 unless the matrix holds more values than a Java array can index. A chunk is
-multiplied a range of rows at a time rather than whole, because the dot
-products of one range are held for every query in the batch. Bounding the range
-bounds that buffer by the range rather than by the matrix, and the multiply
-still reads each row once.
+multiplied a range of rows at a time rather than whole, because the dot products
+of one range are held for every query in the batch. Bounding the range bounds
+that buffer by the range rather than by the matrix, and the multiply still reads
+each row once.
 
-A scorer returns the rows a query keeps rather than a dot product for every
-row, which lets an implementation discard the rows it will not keep before
-returning, instead of returning as many values as the matrix has rows.
-Selecting those rows needs the row numbers, their unilateral values, the
-deletions and the comparator's arithmetic, which `MatrixRows` carries, so an
-implementation may select as soon as it has scored. Every implementation adds
-its rows to the same bounded heap, which holds them in a list until they exceed
-the bound, so one adding no more rows than the bound never builds a queue. The
-dot products of a query are reused rather than allocated for each query, since
-they are as long as the matrix has rows.
+A scorer returns the rows a query keeps rather than a dot product for every row.
+That lets an implementation discard the rows it will not keep before returning,
+instead of returning as many values as the matrix has rows. Selecting those rows
+needs the row numbers, their unilateral values, the deletions and the
+comparator's arithmetic, which `MatrixRows` carries, so an implementation may
+select as soon as it has scored. Every implementation adds its rows to the same
+bounded heap, which holds them in a list until they exceed the bound, so one
+adding no more rows than the bound never builds a queue. The dot products of a
+query are reused rather than allocated for each query, since they are as long as
+the matrix has rows.
 
 Selecting raises its minimum similarity as its heap fills, as a scan does, so a
-row that cannot reach what the heap already holds is rejected before a result
-is made for it. A query asking for the best rows of the whole matrix otherwise
-makes one result per row and lets the heap discard almost all of them, which
-was measured to cost more than the multiply that produced the dot products.
+row that cannot reach what the heap already holds is rejected before a result is
+made for it. A query asking for the best rows of the whole matrix would
+otherwise make one result per row and let the heap discard almost all of them.
+That was measured to cost more than the multiply that produced the dot products.
 
 Selecting runs on the thread that asked for the query, not on the thread that
 performed the multiply, so several queries select at once and overlap the
@@ -634,9 +629,9 @@ touch.
 `CudaMatrixDotProductScorer` is such a scorer, for a GPU reached through CUDA.
 It leads the preference order, since a GPU scores a dense matrix faster than a
 CPU does. Reaching it takes the bindings on the runtime classpath, and they are
-a compile-time dependency of this library, so a deployment that does not want
-it carries nothing and never builds it. A deployment that adds them is what
-selects it.
+a compile-time dependency of this library, so a deployment that does not want it
+carries nothing and never builds it. A deployment that adds them is what selects
+it.
 
 A scorer may compute the dot products somewhere this process cannot read, which
 is why it returns the rows a query keeps rather than a value for every row. Such
@@ -655,51 +650,50 @@ left for future work.
 FAISS is not adopted here, because its architectural assumptions differ from
 this library's:
 
-- it batches the queries within one search call and not across concurrent
-  calls, so a service receiving one query per request aggregates them itself,
-  which is what `BatchedMatrixDotProductScorer` does
+- it batches the queries within one search call and not across concurrent calls,
+  so a service receiving one query per request aggregates them itself, which is
+  what `BatchedMatrixDotProductScorer` does
 - below a threshold on the query count times the dimension it does not reach
   BLAS at all, and a selector takes it off that path at any size
 - it offers the metrics it implements, where a namespace here configures its
   comparator
-- deletion here sets the deleted row's unilateral value to a value that is not
-  a number, so the similarity derived from it is not a number either and every
-  comparison against it is false, which drops the row through arithmetic the
-  search already performs rather than through a lookup for every row, as
-  [Inserts, Deletes, and Updates](#inserts-deletes-and-updates) describes.
-  FAISS states no order for such a value, so deletion there needs a selector or
-  compaction instead
+- deletion here sets the deleted row's unilateral value to a value that is not a
+  number. The similarity derived from it is then not a number either, and every
+  comparison against it is false, so the row is dropped by arithmetic the search
+  already performs rather than by a lookup for every row. [Inserts, Deletes, and
+  Updates](#inserts-deletes-and-updates) describes why. FAISS states no order
+  for such a value, so deletion there needs a selector or compaction instead
 - it has no Java API, so adopting it means owning a JNI layer and shipping a
-  native artifact for every platform, where these bindings are a compile-time
+  native artifact for every platform. These bindings are a compile-time
   dependency that a deployment carries nothing of
 
 The native scorer is written against `NativeBlas`, not against OpenBLAS.
-`NativeMatrixDotProductScorer` allocates the buffers, reuses them across
-scores, and traverses the matrix range by range, none of which depends on the
-library in use. `OpenBlas` supplies the rest: which platforms carry a binary,
-whether it loads, the thread count the library maintains for the process, and
-the two multiplies. Supporting a further library requires implementing that
-interface and nothing else. The interface is parameterised by the buffer handle
-it allocates, and counts every offset in values, so an implementation may hold
-its buffers wherever its library requires.
+`NativeMatrixDotProductScorer` allocates the buffers, reuses them across scores,
+and traverses the matrix range by range, none of which depends on the library in
+use. `OpenBlas` supplies the rest: which platforms carry a binary, whether it
+loads, the thread count the library maintains for the process, and the two
+multiplies. Supporting a further library requires implementing that interface
+and nothing else. The interface is parameterised by the buffer handle it
+allocates, and counts every offset in values, so an implementation may hold its
+buffers wherever its library requires.
 
 An earlier attempt at scoring several queries in one matrix-matrix multiply was
-not adopted, because it formed a batch by waiting for a fixed number of queries
-to arrive, which delays a query whenever the load does not supply them. Taking
-only the queries already waiting removes that delay, which is what made the
+not adopted. It formed a batch by waiting for a fixed number of queries to
+arrive, which delays a query whenever the load does not supply them. Taking only
+the queries already waiting removes that delay, which is what made the
 arrangement pay.
 
 ### Term Index
 
-`TermIndex` is delete-only and keys its inverted lists by canonicalized terms,
-a row's own terms with nothing derived from them, so the terms a query and a
+`TermIndex` is delete-only and keys its inverted lists by canonicalized terms, a
+row's own terms with nothing derived from them, so the terms a query and a
 candidate share determine their similarity exactly rather than bounding it.
 
 Inverted lists are sorted by each row's comparator-specific unilateral value,
 its `uniValue`, which is what enables length filtering. They are one of two
-components: the **forward index** holds the other side, mapping each `rowNum`
-to its record and its precomputed `uniValue`, so candidate generation reads
-the lists and verification reads the forward index.
+components: the **forward index** holds the other side, mapping each `rowNum` to
+its record and its precomputed `uniValue`, so candidate generation reads the
+lists and verification reads the forward index.
 
 Candidate traversal runs on two axes. A **vertical scan** visits the query's
 keys, and a **horizontal scan** walks the inverted list of each key it visits.
@@ -720,15 +714,15 @@ and the vertical scan halts once the partial unilateral value of the visited
 keys exceeds the query's `maxPrefixSum`, the most a qualifying candidate may
 leave unmatched. `maxPrefixSum` takes one of two shapes, and which one a measure
 takes is what decides how it is derived. A minimum similarity that is already a
-share of the keys gives the share of their unilateral value a candidate at
-exactly the minimum similarity can afford to miss: a similarity for Jaccard and
-Ruzicka, a normalized distance for NGLD, and any signature-keyed structure, a
-signature standing for one draw. Keys are shared in proportion to the multiset
-similarity of the records they were drawn from whether they are terms or
-signatures, so that share is one fraction serving both key spaces. A minimum
-similarity that counts keys instead states `maxPrefixSum` directly and no share
-comes into it, GLD's edits counting a sequence's terms and L2's squared distance
-being in the units of the squared values its unilateral value sums. The
+share of the keys gives the share of their unilateral value that a candidate at
+exactly the minimum similarity can afford to miss. That covers a similarity for
+Jaccard and Ruzicka, a normalized distance for NGLD, and any signature-keyed
+structure, where a signature stands for one draw. Keys are shared in proportion
+to the multiset similarity of the records they were drawn from whether they are
+terms or signatures, so that share is one fraction serving both key spaces. A
+minimum similarity that counts keys instead states `maxPrefixSum` directly and
+no share comes into it, GLD's edits counting a sequence's terms and L2's squared
+distance being in the units of the squared values its unilateral value sums. The
 comparator supplies `maxPrefixSum` for term keys and the signature keying
 strategy for signature keys. A row absent from every list visited so far has
 missed all of them, so once that accumulation passes `maxPrefixSum`, no row
@@ -739,11 +733,11 @@ Each row and each query must have non-empty terms and values arrays of equal
 length after canonicalization; a query and a row need not have the same number
 of terms as each other. Search only considers rows sharing at least one
 non-discarded term with the query. This matters for sparse L2: two disjoint
-sparse vectors can have a non-zero normalized L2 similarity, and
-`inverted_term` does not return such rows.
+sparse vectors can have a non-zero normalized L2 similarity, and `inverted_term`
+does not return such rows.
 
-At build time, terms occurring in more than
-`floor(numRows * max_fraction_ids_per_term)` rows are discarded.
+At build time, terms occurring in more than `floor(numRows *
+max_fraction_ids_per_term)` rows are discarded.
 
 ### Sequences On The Term Index
 
@@ -751,26 +745,26 @@ Paired with a sequence comparator, that same `TermIndex` stores ordered
 sequences, whose terms arrive in order and with repeats rather than once each
 alongside a value.
 
-An edit distance depends on the order the terms appear in, so it cannot be
-read off the terms a query and a row share. What those shared terms give
-is a bound: two sequences within edit distance `d` have term multisets
-within L1 distance `l1BoundFactor * d` of each other, where the factor is `2.0`
-for `levenshtein` and `damerau_levenshtein` and `1.0` for `lcs`. A substitution
-takes one term out of a multiset and puts another in, moving two, while an
-insertion or a deletion moves one, which is why forbidding substitution halves
-the factor and makes `lcs` the more selective choice for candidate generation.
-A row sharing too few terms with the query, disregarding order, therefore
-cannot be close enough in order either.
+An edit distance depends on the order the terms appear in, so it cannot be read
+off the terms a query and a row share. What those shared terms give is a bound:
+two sequences within edit distance `d` have term multisets within L1 distance
+`l1BoundFactor * d` of each other, where the factor is `2.0` for `levenshtein`
+and `damerau_levenshtein` and `1.0` for `lcs`. A substitution takes one term out
+of a multiset and puts another in, moving two, while an insertion or a deletion
+moves one. Forbidding substitution therefore halves the factor, which makes
+`lcs` the more selective choice for candidate generation. A row sharing too few
+terms with the query, disregarding order, therefore cannot be close enough in
+order either.
 
 Each row travels through a search in two forms. The inverted lists are keyed by
-the distinct terms of the row's multiset and carry how many times each
-occurs, which is what length and prefix filtering prune on. The comparator then
-verifies each surviving candidate against the ordered sequences, running the
-banded dynamic program under the budget the current `minSimilarity` allows.
+the distinct terms of the row's multiset and carry how many times each occurs,
+which is what length and prefix filtering prune on. The comparator then verifies
+each surviving candidate against the ordered sequences, running the banded
+dynamic program under the budget the current `minSimilarity` allows.
 
 Each row and each query must have non-empty terms and an empty values array. A
-query and a row need not be the same length as each other. Search only
-considers rows sharing at least one non-discarded term with the query.
+query and a row need not be the same length as each other. Search only considers
+rows sharing at least one non-discarded term with the query.
 
 ### Signature Index
 
@@ -789,9 +783,9 @@ Prefix filtering over signature keys needs the smallest share of the query's
 signatures that a qualifying candidate can collide on. Signatures collide at a
 rate tracking the multiset similarity of the records behind them, so for Jaccard
 and Ruzicka that share is the minimum similarity itself. An edit distance
-measures something else, and the share follows from the same L1 bound the
-term-keyed lists use: multisets within L1 distance `u` of their combined length
-share at least `(1 - u) / (1 + u)` of it, and the lengths cancel, so one share
+measures something else, and its share follows from the same L1 bound the
+term-keyed lists use. Multisets within L1 distance `u` of their combined length
+share at least `(1 - u) / (1 + u)` of it. The lengths cancel, so one share
 covers every candidate the minimum similarity admits. A normalized distance is
 already a share of the combined length; a raw edit count becomes one against the
 shortest candidate length filtering admits.
@@ -799,17 +793,16 @@ shortest candidate length filtering admits.
 Signature prefix filtering applies a generator-specific approximation safety
 margin: `0.1` for MinHash, I2CWS, ICWS, and SCWS, and `0.15` for PCWS. The
 margin relaxes that share rather than the comparator's own tightened minimum
-similarity, because a
-generator's concentration bound is stated on the similarity it estimates. These
-margins broaden candidate generation but do not make the signature index
-exact.
+similarity, because a generator's concentration bound is stated on the
+similarity it estimates. These margins broaden candidate generation but do not
+make the signature index exact.
 
 ### Hybrid Index
 
 `HybridIndex` combines a `TermIndex` and a `SignatureIndex`. During each build,
 rows with at most 270 terms go to its term index and longer rows to its
-signature index. The configured length range may
-fall entirely below, entirely above, or across this internal boundary.
+signature index. The configured length range may fall entirely below, entirely
+above, or across this internal boundary.
 
 Queries search the index matching the query length first. Jaccard's cardinality
 bounds can skip the other when no row on that side can reach the search's
@@ -837,21 +830,21 @@ count. Row numbers are issued in sequence, so the shards receive equal shares
 and cost the same to search.
 
 A search submits all of its shards together. The pool starts shard searches in
-the order they were submitted, so a search that submitted only some of its
-shards and then returned for the rest would have those later shards queued
-behind the shards of every search that arrived in the meantime. Submitting all
-of them at once also delegates the thread count to the pool, which is sized to
-the cores and so imposes the bound `ParallelismBudget` would impose.
+the order they were submitted. A search that submitted only some of its shards
+and then returned for the rest would find those later shards queued behind the
+shards of every search that arrived in the meantime. Submitting all of them at
+once also delegates the thread count to the pool, which is sized to the cores
+and so imposes the bound `ParallelismBudget` would impose.
 
 Sharding runs a search in parallel in its entirety, which the alternatives do
-not. Running verification in parallel reaches only the phase that scores 
+not. Running verification in parallel reaches only the phase that scores
 candidates. Running the query's keys in parallel visits a row once per thread
-holding one of that row's keys, whereas one thread walking every key visits 
-that row once.
+holding one of that row's keys, whereas one thread walking every key visits that
+row once.
 
 The cost is weaker pruning. Inverted lists are sorted by uni value, and both
 length filtering and the rising `minSimilarity` of a filling heap prune against
-that order, so a shard prunes against a weaker minimum similarity over a
+that order. A shard therefore prunes against a weaker minimum similarity over a
 narrower range than the whole index does. Each shard also repeats the walk of
 the query's keys and the seek into each list. Sharding therefore raises the
 total work of a search and returns concurrency for it. Without a spare thread to
@@ -876,11 +869,11 @@ across its rows, and a matrix index scored by a native library divides inside
 that scorer, both from the same budget. A matrix index scored by the Java scorer
 draws nothing from the budget, so sharding it remains unexplored.
 
-The inverted term cache is not sharded. It is bounded by `max_cache_size` and so
-holds fewer rows than one shard requires, and it is the one inverted structure
-that changes: it revises its popular-term decisions as rows are inserted,
-deleted and updated, and every shard would need those revisions as they
-occurred. It divides through `ParallelRowScan` instead.
+The inverted term cache is not sharded. It is bounded by `max_cache_size`, so it
+holds fewer rows than one shard requires. It is also the one inverted structure
+that changes, revising its popular-term decisions as rows are inserted, deleted
+and updated, and every shard would need those revisions as they occurred. It
+divides through `ParallelRowScan` instead.
 
 Sharding is invisible to callers, which address rows only by the row numbers
 they inserted them under.
@@ -897,30 +890,30 @@ the index's, and would discard terms the index keeps.
 
 In a hybrid index, only the term index discards, and its popular terms are
 counted over the rows that term index holds. Discarding shortens inverted lists,
-which only a term index gains: a signature list holds one entry per row whatever
+which only a term index gains. A signature list holds one entry per row whatever
 that row's terms are, so discarding leaves a signature index's lists the same
 length and merely moves the signatures its rows are keyed by.
 
 `popular_term_discard_scope` decides what a discard means. The two settings
 differ in which side of the answer stays exact, not in how aggressive they are.
 
-Under the default `candidates_and_verification`, a discarded term is absent
-from the inverted lists and from the records the comparator scores. A search
-reports the similarity between the records that remain once the popular terms
-are removed from both, and every row within the minimum similarity of the query,
+Under the default `candidates_and_verification`, a discarded term is absent from
+the inverted lists and from the records the comparator scores. A search reports
+the similarity between the records that remain once the popular terms are
+removed from both, and every row within the minimum similarity of the query,
 measured that same way, is found. This redefines what the reported similarities
 mean, which is the right trade when the popular terms carry no signal worth
 reporting.
 
 Under `candidates_only`, a discarded term is absent from the inverted lists
 only. A search reports the similarity between the records as supplied, including
-their discarded terms, which is the right trade when an application has to
-report an exact similarity on the original records but cannot pay to generate
-candidates from their popular terms. The cost is recall: candidate generation
+their discarded terms. That is the right trade when an application must report
+an exact similarity on the original records but cannot pay to generate
+candidates from their popular terms. The cost is recall. Candidate generation
 still prunes on the similarity measured without the discarded terms, and
 removing a shared term can only lower that measure, so a row within the minimum
-similarity of the query can be pruned before verification ever scores it. How
-much is lost depends on how much of the similarity the discarded terms carried.
+similarity of the query can be pruned before verification scores it. How much is
+lost depends on how much of the similarity the discarded terms carried.
 
 This also rules out scoring a row from the conjunction accumulated over the
 inverted lists, since that conjunction can only report the similarity that
@@ -956,23 +949,22 @@ the comparator. Because it always scores through the comparator, it supports
 every inverted index type and every supported comparator.
 
 `spars_merge` is row-major. One frontier spans all of the query's keys and
-advances them in step, so every inverted-list entry belonging to a candidate
-row arrives together. That lets the generator accumulate the row's conjunction,
+advances them in step, so every inverted-list entry belonging to a candidate row
+arrives together. That lets the generator accumulate the row's conjunction,
 which is the part of the similarity the query and the row derive from the keys
 they share, as it goes. What it holds mid-row is a partial conjunction, and
-`maxSimilarityFromPartialConjunction` bounds the best any completion of it
-could reach, using the unscanned keys' unilateral value to bound what the keys
-still to arrive can add. The row is abandoned as soon as that bound falls below
-the minimum similarity the search currently holds. It trades a priority queue
-over the
-query's keys for the ability to prune a row mid-scan, which pays off when a
+`maxSimilarityFromPartialConjunction` bounds the best any completion of it could
+reach, using the unscanned keys' unilateral value to bound what the keys still
+to arrive can add. The row is abandoned as soon as that bound falls below the
+minimum similarity the search currently holds. It trades a priority queue over
+the query's keys for the ability to prune a row mid-scan, which pays off when a
 query has many keys and the minimum similarity rejects most rows early.
 
 When the keys are the terms of a sparse record, the inverted lists also carry
 the row's value at that key, so the accumulated conjunction is the row's exact
 similarity and no further comparison is needed. Signature keys carry no usable
-value, and a sequence's terms bound its similarity without determining it,
-so in both cases the merge generator scores each retained candidate with the
+value, and a sequence's terms bound its similarity without determining it, so in
+both cases the merge generator scores each retained candidate with the
 comparator, exactly as the filtered scan does. `inverted_hybrid` applies the
 generator independently to each of the two, so its term index scores from the
 conjunction while its signature index verifies.

@@ -44,34 +44,34 @@ import org.bytedeco.javacpp.SizeTPointer;
 /**
  * A dense matrix-vector dot-product scorer that holds the matrix in a GPU's memory.
  *
- * <p>It leads the preference order of {@link MatrixDotProductScorers}, since a GPU scores a
- * dense matrix faster than a CPU does, and reaching it takes the CUDA bindings on the runtime
- * classpath, which this library depends on at compile time alone. A deployment adding them is
- * what selects it.
+ * <p>It leads the preference order of {@link MatrixDotProductScorers}, since a GPU scores a dense
+ * matrix faster than a CPU does. Reaching it takes the CUDA bindings on the runtime classpath,
+ * which this library depends on at compile time alone, so a deployment adding them is what selects
+ * it.
  *
- * <p>The matrix is copied to the GPU once and stays for the life of the scorer, so the GPU's
- * memory bounds the rows an index may hold. A batch's queries are copied in, multiplied
- * against the whole matrix at once, and selected from where they were computed, so what
- * returns is the rows a query keeps rather than a value for every row.
+ * <p>The matrix is copied to the GPU once and stays for the life of the scorer, so the GPU's memory
+ * bounds the rows an index may hold. A batch's queries are copied in and multiplied against the
+ * whole matrix at once, and the rows are selected where they were computed. What returns is the
+ * rows a query keeps rather than a value for every row.
  *
  * <p>The multiply's products are read and never written, so a batch's products are what the
  * multiply produced and nothing else.
  *
- * <p>Not tuned. A batch multiplies against the whole matrix at once and selects from the
- * whole result, where an implementation meant for use would tile the multiply over blocks of
- * rows and select within each tile, which bounds the memory the products need and keeps a
- * tile in cache while it is selected from. Host memory is pageable rather than pinned and
- * every call runs on the default stream, so a copy never overlaps a multiply.
+ * <p>Not tuned. A batch multiplies against the whole matrix at once and selects from the whole
+ * result. An implementation meant for use would tile the multiply over blocks of rows and select
+ * within each tile, which bounds the memory the products need and keeps a tile in cache while it is
+ * selected from. Host memory is pageable rather than pinned and every call runs on the default
+ * stream, so a copy never overlaps a multiply.
  *
  * <p>The rows a query may keep are fixed when the scorer is built, since the select on the GPU
- * keeps that many, so a query asking for more is refused rather than answered short. It is
- * built to keep the most a namespace may ask for, which is what makes the refusal unreachable.
- * The room the results occupy is that many rows for every query a batch may hold, so a
- * namespace permitting a great many similarities takes proportionally more of the GPU, and
- * takes it when the scorer is built rather than when a query arrives.
+ * keeps that many, so a query asking for more is refused rather than answered short. It is built to
+ * keep the most a namespace may ask for, which is what makes the refusal unreachable. The results
+ * occupy that many rows for every query a batch may hold. A namespace permitting a great many
+ * similarities therefore takes proportionally more of the GPU, and takes it when the scorer is
+ * built rather than when a query arrives.
  *
- * <p>Every buffer is allocated once and reused by every batch, which is safe because the base
- * class performs one multiply at a time, under a lock, whichever caller wins it.
+ * <p>Every buffer is allocated once and reused by every batch, which is safe because the base class
+ * performs one multiply at a time, under a lock, whichever caller wins it.
  *
  * <p>CUDA calls a GPU's memory device memory, which the fields holding it are named for.
  */
@@ -92,21 +92,21 @@ final class CudaMatrixDotProductScorer
   private static final int CUDA_ERROR_MEMORY_ALLOCATION = 2;
 
   /**
-   * One block a query, selecting that query's best rows in a fixed number of passes rather
-   * than one pass for each row kept.
+   * One block a query, selecting that query's best rows in a fixed number of passes rather than one
+   * pass for each row kept.
    *
-   * <p>The passes are a radix select. A row ranks by the squared Euclidean distance between
-   * it and the query, negated, and reading the bits of that as an unsigned number preserves
-   * its order, so four passes over the rows, each counting one byte of that number into a
-   * histogram, narrow the rows to the key of the last row to keep. A fifth pass writes out
-   * every row above that key, and enough of those equal to it to make the count up.
+   * <p>The passes are a radix select. A row ranks by the squared Euclidean distance between it and
+   * the query, negated. Reading the bits of that as an unsigned number preserves its order, so four
+   * passes over the rows, each counting one byte of that number into a histogram, narrow the rows
+   * to the key of the last row to keep. A fifth pass writes out every row above that key, and
+   * enough of those equal to it to make the count up.
    *
-   * <p>What it writes is the rows to keep, in no particular order, and the dot product of
-   * each, since the similarity is the comparator's to take and the comparator runs on the
-   * host. It writes fewer than asked for when the matrix holds fewer.
+   * <p>What it writes is the rows to keep, in no particular order, and the dot product of each,
+   * since the similarity is the comparator's to take and the comparator runs on the host. It writes
+   * fewer than asked for when the matrix holds fewer.
    *
-   * <p>A deleted row carries a unilateral value that is not a number, so what it ranks by is
-   * not a number either, and the passes drop it.
+   * <p>A deleted row carries a unilateral value that is not a number, so what it ranks by is not a
+   * number either, and the passes drop it.
    */
   private static final String SELECT_SOURCE =
       "__device__ unsigned int orderedKey(float rankValue) {\n"
@@ -220,8 +220,8 @@ final class CudaMatrixDotProductScorer
           + "}\n";
 
   /**
-   * The rows a query kept and the dot product of each, which is all that crosses back from the
-   * GPU. The similarity is left to the comparator, which runs on the host over these alone.
+   * The rows a query kept and the dot product of each, which is all that crosses back from the GPU.
+   * The similarity is left to the comparator, which runs on the host over these alone.
    */
   static final class KeptRows {
     private final long[] rowNums;
@@ -256,17 +256,17 @@ final class CudaMatrixDotProductScorer
   /**
    * Whether the comparator orders rows the way the select does, which is by squared Euclidean
    * distance and nothing else. The select keeps the rows nearest by that distance and the host
-   * scores only those, so a comparator ordering by anything else would be handed the wrong rows
-   * to score.
+   * scores only those, so a comparator ordering by anything else would be handed the wrong rows to
+   * score.
    *
-   * <p>Two properties are required of it, both stated on {@link DotProductScored}. The
-   * similarity has to depend on the dot product and the two unilateral values through that
-   * distance alone, so that two rows at equal distance score equally. And it must not rise
-   * with the distance, so that nearest is best.
+   * <p>Two properties are required of it, both stated on {@link DotProductScored}. The similarity
+   * has to depend on the dot product and the two unilateral values through that distance alone, so
+   * that two rows at equal distance score equally. And it must not rise with the distance, so that
+   * nearest is best.
    *
-   * <p>Both are tested by evaluating the comparator at sample points, since what it computes
-   * cannot be read off it. That rejects a comparator breaking either property at one of those
-   * points rather than establishing that one keeps them everywhere.
+   * <p>Both are tested by evaluating the comparator at sample points, since what it computes cannot
+   * be read off it. That rejects a comparator breaking either property at one of those points
+   * rather than establishing that one keeps them everywhere.
    */
   static boolean doesComparatorOrderBySquaredDistance(DotProductScored comparator) {
     // Pairs of triples sharing a squared distance while differing in all three terms, so a
@@ -420,10 +420,10 @@ final class CudaMatrixDotProductScorer
   }
 
   /**
-   * Releases what the scorer took, and is called by the constructor as well when construction
-   * fails partway, so it runs against whatever was taken by then. Freeing memory that was
-   * never allocated is defined and does nothing, where unloading a module and destroying a
-   * handle that were never made are not, which is what those two are tracked for.
+   * Releases what the scorer took, and is called by the constructor as well when construction fails
+   * partway, so it runs against whatever was taken by then. Freeing memory that was never allocated
+   * is defined and does nothing. Unloading a module that was never loaded is not, nor is destroying
+   * a handle that was never made, which is why those two are tracked.
    */
   @Override
   protected void releaseResources() {

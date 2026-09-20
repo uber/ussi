@@ -7,9 +7,9 @@ import java.util.List;
  * Selects which dense scorer to build, and checks the query every one of them requires.
  *
  * <p>The scorers are tried in the order of {@link #PREFERENCE_ORDER}, and the first whose
- * implementation is available on this machine is built. A scorer that turns out to be
- * unavailable only when it is built, which is how a missing native library presents itself, is
- * skipped as though it had never claimed to be available, so the order continues past it.
+ * implementation is available on this machine is built. A scorer may turn out to be unavailable
+ * only when it is built, which is how a missing native library presents itself. Such a scorer is
+ * skipped as though it had never claimed to be available, and the order continues past it.
  *
  * <p>Adding a scorer is adding a {@link Provider} to that list at the position it deserves. The
  * last entry needs no native code and is always available, so the list always ends somewhere.
@@ -31,9 +31,9 @@ final class MatrixDotProductScorers {
       };
 
   /**
-   * Holds the matrix in a GPU's memory and scores there, which is the fastest of these where a
-   * GPU is present. Available only where the CUDA bindings are on the runtime classpath, which
-   * is a deliberate addition, since this library depends on them at compile time alone.
+   * Holds the matrix in a GPU's memory and scores there, which is the fastest of these where a GPU
+   * is present. Available only where the CUDA bindings are on the runtime classpath, which is a
+   * deliberate addition, since this library depends on them at compile time alone.
    */
   private static final Provider CUDA =
       new Provider() {
@@ -68,13 +68,13 @@ final class MatrixDotProductScorers {
       };
 
   /**
-   * Ordered by how fast a scorer is where it can be built, so the first one this machine can
-   * build is the fastest it can run. The Java scorer needs no native code and is therefore
-   * always available, which is what makes the list terminate.
+   * Ordered by how fast a scorer is where it can be built, so the first one this machine can build
+   * is the fastest it can run. The Java scorer needs no native code and is therefore always
+   * available, which is what makes the list terminate.
    *
-   * <p>The CUDA scorer leads it because a GPU scores a dense matrix faster than a CPU does,
-   * and reaching it takes both a GPU and the bindings, which this library depends on at
-   * compile time alone. A deployment adding them is what selects it.
+   * <p>The CUDA scorer leads it because a GPU scores a dense matrix faster than a CPU does, and
+   * reaching it takes both a GPU and the bindings, which this library depends on at compile time
+   * alone. A deployment adding them is what selects it.
    */
   private static final List<Provider> PREFERENCE_ORDER = List.of(CUDA, OPEN_BLAS, JAVA);
 
@@ -132,8 +132,8 @@ final class MatrixDotProductScorers {
     boolean isAvailable();
 
     /**
-     * Builds the scorer. The bound is the most rows any query against this namespace may ask
-     * for, which a scorer that fixes how many it keeps is built to keep.
+     * Builds the scorer. The bound is the most rows any query against this namespace may ask for,
+     * which a scorer that fixes how many it keeps is built to keep.
      */
     MatrixDotProductScorer create(DenseMatrix matrix, MatrixRows rows, int maxNumSimilarities);
   }

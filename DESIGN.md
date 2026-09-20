@@ -20,7 +20,7 @@ which is the handle the internals pass around in place of the row itself.
 A **record** is the feature data of a row. It is a concept, not a type, and it
 can take the shape of a vector, a time series, a histogram, a sparse
 (multi-)set, or a sequence of terms. `RecordType` names which shape a given
-record is in; a comparator declares the shapes it reads and a structure declares
+record is in. A comparator declares the shapes it reads and a structure declares
 the one it stores, so the two pair up by agreeing on one.
 
 `TermsAndValues` is the public data structure a record arrives in: two parallel
@@ -106,7 +106,7 @@ current one.
 
 The saving depends on the number of structures, because a minimum similarity
 must have somewhere to be spent. An inverted index holds, for each key, a list
-of the rows carrying that key; these are its **inverted lists**, and a row drawn
+of the rows carrying that key. These are its **inverted lists**, and a row drawn
 from them to be scored is a **candidate**. Indexes and Candidate Generation
 describe both. Measured across several structures, it cuts candidates by about
 half, and the inverted lists walked by more. With one active cache and one index
@@ -730,7 +730,7 @@ still unseen can qualify and the rest of the query's keys go unvisited. Either
 candidate generator can traverse these lists.
 
 Each row and each query must have non-empty terms and values arrays of equal
-length after canonicalization; a query and a row need not have the same number
+length after canonicalization. A query and a row need not have the same number
 of terms as each other. Search only considers rows sharing at least one
 non-discarded term with the query. This matters for sparse L2: two disjoint
 sparse vectors can have a non-zero normalized L2 similarity, and `inverted_term`

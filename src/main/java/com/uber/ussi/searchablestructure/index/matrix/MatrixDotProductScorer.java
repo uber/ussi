@@ -7,9 +7,9 @@ import java.util.List;
 /**
  * Scores a query against every row of a dense matrix and returns the rows it keeps.
  *
- * <p>The rows it keeps rather than a dot product for every row, so that an implementation able
- * to discard the rows it will not keep does so before returning, rather than returning as many
- * values as the matrix has rows for the caller to discard.
+ * <p>The rows it keeps rather than a dot product for every row. An implementation able to discard
+ * the rows it will not keep therefore does so before returning, instead of returning as many values
+ * as the matrix has rows for the caller to discard.
  */
 interface MatrixDotProductScorer extends AutoCloseable {
 

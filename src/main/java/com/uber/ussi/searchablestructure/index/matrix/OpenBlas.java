@@ -19,8 +19,8 @@ import org.bytedeco.openblas.presets.openblas_nolapack;
  * OpenBLAS behind {@link NativeBlas}, reached over JNI and addressing native memory through {@link
  * FloatPointer}.
  *
- * <p>This class holds everything specific to OpenBLAS: which platforms carry a binary, whether
- * that binary loads, the thread count the library keeps for the whole process, and the bound on
+ * <p>This class holds everything specific to OpenBLAS: which platforms carry a binary, whether that
+ * binary loads, the thread count the library keeps for the whole process, and the bound on
  * concurrent callers its per-thread buffers impose. A dense scorer reads none of it.
  *
  * <p>One instance serves the process, because the thread count and the buffers it rations are the
@@ -35,8 +35,8 @@ final class OpenBlas implements NativeBlas<FloatPointer> {
   private static final int FALLBACK_MAX_NUM_CONCURRENT_CALLERS = 64;
 
   /**
-   * One entry per native binary carried as a runtime dependency. {@link #isAvailable()} also
-   * probes the load, since carrying a binary is weaker than loading one.
+   * One entry per native binary carried as a runtime dependency. {@link #isAvailable()} also probes
+   * the load, since carrying a binary is weaker than loading one.
    */
   private static final boolean IS_SUPPORTED_PLATFORM =
       (Utils.isRunningOnLinux() && Utils.isRunningOnArm())
@@ -185,8 +185,8 @@ final class OpenBlas implements NativeBlas<FloatPointer> {
 
   /**
    * The queries are a numQueries by numColumns row-major matrix and the rows are a numRows by
-   * numColumns row-major matrix, so the products are the first multiplied by the transpose of the
-   * second, which leaves each query's products contiguous.
+   * numColumns row-major matrix. The products are therefore the first multiplied by the transpose
+   * of the second, which leaves each query's products contiguous.
    */
   @Override
   public void multiplyQueries(
@@ -220,8 +220,8 @@ final class OpenBlas implements NativeBlas<FloatPointer> {
    *
    * <p>OpenBLAS retains one buffer per thread that calls into it, and the number of buffers is
    * fixed when the binary is built. A caller beyond that number reaches an allocation the library
-   * reports as liable to corrupt the heap rather than one that fails, so the concurrent callers
-   * are bounded by this number.
+   * reports as liable to corrupt the heap rather than one that fails, so the concurrent callers are
+   * bounded by this number.
    *
    * <p>Obtained by requesting more threads than any binary provides, since OpenBLAS answers a
    * request above its own maximum with that maximum. The number configured beforehand is restored,

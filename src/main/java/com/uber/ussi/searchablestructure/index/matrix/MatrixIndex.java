@@ -185,8 +185,8 @@ public final class MatrixIndex extends RowStoringIndex {
   }
 
   /**
-   * The scorer selects the rows as well as scoring them, so that an implementation able to
-   * discard the rows it will not keep returns only those it kept.
+   * The scorer selects the rows as well as scoring them, so that an implementation able to discard
+   * the rows it will not keep returns only those it kept.
    */
   private List<RowNumAndSimilarity> searchAllMatrixRowsWithDotProductScorer(
       float[] queryValues, double queryUniValue, float minSimilarity, int maxResults) {
@@ -198,9 +198,9 @@ public final class MatrixIndex extends RowStoringIndex {
    * A deleted row keeps its place in the matrix until the matrix is rebuilt, so its unilateral
    * value is replaced with one no similarity can be derived from. Every similarity the comparator
    * derives from it is then not a number, which no minimum similarity admits, so the row is
-   * excluded by the arithmetic the search performs regardless. Asking a set of deleted row
-   * numbers instead costs a lookup for every row of every query, which was measured to dominate
-   * the rest of the search.
+   * excluded by the arithmetic the search performs regardless. Asking a set of deleted row numbers
+   * instead costs a lookup for every row of every query, which was measured to dominate the rest of
+   * the search.
    */
   @Override
   protected void onRowDeleted(long rowNum) {
@@ -229,9 +229,9 @@ public final class MatrixIndex extends RowStoringIndex {
   }
 
   /**
-   * Adds the row when it matches and reaches the minimum, and returns the minimum to score the
-   * rows after it against, which rises as the heap fills so that a row unable to reach what the
-   * heap already holds incurs no cost beyond its own similarity.
+   * Adds the row when it matches and reaches the minimum, and returns the minimum to score the rows
+   * after it against. That minimum rises as the heap fills, so a row unable to reach what the heap
+   * already holds incurs no cost beyond its own similarity.
    */
   private float addMatchingRow(
       BoundedSizeMaxHeap<RowNumAndSimilarity> rows,

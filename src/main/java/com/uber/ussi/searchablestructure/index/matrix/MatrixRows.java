@@ -7,14 +7,14 @@ import com.uber.ussi.comparator.DotProductScored;
  * What selecting the rows a query keeps needs to know, beyond the dot products themselves.
  *
  * <p>A dot product is not a similarity: the comparator derives one from the dot product and the
- * unilateral value of each side. Selecting therefore needs the row numbers, their unilateral
- * values and the comparator's arithmetic, all of which belong to the index rather than to
- * whatever performs the multiply. A deleted row is excluded by the same arithmetic, since its
- * unilateral value is one no similarity can be derived from.
+ * unilateral value of each side. Selecting therefore needs the row numbers, their unilateral values
+ * and the comparator's arithmetic, all of which belong to the index rather than to whatever
+ * performs the multiply. A deleted row is excluded by the same arithmetic, since its unilateral
+ * value is one no similarity can be derived from.
  *
- * <p>These are given to the scorer rather than applied by its caller, so that an implementation
- * may select its rows as soon as it has scored them and return only those, instead of returning
- * one value per row.
+ * <p>These are given to the scorer rather than applied by its caller, so that an implementation may
+ * select its rows as soon as it has scored them and return only those, instead of returning one
+ * value per row.
  */
 final class MatrixRows {
 

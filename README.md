@@ -5,8 +5,8 @@ Ahmed Metwally (ametwally@uber.com) -->
 
 Uber Similarity Search Index, or USSI, is a platform-agnostic, in-memory Java
 library for nearest neighbor search. You embed it in a host process, such as an
-OpenSearch data node, and it holds your records in memory and answers
-similarity queries over them.
+OpenSearch data node, and it holds your records in memory and answers similarity
+queries over them.
 
 It supports mutable ingestion, k-nearest-neighbor search, minimum-similarity
 search, and metadata filtering, over dense vectors, sparse weighted features,
@@ -127,16 +127,16 @@ comparator from what you want measured:
 `jaccard` counts any non-zero value as present and ignores magnitudes, so a
 multiset given to it behaves as a set. `ruzicka` keeps magnitudes, giving
 weighted Jaccard over weights and multiset Jaccard over counts. Both treat
-opposite signs as not intersecting, and `ruzicka` weighs by absolute value.
-`l2` uses the values as given.
+opposite signs as not intersecting, and `ruzicka` weighs by absolute value. `l2`
+uses the values as given.
 
 A few things happen to your input on the way in, which matter when you compare
 what you put in against what comes back:
 
 - Terms are lowercased and encoded into primitive longs.
-- Sparse records are canonicalized: terms sorted, values summed across
-  duplicate terms, and zero sums dropped unless every sum is zero. Summing is
-  what lets a multiset arrive as repeated terms or as counts.
+- Sparse records are canonicalized: terms sorted, values summed across duplicate
+  terms, and zero sums dropped unless every sum is zero. Summing is what lets a
+  multiset arrive as repeated terms or as counts.
 - Sequence terms stay in arrival order.
 - Metadata keys and values are lowercased.
 
@@ -159,8 +159,8 @@ void close()
 versions. Keep your own mapping from your document IDs to these values.
 
 `getNearestNeighborRowNums` is a kNN query and `getSimilarRowNums` a capped
-range query, returning the best `maxNumSimilarities` rows meeting the
-minimum similarity rather than every row that meets it.
+range query, returning the best `maxNumSimilarities` rows meeting the minimum
+similarity rather than every row that meets it.
 
 Both searches return `SearchResults`, an ordered container with parallel
 `rowNums` and `similarities` arrays, ordered by descending similarity with the
@@ -172,8 +172,8 @@ lower `rowNum` breaking ties.
   they are always in `[0.0, 1.0]`.
 - An empty metadata filter matches every non-deleted row.
 
-Call `close()` when you are done with a namespace. It releases any native
-memory held by the dense matrix index.
+Call `close()` when you are done with a namespace. It releases any native memory
+held by the dense matrix index.
 
 ## Configuration
 
@@ -195,8 +195,8 @@ memory held by the dense matrix index.
 | `maxNumSearchableStructures` | Maximum number of active, graduating, and indexed structures before consolidation. Must be greater than `2`. |
 | `maxNumSimilarities` | Maximum result count kept per structure and in the final merge. Must be positive. |
 
-The length bounds are validated against each other but not enforced against
-each inserted record.
+The length bounds are validated against each other but not enforced against each
+inserted record.
 
 ### Choosing An Index Type
 
@@ -218,19 +218,19 @@ Any pairing not listed is reported when you create the namespace. Note that
 `matrix` takes `l2` and nothing else, even though it stores records `jaccard`
 and `ruzicka` can also read.
 
-`matrix` gathers the searches running at one moment into a single multiply, so
-a caller sending one query per request gets the throughput of a batch without
-batching anything itself.
+`matrix` gathers the searches running at one moment into a single multiply. A
+caller sending one query per request therefore gets the throughput of a batch
+without batching anything itself.
 
-For the cache, `scan` works with dense or sparse records and is the right
-choice for sequences. `inverted_term` maintains mutable term lists for sparse
-records and normally graduates into one of the inverted index types. A sequence
+For the cache, `scan` works with dense or sparse records and is the right choice
+for sequences. `inverted_term` maintains mutable term lists for sparse records
+and normally graduates into one of the inverted index types. A sequence
 namespace must cache through `scan`.
 
 ### Choosing A Normalizer
 
-A comparator produces either a similarity or a distance; the normalizer turns
-it into a similarity in `[0.0, 1.0]`.
+A comparator produces either a similarity or a distance; the normalizer turns it
+into a similarity in `[0.0, 1.0]`.
 
 | Normalizer | Converts | Use with |
 | --- | --- | --- |
@@ -243,8 +243,8 @@ it into a similarity in `[0.0, 1.0]`.
 
 Every parameter map is read by key, ignoring case and surrounding space. A key
 nothing reads is a violation, so a typo fails loudly instead of leaving the
-default in place. Keys are recognized per map, so a parameter only one
-structure reads stays valid beside a structure that ignores it.
+default in place. Keys are recognized per map, so a parameter only one structure
+reads stays valid beside a structure that ignores it.
 
 Index parameters:
 
@@ -266,9 +266,9 @@ Cache parameters, read by the `inverted_term` cache:
 | `full_reevaluation_cache_size_decrease_fraction` | double in `[0.0, 1.0]`, default `0.10` | How far the cache must shrink before popularity is reevaluated for every term. `0.0` reevaluates after every deletion. |
 
 Set `max_fraction_ids_per_term` and `popular_term_discard_scope` to the same
-values in both `cacheParams` and `indexParams`. Each structure reads its own,
-so setting them on only one leaves a namespace behaving one way before
-graduation and another way after.
+values in both `cacheParams` and `indexParams`. Each structure reads its own, so
+setting them on only one leaves a namespace behaving one way before graduation
+and another way after.
 
 Comparator parameters:
 
@@ -278,25 +278,23 @@ Comparator parameters:
 | `signature_generator` | `ruzicka`, `gld`, `ngld` | `i2cws`, `icws`, `pcws`, `scws` | none |
 | `sequence_distance_type` | `gld`, `ngld` | `levenshtein`, `damerau_levenshtein`, `lcs` | `levenshtein` |
 
-`signature_generator` is required by `inverted_signature` and
-`inverted_hybrid` and optional everywhere else. `l2` does not support signature
-generation.
+`signature_generator` is required by `inverted_signature` and `inverted_hybrid`
+and optional everywhere else. `l2` does not support signature generation.
 
 `jaccard` reads a record's distinct terms, so `minhash` serves it. The other
 comparators read counts, whether a sparse record's values or how often a
 sequence repeats a term, so they take a weighted sampler instead.
 
-`gld` reports the number of single-term edits that turn one sequence into
-the other. `ngld` divides that count by the two lengths as
-`2 * d / (length1 + length2 + d)`, which makes scores comparable across
-sequences of different lengths. `sequence_distance_type` chooses which edits
-count:
+`gld` reports the number of single-term edits that turn one sequence into the
+other. `ngld` divides that count by the two lengths as `2 * d / (length1 +
+length2 + d)`, which makes scores comparable across sequences of different
+lengths. `sequence_distance_type` chooses which edits count:
 
 - `levenshtein`: insertion, deletion, and substitution.
 - `damerau_levenshtein`: the above plus transposing two adjacent terms, so a
   swapped pair costs one edit rather than two.
-- `lcs`: insertion and deletion only. Rewriting a term costs both, so an
-  `lcs` distance is never below the `levenshtein` distance for the same pair.
+- `lcs`: insertion and deletion only. Rewriting a term costs both, so an `lcs`
+  distance is never below the `levenshtein` distance for the same pair.
 
 ## Metadata Filtering
 
@@ -330,37 +328,36 @@ types is what `auto` chooses and what an explicitly named strategy costs.
 | `pre_filtering` | pre-filtering, otherwise in-filtering | pre-filtering, otherwise in-filtering | pre-filtering, otherwise post-filtering |
 | `post_filtering` | post-filtering | post-filtering | post-filtering |
 
-A search carrying no `MetaFilter` skips all of this and scores every row, which
-for the matrix index is one bulk multiply and for the others is their ordinary
-traversal.
+A search carrying no `MetaFilter` skips all of this and scores every row. For
+the matrix index that is one bulk multiply, and for the others it is their
+ordinary traversal.
 
 What each strategy does, what it costs, and where it does not run as named:
 
 - **`in_filtering`** applies the filter to each row as it is scored, and returns
   every row the filter accepts. On the matrix index it costs the bulk multiply:
-  that index scores an unfiltered search with one matrix-vector multiply over
-  every row, and a filter cannot be pushed into that multiply, so in-filtering
-  scores row by row instead. It pays there only when the filter rejects enough
-  rows to outweigh the multiply, which is why `auto` never chooses it for that
-  index type.
+  that index scores an unfiltered search with one multiply over every row, and a
+  filter cannot be pushed into that multiply. In-filtering scores row by row
+  instead. It pays there only when the filter rejects enough rows to outweigh
+  the multiply, which is why `auto` never chooses it for that index type.
 - **`pre_filtering`** asks the metadata index which rows match and scores only
-  those, and returns every row the filter accepts. It runs only while the
-  filter matches at most `max_pre_filtering_rows_ratio` of the rows. Past that
-  it falls back, to in-filtering on the scan and inverted indexes and to
-  post-filtering on the matrix index, and the fallback is not reported.
+  those, and returns every row the filter accepts. It runs only while the filter
+  matches at most `max_pre_filtering_rows_ratio` of the rows. Past that it falls
+  back, to in-filtering on the scan and inverted indexes and to post-filtering
+  on the matrix index, and the fallback is not reported.
 - **`post_filtering`** scores rows without the filter and applies the filter to
   what it kept, so it keeps the matrix index's bulk multiply. It is the one
   strategy that can return fewer rows than the filter accepts. It asks for more
   rows than the caller wanted, expanded by how selective the filter is and
-  capped by `maxNumSimilarities`, and rows the filter accepts can still fall
-  outside the expanded set.
+  capped by `maxNumSimilarities`. Rows the filter accepts can still fall outside
+  that expanded set.
 - **`auto`** chooses per index type as the table shows. It never chooses
-  in-filtering on the matrix index, where that would cost the multiply, which
-  is why it is the one default that can post-filter.
+  in-filtering on the matrix index, where that would cost the multiply, which is
+  why it is the one default that can post-filter.
 
 In-filtering and pre-filtering return the same rows and differ only in the work
 done to reach them. Post-filtering is the one strategy that changes which rows
-come back, and a matrix index under `auto` reaches it whenever a filter is not
+come back. A matrix index under `auto` reaches it whenever a filter is not
 selective enough to pre-filter.
 
 ## What To Expect From Results
@@ -372,9 +369,9 @@ where that changes, and each is something you opt into.
 **Signature indexes are approximate.** `inverted_signature`, and
 `inverted_hybrid` above 270 terms, find candidates by signature collision. The
 scores returned are exact, but qualifying rows can be missed. For sequences the
-signatures come from the term multiset, so the collision rate estimates a
-bound on the edit distance rather than the distance itself, and recall is
-looser than it is for a comparator the signatures estimate directly.
+signatures come from the term multiset. The collision rate then estimates a
+bound on the edit distance rather than the distance itself, so recall is looser
+than it is for a comparator the signatures estimate directly.
 
 **`inverted_term` only returns rows sharing a term with the query.** This
 matters for sparse `l2`, where two records with no terms in common can still
@@ -382,10 +379,10 @@ have a non-zero similarity. Those rows are not returned. Use `scan` if you need
 them.
 
 **Post-filtering can return fewer rows than exist.** A search that resolves to
-post-filtering scores rows without applying the metadata filter and filters
-what it kept, so rows the filter accepts can fall outside what it kept. The
-matrix index post-filters under `auto` whenever a filter is not selective
-enough to pre-filter. [Strategies An Index Type
+post-filtering scores rows first and applies the metadata filter to what it
+kept. Rows the filter accepts can therefore fall outside what it kept. The
+matrix index post-filters under `auto` whenever a filter is not selective enough
+to pre-filter. [Strategies An Index Type
 Supports](#strategies-an-index-type-supports) says when each strategy runs.
 
 **Background maintenance is invisible to results.** Rows move from the active
@@ -397,24 +394,22 @@ structure, so a deleted row never comes back.
 
 A term occurring in most rows produces most of the index as candidates without
 narrowing anything down. Setting `max_fraction_ids_per_term` below `1.0` lets
-the inverted cache and indexes discard such terms.
-`popular_term_discard_scope` decides what a discard means, and the two settings
-differ in which half of the answer stays exact:
+the inverted cache and indexes discard such terms. `popular_term_discard_scope`
+decides what a discard means, and the two settings differ in which half of the
+answer stays exact:
 
 `candidates_and_verification`, the default, removes a discarded term from the
 lists and from the records being scored. Similarities are then reported between
 the records with the popular terms removed, and every row at or above the
-minimum similarity
-by that measure is found. Choose this when the popular terms carry no signal
-worth reporting.
+minimum similarity by that measure is found. Choose this when the popular terms
+carry no signal worth reporting.
 
-`candidates_only` removes a discarded term from the lists only. Similarities
-are reported over your records as supplied, including the popular terms, but
-recall is no longer exact: candidates are pruned using the similarity measured
-without those terms, so a qualifying row can be dropped before it is ever
-scored. Choose this when you must report exact similarities on the original
-records. How much recall costs depends on how much similarity the discarded
-terms carried.
+`candidates_only` removes a discarded term from the lists only. Similarities are
+reported over your records as supplied, including the popular terms, but recall
+is no longer exact: candidates are pruned using the similarity measured without
+those terms, so a qualifying row can be dropped before it is ever scored. Choose
+this when you must report exact similarities on the original records. How much
+recall costs depends on how much similarity the discarded terms carried.
 
 ### Candidate Generation
 
@@ -428,11 +423,9 @@ comparator.
 
 `spars_merge` advances all of the query's keys together, letting it abandon a
 row as soon as no completion of it can reach the current minimum similarity. It
-pays off
-when queries have many keys and the minimum similarity rejects most rows early.
-It is
-available for `l2`, `jaccard`, and `ruzicka`, and not for the sequence
-comparators.
+pays off when queries have many keys and the minimum similarity rejects most
+rows early. It is available for `l2`, `jaccard`, and `ruzicka`, and not for the
+sequence comparators.
 
 ## What USSI Does Not Do
 

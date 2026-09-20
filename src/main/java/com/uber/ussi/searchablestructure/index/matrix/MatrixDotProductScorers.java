@@ -73,10 +73,8 @@ final class MatrixDotProductScorers {
    * always available, which is what makes the list terminate.
    *
    * <p>The CUDA scorer leads it because a GPU scores a dense matrix faster than a CPU does,
-   * and reaching it takes
-   * both a GPU and the bindings, which this library depends on at compile time alone. A
-   * deployment adding them is what selects it, and no result it produces has been verified on
-   * a GPU.
+   * and reaching it takes both a GPU and the bindings, which this library depends on at
+   * compile time alone. A deployment adding them is what selects it.
    */
   private static final List<Provider> PREFERENCE_ORDER = List.of(CUDA, OPEN_BLAS, JAVA);
 

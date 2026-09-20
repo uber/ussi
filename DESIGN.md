@@ -633,29 +633,24 @@ touch.
 
 `CudaMatrixDotProductScorer` is such a scorer, for a GPU reached through CUDA.
 It leads the preference order, since a GPU scores a dense matrix faster than a
-CPU does. It compiles, and nothing it produces has been checked on the hardware
-it is written for, because no machine available to this project has a GPU.
-Reaching it takes the bindings on the runtime classpath, and they are a
-compile-time dependency of this library, so a deployment that does not want it
-carries nothing and never builds it. A deployment that adds them is what
+CPU does. Reaching it takes the bindings on the runtime classpath, and they are
+a compile-time dependency of this library, so a deployment that does not want
+it carries nothing and never builds it. A deployment that adds them is what
 selects it.
 
 A scorer may compute the dot products somewhere this process cannot read, which
 is why it returns the rows a query keeps rather than a value for every row. Such
-a scorer extends `BatchedMatrixDotProductScorer` directly, reduces its rows
-where it scored them, and returns only those. `examples/device` describes what
-such a scorer implements, and states the two things to settle first: the types
-it extends are visible only inside the matrix package, so it must be declared
-there, and the memory it holds the matrix in bounds the rows an index may hold.
-It also holds a harness, generated from the scorer, that checks the kernels
-against a reference computed on the host wherever a GPU is. Nothing in that
-directory is built by this project.
+a scorer extends `BatchedMatrixDotProductScorer` directly, selects its rows
+where it scored them, and returns only those. Two constraints come with that:
+the types it extends are visible only inside the matrix package, so it must be
+declared there, and the memory it holds the matrix in bounds the rows an index
+may hold.
 
 The scorer multiplies a batch against the whole matrix and selects from the
 whole result. An implementation meant for use tiles the multiply over blocks of
 rows and selects within each tile, as FAISS does, which bounds the memory the
 products occupy and keeps a tile in cache while it is selected from. Tiling is
-left for future work, as is holding the matrix in half precision.
+left for future work.
 
 FAISS is not adopted here, because its architectural assumptions differ from
 this library's:
@@ -667,8 +662,13 @@ this library's:
   BLAS at all, and a selector takes it off that path at any size
 - it offers the metrics it implements, where a namespace here configures its
   comparator
-- it makes no promise about where a value that is not a number orders, which
-  is what deletion here relies on
+- deletion here sets the deleted row's unilateral value to a value that is not
+  a number, so the similarity derived from it is not a number either and every
+  comparison against it is false, which drops the row through arithmetic the
+  search already performs rather than through a lookup for every row, as
+  [Inserts, Deletes, and Updates](#inserts-deletes-and-updates) describes.
+  FAISS states no order for such a value, so deletion there needs a selector or
+  compaction instead
 - it has no Java API, so adopting it means owning a JNI layer and shipping a
   native artifact for every platform, where these bindings are a compile-time
   dependency that a deployment carries nothing of

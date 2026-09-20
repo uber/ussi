@@ -3,4 +3,3 @@
 /bazel-testlogs
 /bazel-ussi
 MODULE.bazel.lock
-examples/device/harness/harness.cu

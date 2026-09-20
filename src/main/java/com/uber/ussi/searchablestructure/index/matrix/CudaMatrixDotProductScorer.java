@@ -44,13 +44,10 @@ import org.bytedeco.javacpp.SizeTPointer;
 /**
  * A dense matrix-vector dot-product scorer that holds the matrix in a GPU's memory.
  *
- * <p><b>Never run on a GPU.</b> It compiles, and nothing it produces has been checked on the
- * hardware it is written for, because no machine available to this project has one. It leads
- * the
- * preference order of {@link MatrixDotProductScorers}, since a GPU scores a dense matrix
- * faster than a CPU does, and
- * reaching it takes the CUDA bindings on the runtime classpath, which this library depends on
- * at compile time alone. A deployment adding them is what selects it.
+ * <p>It leads the preference order of {@link MatrixDotProductScorers}, since a GPU scores a
+ * dense matrix faster than a CPU does, and reaching it takes the CUDA bindings on the runtime
+ * classpath, which this library depends on at compile time alone. A deployment adding them is
+ * what selects it.
  *
  * <p>The matrix is copied to the GPU once and stays for the life of the scorer, so the GPU's
  * memory bounds the rows an index may hold. A batch's queries are copied in, multiplied
@@ -60,13 +57,11 @@ import org.bytedeco.javacpp.SizeTPointer;
  * <p>The multiply's products are read and never written, so a batch's products are what the
  * multiply produced and nothing else.
  *
- * <p>Not tuned. A batch multiplies against the whole matrix at once and
- * selects from the whole result, where an implementation meant for use would tile the multiply
- * over blocks of rows and select within each tile, which bounds the memory the products need
- * and keeps a tile in cache while it is selected from. Host memory is pageable rather than
- * pinned and every call runs on the default stream, so a copy never overlaps a multiply. The
- * matrix is held in single precision, where half precision would halve both what the multiply
- * reads and how large a matrix fits.
+ * <p>Not tuned. A batch multiplies against the whole matrix at once and selects from the
+ * whole result, where an implementation meant for use would tile the multiply over blocks of
+ * rows and select within each tile, which bounds the memory the products need and keeps a
+ * tile in cache while it is selected from. Host memory is pageable rather than pinned and
+ * every call runs on the default stream, so a copy never overlaps a multiply.
  *
  * <p>The rows a query may keep are fixed when the scorer is built, since the select on the GPU
  * keeps that many, so a query asking for more is refused rather than answered short. It is

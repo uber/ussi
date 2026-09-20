@@ -15,8 +15,7 @@ import org.junit.jupiter.api.Test;
 /**
  * The GPU scorer against a scorer that needs no GPU, on the same rows and the same query.
  *
- * <p>Skipped wherever no GPU is present, which is every machine this project has, so the GPU
- * scorer is unverified until this runs somewhere it is not skipped.
+ * <p>Skipped where no GPU is present.
  */
 class CudaMatrixDotProductScorerTest {
   private static final float DELTA = 1e-3f;

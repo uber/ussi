@@ -231,7 +231,7 @@ public final class MatrixIndex extends RowStoringIndex {
   /**
    * Adds the row when it matches and reaches the minimum, and returns the minimum to score the
    * rows after it against, which rises as the heap fills so that a row unable to reach what the
-   * heap already holds costs nothing beyond its own similarity.
+   * heap already holds incurs no cost beyond its own similarity.
    */
   private float addMatchingRow(
       BoundedSizeMaxHeap<RowNumAndSimilarity> rows,

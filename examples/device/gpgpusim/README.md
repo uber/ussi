@@ -20,12 +20,14 @@ GPGPU-Sim 4.2 was built against CUDA 12.6 and run against both forms on its A100
 Neither completes, for two reasons that are properties of the simulator rather than of this
 code.
 
-**It does not implement the synchronising warp shuffle.** `__shfl_down_sync` returns zero to
-every lane, which a twelve-line program reducing a warp to its largest lane confirms: it yields
-zero where it should yield thirty-one. The reduction is built on that instruction, so under the
-simulator it produces a row number and a similarity belonging to different rows. That result is
-an artifact and says nothing about the kernel. CUDA 12 removed the older `__shfl_down`, so there
-is no substitute to fall back to.
+**It does not implement the warp shuffle.** Every lane receives zero from `__shfl_down_sync`,
+`__shfl_sync`, `__shfl_up_sync` and `__shfl_xor_sync` alike, where a warp reducing to its
+largest lane should reach thirty-one. The same holds built against CUDA 11.8 and against 12.6,
+and on the Volta configuration as on the Ampere one, while a reduction through shared memory in
+the same kernel returns the right answer. The reduction this scorer uses is built on that
+instruction, so under the simulator it yields a row number and a similarity belonging to
+different rows. That result is an artifact and says nothing about the kernel. CUDA 12 removed
+the older `__shfl_down`, so there is no substitute to fall back to.
 
 **It cannot load a current cuBLAS.** The simulator reads kernels only from a statically linked
 library, which works as far as parsing cuBLAS's own `sgemm`, and then aborts on a device

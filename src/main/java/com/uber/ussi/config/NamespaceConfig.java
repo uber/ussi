@@ -18,6 +18,13 @@ import javax.annotation.Nullable;
  * {@link NamespaceConfigValidator} for the params and cross-field rules only that layer knows.
  */
 public final class NamespaceConfig {
+  /**
+   * The most similarities a namespace may be configured to return. Every search reduces what
+   * it was asked for to what the namespace permits, so this bounds a result set however large
+   * a caller's k is, and it bounds what a scorer keeping a fixed number of rows has to hold.
+   */
+  public static final int MAX_NUM_SIMILARITIES_CEILING = 1_024;
+
   private final int minTermsAndValuesLength;
   private final int maxTermsAndValuesLength;
   private final int maxCacheSize;
@@ -169,6 +176,8 @@ public final class NamespaceConfig {
           "maxNumSearchableStructures must be > 2, got " + maxNumSearchableStructures + ".");
     }
     ConfigViolations.checkPositive(violations, "maxNumSimilarities", maxNumSimilarities);
+    ConfigViolations.checkAtMost(
+        violations, "maxNumSimilarities", maxNumSimilarities, MAX_NUM_SIMILARITIES_CEILING);
     if (minTermsAndValuesLength > maxTermsAndValuesLength) {
       violations.add(
           "minTermsAndValuesLength must be <= maxTermsAndValuesLength, got "

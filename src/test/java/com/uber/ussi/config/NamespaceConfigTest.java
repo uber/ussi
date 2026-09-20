@@ -47,6 +47,25 @@ class NamespaceConfigTest {
   }
 
   @Test
+  void validateRejectsMoreSimilaritiesThanTheCeiling() {
+    NamespaceConfig config =
+        validBuilder()
+            .maxNumSimilarities(NamespaceConfig.MAX_NUM_SIMILARITIES_CEILING + 1)
+            .build();
+
+    assertFalse(config.collectStructuralViolations().isEmpty());
+    assertThrows(IllegalArgumentException.class, config::validate);
+  }
+
+  @Test
+  void validateAcceptsTheCeilingItself() {
+    NamespaceConfig config =
+        validBuilder().maxNumSimilarities(NamespaceConfig.MAX_NUM_SIMILARITIES_CEILING).build();
+
+    config.validate(); // Should not throw.
+  }
+
+  @Test
   void validateRejectsMinTermsLengthGreaterThanMax() {
     NamespaceConfig config =
         validBuilder().minTermsAndValuesLength(5).maxTermsAndValuesLength(2).build();

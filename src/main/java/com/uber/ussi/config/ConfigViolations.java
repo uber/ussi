@@ -24,6 +24,12 @@ public final class ConfigViolations {
     }
   }
 
+  public static void checkAtMost(List<String> violations, String name, int value, int ceiling) {
+    if (value > ceiling) {
+      violations.add(name + " must be <= " + ceiling + ", got " + value + ".");
+    }
+  }
+
   public static void checkNonNegative(List<String> violations, String name, int value) {
     if (value < 0) {
       violations.add(name + " must be >= 0, got " + value + ".");

@@ -67,6 +67,9 @@ import org.bytedeco.javacpp.SizeTPointer;
  * <p>The rows a query may keep are fixed when the scorer is built, since the select on the GPU
  * keeps that many, so a query asking for more is refused rather than answered short.
  *
+ * <p>Every buffer is allocated once and reused by every batch, which is safe because the base
+ * class performs one multiply at a time, under a lock, whichever caller wins it.
+ *
  * <p>CUDA calls a GPU's memory device memory, which the fields holding it are named for.
  */
 final class CudaMatrixDotProductScorer
@@ -220,6 +223,7 @@ final class CudaMatrixDotProductScorer
   private final int numRows;
   private final int dimension;
   private final int numKeptPerQuery;
+  private boolean isHandleCreated;
   private boolean isReductionLoaded;
   private final cublasContext handle = new cublasContext();
   private final CUmod_st module = new CUmod_st();
@@ -269,6 +273,7 @@ final class CudaMatrixDotProductScorer
     try {
       check(cuInit(0), "start");
       check(cublasCreate_v2(handle), "create a handle");
+      isHandleCreated = true;
       allocate(deviceMatrix, (long) numRows * dimension * Float.BYTES);
       allocate(deviceRowUniValues, (long) numRows * Float.BYTES);
       allocate(deviceQueryUniValues, (long) maxNumQueriesInABatch * Float.BYTES);
@@ -345,8 +350,8 @@ final class CudaMatrixDotProductScorer
   /**
    * Releases what the scorer took, and is called by the constructor as well when construction
    * fails partway, so it runs against whatever was taken by then. Freeing memory that was
-   * never allocated is defined and does nothing, where unloading a module that was never
-   * loaded is not, which is what the module is tracked for.
+   * never allocated is defined and does nothing, where unloading a module and destroying a
+   * handle that were never made are not, which is what those two are tracked for.
    */
   @Override
   protected void releaseResources() {
@@ -362,7 +367,9 @@ final class CudaMatrixDotProductScorer
     cudaFree(deviceQueryUniValues);
     cudaFree(deviceRowUniValues);
     cudaFree(deviceMatrix);
-    cublasDestroy_v2(handle);
+    if (isHandleCreated) {
+      cublasDestroy_v2(handle);
+    }
     handle.deallocate();
     one.deallocate();
     zero.deallocate();
@@ -370,82 +377,78 @@ final class CudaMatrixDotProductScorer
 
   private void copyQueriesToDevice(
       float[][] queryValues, RowSelection[] selections, int numQueries) {
-    FloatPointer queries = new FloatPointer((long) numQueries * dimension);
-    FloatPointer queryUniValues = new FloatPointer(numQueries);
-    for (int query = 0; query < numQueries; ++query) {
-      queries.position((long) query * dimension).put(queryValues[query], 0, dimension);
-      queryUniValues.put(query, (float) selections[query].getQueryUniValue());
+    try (FloatPointer queries = new FloatPointer((long) numQueries * dimension);
+        FloatPointer queryUniValues = new FloatPointer(numQueries)) {
+      for (int query = 0; query < numQueries; ++query) {
+        queries.position((long) query * dimension).put(queryValues[query], 0, dimension);
+        queryUniValues.put(query, (float) selections[query].getQueryUniValue());
+      }
+      queries.position(0);
+      check(
+          cudaMemcpy(
+              deviceQueries, queries, (long) numQueries * dimension * Float.BYTES,
+              cudaMemcpyHostToDevice),
+          "copy the queries");
+      check(
+          cudaMemcpy(
+              deviceQueryUniValues, queryUniValues, (long) numQueries * Float.BYTES,
+              cudaMemcpyHostToDevice),
+          "copy the query unilateral values");
     }
-    queries.position(0);
-    check(
-        cudaMemcpy(
-            deviceQueries, queries, (long) numQueries * dimension * Float.BYTES,
-            cudaMemcpyHostToDevice),
-        "copy the queries");
-    check(
-        cudaMemcpy(
-            deviceQueryUniValues, queryUniValues, (long) numQueries * Float.BYTES,
-            cudaMemcpyHostToDevice),
-        "copy the query unilateral values");
-    queries.deallocate();
-    queryUniValues.deallocate();
   }
 
   private void launchReduction(int numQueries) {
-    IntPointer numRowsArgument = new IntPointer(1).put(numRows);
-    IntPointer numKeptArgument = new IntPointer(1).put(numKeptPerQuery);
     // Every argument is read from the address given for it, so an argument that is itself an
     // address is handed over as a buffer holding it rather than as itself. Passing a device
     // address directly has it read as though it were a host one.
-    PointerPointer<Pointer> productsArgument = new PointerPointer<>(1).put(deviceProducts);
-    PointerPointer<Pointer> rowUniValuesArgument =
-        new PointerPointer<>(1).put(deviceRowUniValues);
-    PointerPointer<Pointer> queryUniValuesArgument =
-        new PointerPointer<>(1).put(deviceQueryUniValues);
-    PointerPointer<Pointer> keptRowNumsArgument =
-        new PointerPointer<>(1).put(deviceKeptRowNums);
-    PointerPointer<Pointer> keptSimilaritiesArgument =
-        new PointerPointer<>(1).put(deviceKeptSimilarities);
-    PointerPointer<Pointer> arguments =
-        new PointerPointer<>(
-            productsArgument,
-            rowUniValuesArgument,
-            queryUniValuesArgument,
-            numRowsArgument,
-            numKeptArgument,
-            keptRowNumsArgument,
-            keptSimilaritiesArgument);
-    check(
-        cuLaunchKernel(
-            reduction, numQueries, 1, 1, NUM_THREADS_PER_BLOCK, 1, 1, 0, null, arguments, null),
-        "reduce");
-    arguments.deallocate();
-    productsArgument.deallocate();
-    rowUniValuesArgument.deallocate();
-    queryUniValuesArgument.deallocate();
-    keptRowNumsArgument.deallocate();
-    keptSimilaritiesArgument.deallocate();
-    numRowsArgument.deallocate();
-    numKeptArgument.deallocate();
+    try (IntPointer numRowsArgument = new IntPointer(1).put(numRows);
+        IntPointer numKeptArgument = new IntPointer(1).put(numKeptPerQuery);
+        PointerPointer<Pointer> productsArgument = new PointerPointer<>(1).put(deviceProducts);
+        PointerPointer<Pointer> rowUniValuesArgument =
+            new PointerPointer<>(1).put(deviceRowUniValues);
+        PointerPointer<Pointer> queryUniValuesArgument =
+            new PointerPointer<>(1).put(deviceQueryUniValues);
+        PointerPointer<Pointer> keptRowNumsArgument =
+            new PointerPointer<>(1).put(deviceKeptRowNums);
+        PointerPointer<Pointer> keptSimilaritiesArgument =
+            new PointerPointer<>(1).put(deviceKeptSimilarities);
+        PointerPointer<Pointer> arguments =
+            new PointerPointer<>(
+                productsArgument,
+                rowUniValuesArgument,
+                queryUniValuesArgument,
+                numRowsArgument,
+                numKeptArgument,
+                keptRowNumsArgument,
+                keptSimilaritiesArgument)) {
+      check(
+          cuLaunchKernel(
+              reduction, numQueries, 1, 1, NUM_THREADS_PER_BLOCK, 1, 1, 0, null, arguments,
+              null),
+          "reduce");
+    }
   }
 
   private void copyKeptRowsToHost(KeptRows[] into, int numQueries) {
     long numKept = (long) numQueries * numKeptPerQuery;
-    FloatPointer similarities = new FloatPointer(numKept);
-    LongPointer rowNums = new LongPointer(numKept);
-    check(
-        cudaMemcpy(
-            similarities, deviceKeptSimilarities, numKept * Float.BYTES, cudaMemcpyDeviceToHost),
-        "copy the kept similarities");
-    check(
-        cudaMemcpy(rowNums, deviceKeptRowNums, numKept * Long.BYTES, cudaMemcpyDeviceToHost),
-        "copy the kept rows");
-    for (int query = 0; query < numQueries; ++query) {
-      similarities.position((long) query * numKeptPerQuery).get(into[query].similarities);
-      rowNums.position((long) query * numKeptPerQuery).get(into[query].rowNums);
+    try (FloatPointer similarities = new FloatPointer(numKept);
+        LongPointer rowNums = new LongPointer(numKept)) {
+      check(
+          cudaMemcpy(
+              similarities, deviceKeptSimilarities, numKept * Float.BYTES,
+              cudaMemcpyDeviceToHost),
+          "copy the kept similarities");
+      check(
+          cudaMemcpy(rowNums, deviceKeptRowNums, numKept * Long.BYTES, cudaMemcpyDeviceToHost),
+          "copy the kept rows");
+      for (int query = 0; query < numQueries; ++query) {
+        similarities.position((long) query * numKeptPerQuery).get(into[query].similarities);
+        rowNums.position((long) query * numKeptPerQuery).get(into[query].rowNums);
+      }
+      // Rewound, so what is released is what was taken rather than a position within it.
+      similarities.position(0);
+      rowNums.position(0);
     }
-    similarities.position(0).deallocate();
-    rowNums.position(0).deallocate();
   }
 
   private void copyMatrixToDevice(DenseMatrix matrix) {
@@ -454,15 +457,15 @@ final class CudaMatrixDotProductScorer
     long offset = 0;
     for (int chunk = 0; chunk < matrix.numChunks(); ++chunk) {
       float[] values = matrix.chunk(chunk);
-      FloatPointer host = new FloatPointer(values);
-      check(
-          cudaMemcpy(
-              atChunk.position(offset),
-              host,
-              (long) values.length * Float.BYTES,
-              cudaMemcpyHostToDevice),
-          "copy a chunk");
-      host.deallocate();
+      try (FloatPointer host = new FloatPointer(values)) {
+        check(
+            cudaMemcpy(
+                atChunk.position(offset),
+                host,
+                (long) values.length * Float.BYTES,
+                cudaMemcpyHostToDevice),
+            "copy a chunk");
+      }
       offset += values.length;
     }
   }
@@ -473,11 +476,11 @@ final class CudaMatrixDotProductScorer
     for (int index = 0; index < values.length; ++index) {
       narrowed[index] = (float) values[index];
     }
-    FloatPointer host = new FloatPointer(narrowed);
-    check(
-        cudaMemcpy(device, host, (long) narrowed.length * Float.BYTES, cudaMemcpyHostToDevice),
-        "copy the unilateral values");
-    host.deallocate();
+    try (FloatPointer host = new FloatPointer(narrowed)) {
+      check(
+          cudaMemcpy(device, host, (long) narrowed.length * Float.BYTES, cudaMemcpyHostToDevice),
+          "copy the unilateral values");
+    }
   }
 
   private void compileReduction() {

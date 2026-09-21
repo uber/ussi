@@ -553,16 +553,20 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
 
   /**
    * Adds the inverted lists and the further maps this index keeps to the rows and metadata the
-   * superclass counts. The verification map is counted only where it is a map of its own, since
-   * leaving the popular terms in the scored records aliases it to the map already counted.
+   * superclass counts.
+   *
+   * <p>Those maps may be one another. The rows keyed by the lists are the rows the discarded terms
+   * were removed from wherever removing them changed nothing, and the rows scored are those same
+   * rows wherever the discarded terms are absent from scoring. Each map is therefore counted once,
+   * by identity.
    */
   @Override
   public MemoryFootprint getMemoryFootprint() {
     MemoryFootprint rowsAndMetadata = super.getMemoryFootprint();
     long bytes = rowsAndMetadata.getOnHeapBytes();
-    bytes += estimateRowMapBytes(indexedRowNumToTermsAndValuesMap);
-    if (verificationRowNumToTermsAndValuesMap != rowNumToTermsAndValuesMap) {
-      bytes += estimateRowMapBytes(verificationRowNumToTermsAndValuesMap);
+    bytes += estimateAdditionalRowMapBytes(indexedRowNumToTermsAndValuesMap);
+    if (verificationRowNumToTermsAndValuesMap != indexedRowNumToTermsAndValuesMap) {
+      bytes += estimateAdditionalRowMapBytes(verificationRowNumToTermsAndValuesMap);
     }
     bytes += (long) rowNumToUniValue.size() * BYTES_PER_UNI_VALUE_ENTRY;
     bytes += (long) discardedTerms.size() * BYTES_PER_DISCARDED_TERM;

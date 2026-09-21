@@ -245,7 +245,7 @@ public final class ParallelismBudget {
    *
    * <p>Such a count is divided only where concurrent searches call the library at once, and the
    * holders of one serialize their callers instead, so there is nothing to divide: one call holds
-   * the whole width and the searches behind it wait. Dividing would narrow every call exactly as
+   * the whole count and the searches behind it wait. Dividing would narrow every call exactly as
    * load rises, which measurement showed to be the worse arrangement by a wide margin.
    *
    * <p>The count is therefore constant, which means it is applied once when its holder registers

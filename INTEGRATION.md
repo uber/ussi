@@ -29,7 +29,7 @@ records, comparators, and index types.
 | Admission | The process-wide semaphore a search acquires a permit from before it runs, which bounds how many searches run at once. |
 | Work unit | One piece of a search that divides itself, run on the search pool. |
 | Shard | One part of an inverted index, searched as its own work unit. |
-| Batch | The queries one dense matrix multiply carries. Its width is the most queries that multiply may carry at once. |
+| Batch | The queries one dense matrix multiply carries. Its size is a measurement of the load offered at that instant, bounded by the most queries one multiply may carry. |
 | Parallelism budget | What derives, from the processor allowance and the observed concurrency, the threads one search may use and the threads a native library holds. |
 
 ## What USSI owns
@@ -113,10 +113,10 @@ rebuilds that library's thread pool, which is unsafe during a call.
 Two quantities are fixed when an index is built and do not follow the allowance
 afterwards:
 
-- The batch width a dense scorer allocates its buffers for. Raising the
-  allowance admits more concurrent searches than one multiply carries, and the
-  surplus waits for the next multiply rather than overflowing a buffer. Rebuild
-  the namespace to widen it.
+- The most queries one multiply may carry, which a dense scorer allocates its
+  buffers for. Raising the allowance admits more concurrent searches than one
+  multiply carries, and the surplus waits for the next multiply rather than
+  overflowing a buffer. Rebuild the namespace to raise it.
 - The number of shards an inverted index divides into.
 
 The allowance is clamped by the processors the process may run on, which a
@@ -223,6 +223,12 @@ The generated POM lists the runtime dependencies, including the OpenBLAS and
 JavaCPP platform jars that dense search needs, one per platform. The CUDA
 bindings and Lombok are compile-time only and are absent from it, so a consumer
 that wants the device scorer declares the CUDA platform jar itself.
+
+The four OpenBLAS platform jars come to roughly 61 MB together, and a consumer
+resolves all four whatever it runs on, so that dense search needs no further
+declaration. A consumer that deploys to one platform may exclude the other
+three and declare the one it runs on, which is a Maven exclusion on
+`org.bytedeco:openblas` rather than anything USSI provides.
 
 Publishing takes the repository to publish to, which may be any Maven
 repository. A `file://` URL writes to a directory, which is what verifying the

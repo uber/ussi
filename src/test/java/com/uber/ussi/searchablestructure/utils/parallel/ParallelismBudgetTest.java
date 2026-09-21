@@ -27,7 +27,7 @@ class ParallelismBudgetTest {
   }
 
   /**
-   * A holder of a process-global count serializes its callers, so one call holds the whole width
+   * A holder of a process-global count serializes its callers, so one call holds the whole count
    * and there is nothing to divide between concurrent searches.
    */
   @Test
@@ -305,11 +305,11 @@ class ParallelismBudgetTest {
 
   /**
    * A host lowers the allowance before building its first namespace, which is what brings the
-   * shared budget into existence. An allowance below one socket's cores must narrow the batch
-   * width rather than violate the invariant that it never exceeds the threads one search may use.
+   * shared budget into existence. An allowance below one socket's cores must lower the threads a native
+   * library holds rather than violate the invariant that it never exceeds the threads one search may use.
    */
   @Test
-  void theSharedBudgetNarrowsTheBatchWidthToAnAllowanceBelowOneSocket() {
+  void theSharedBudgetLowersTheNativeThreadCountToAnAllowanceBelowOneSocket() {
     int socketCores = ProcessorTopology.getNumCoresPerSocket();
     ProcessorAllowance.shared().setNumProcessors(() -> 1);
     try {
@@ -318,8 +318,8 @@ class ParallelismBudgetTest {
       assertEquals(1, budget.getNumThreadsPerSearch());
       assertEquals(1, budget.getNumThreadsPerBatchFor(1));
 
-      // The socket width is a property of the machine, so raising the allowance widens the batch
-      // back to it rather than leaving it at what a transient allowance narrowed it to.
+      // The cores of one socket are a property of the machine, so raising the allowance returns
+      // that count to what the machine has rather than to what a transient allowance left.
       ProcessorAllowance.shared().setNumProcessors(() -> socketCores);
       budget.applyAllowanceChange(1);
 

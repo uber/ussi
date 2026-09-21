@@ -178,7 +178,12 @@ public final class SearchThreads {
     if (numThreads < 1) {
       numThreads = 1;
     }
-    ThreadPoolExecutor pool = searchers();
+    ThreadPoolExecutor pool = searchers;
+    // A process that has not divided a search yet holds no pool, and the one it creates reads the
+    // allowance for itself, so there is nothing to resize.
+    if (pool == null) {
+      return;
+    }
     int currentCore = pool.getCorePoolSize();
     if (numThreads > currentCore) {
       pool.setMaximumPoolSize(numThreads);

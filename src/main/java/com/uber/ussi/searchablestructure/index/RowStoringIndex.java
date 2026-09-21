@@ -120,7 +120,13 @@ public abstract class RowStoringIndex extends Index {
    * live ones.
    */
   protected final long getRowStorageBytes() {
-    return estimateRowMapBytes(rowNumToTermsAndValuesMap);
+    long bytes = 0;
+    for (LongObjectCursor<LongTermsAndValues> entry : rowNumToTermsAndValuesMap) {
+      bytes += BYTES_PER_ROW_MAP_ENTRY + BYTES_PER_RECORD_HEADER;
+      bytes += (long) entry.value.termsLength() * Long.BYTES;
+      bytes += (long) entry.value.valuesLength() * Float.BYTES;
+    }
+    return bytes;
   }
 
   /** Bytes the structure answering metadata filters holds. */
@@ -129,15 +135,26 @@ public abstract class RowStoringIndex extends Index {
   }
 
   /**
-   * Bytes a map from rowNum to record holds, being its slots and the two arrays of every record in
-   * it. A subclass keeping a further map of the same shape sizes it through this.
+   * Bytes a further map over the same rows holds beyond {@link #rowNumToTermsAndValuesMap}, being
+   * its own slots, and the records in it that are not the very records that map already holds.
+   *
+   * <p>A subclass may derive a map whose records are unchanged, in which case both maps reference
+   * one set of records and only the slots are held twice. Counting the records again would report
+   * memory that was never allocated.
    */
-  protected static long estimateRowMapBytes(LongObjectHashMap<LongTermsAndValues> rowMap) {
+  protected final long estimateAdditionalRowMapBytes(
+      LongObjectHashMap<LongTermsAndValues> rowMap) {
+    if (rowMap == rowNumToTermsAndValuesMap) {
+      return 0;
+    }
     long bytes = 0;
     for (LongObjectCursor<LongTermsAndValues> entry : rowMap) {
-      bytes += BYTES_PER_ROW_MAP_ENTRY + BYTES_PER_RECORD_HEADER;
-      bytes += (long) entry.value.termsLength() * Long.BYTES;
-      bytes += (long) entry.value.valuesLength() * Float.BYTES;
+      bytes += BYTES_PER_ROW_MAP_ENTRY;
+      if (entry.value != rowNumToTermsAndValuesMap.get(entry.key)) {
+        bytes += BYTES_PER_RECORD_HEADER;
+        bytes += (long) entry.value.termsLength() * Long.BYTES;
+        bytes += (long) entry.value.valuesLength() * Float.BYTES;
+      }
     }
     return bytes;
   }

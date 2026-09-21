@@ -67,6 +67,35 @@ class TermIndexTest {
   }
 
   /**
+   * The rows keyed by the lists and the rows scored are the same records as the rows held, once no
+   * term is discarded and the indexed form is the identity. Only the map slots are held again, so
+   * counting a second and third copy of the records would report memory never allocated.
+   */
+  @Test
+  void memoryFootprintCountsRecordsSharedBetweenItsMapsOnce() {
+    LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
+    for (long rowNum = 1; rowNum <= 20; ++rowNum) {
+      rows.put(rowNum, jaccard(sequentialTerms(8), repeatedValue(1.0f, 8)));
+    }
+
+    long termIndexBytes =
+        new TermIndex(config("jaccard"), rows, longObjectMap())
+            .getMemoryFootprint()
+            .getOnHeapBytes();
+    // A scan index holds the records once and nothing else of consequence, so it stands in for
+    // one copy of them.
+    long scanIndexBytes =
+        new ScanIndex(config("jaccard", Map.of(), "scan"), rows, longObjectMap())
+            .getMemoryFootprint()
+            .getOnHeapBytes();
+
+    assertTrue(
+        termIndexBytes < 2 * scanIndexBytes,
+        "the records shared between the maps are counted more than once: inverted "
+            + termIndexBytes + " against scan " + scanIndexBytes);
+  }
+
+  /**
    * A merging generator scores from the inverted lists, so each list carries a value per row
    * beside the row number. The other generator carries row numbers alone.
    */

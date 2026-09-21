@@ -78,21 +78,21 @@ class OpenBlasTest {
    */
   @Test
   void reClampingTheAllowanceLeavesTheThreadCountAlone() {
+    // Registers the bound outside the fake, so the process is bounded by the loaded binary rather
+    // than by whatever this test reports.
+    OpenBlas.shared();
     FakeOpenBlas fakeOpenBlas = new FakeOpenBlas();
 
     withFakeOpenBlas(
         fakeOpenBlas,
         () -> {
-          new OpenBlas();
-          int numUpdatesAtConstruction = fakeOpenBlas.numThreadsUpdates.size();
-
           ProcessorAllowance.shared().refresh();
           ProcessorAllowance.shared().refresh();
           ProcessorAllowance.shared().refresh();
 
           assertEquals(
-              numUpdatesAtConstruction,
-              fakeOpenBlas.numThreadsUpdates.size(),
+              List.of(),
+              fakeOpenBlas.numThreadsUpdates,
               "re-clamping the allowance must not set the thread count");
         });
   }

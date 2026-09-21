@@ -37,6 +37,9 @@ import java.util.function.IntConsumer;
  */
 public final class SearchThreads {
 
+  /** How long a shutdown waits for the work units already running to finish. */
+  private static final long SHUTDOWN_TIMEOUT_SECONDS = 5;
+
   private static final Object POOL_LOCK = new Object();
   // Guarded by POOL_LOCK for creation and shutdown; read without the lock once assigned.
   private static volatile ThreadPoolExecutor searchers;
@@ -165,10 +168,13 @@ public final class SearchThreads {
   }
 
   /**
-   * Resizes the pool to the given number of threads. Must be called with no search running, since a
-   * running work unit holds a thread the new size may not account for.
+   * Resizes the pool to the given number of threads.
+   *
+   * <p>Package-private because the only caller is {@link ParallelismBudget}, which resizes the pool
+   * while it already holds exclusivity. Acquiring it here as well would re-enter a semaphore whose
+   * permits that caller holds.
    */
-  public static void resize(int numThreads) {
+  static void resize(int numThreads) {
     if (numThreads < 1) {
       numThreads = 1;
     }
@@ -184,10 +190,18 @@ public final class SearchThreads {
   }
 
   /**
-   * Shuts down the pool and releases its threads. Must be called with no search running. A host
-   * unloading USSI, or a test, calls this so the daemon threads do not outlive the work.
+   * Shuts down the pool and releases its threads. A host unloading USSI, or a test, calls this so
+   * the daemon threads do not outlive the work.
+   *
+   * <p>Suspends every search in the process first, rather than requiring the caller to have done
+   * so, since a work unit running while the pool is shut down would be cancelled underneath the
+   * search that submitted it.
    */
   public static void shutdown() {
+    ParallelismBudget.shared().runExclusively(SearchThreads::shutdownPool);
+  }
+
+  private static void shutdownPool() {
     synchronized (POOL_LOCK) {
       ThreadPoolExecutor pool = searchers;
       if (pool == null) {
@@ -195,7 +209,7 @@ public final class SearchThreads {
       }
       pool.shutdownNow();
       try {
-        pool.awaitTermination(5, TimeUnit.SECONDS);
+        pool.awaitTermination(SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
       }

@@ -20,6 +20,7 @@ import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
 import com.uber.ussi.utils.ConfigKeys;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -485,41 +486,59 @@ class SignatureIndexTest {
     /**
      * The hybrid structure routes by term count, so a corpus straddling the cutoff exercises both
      * halves at once and every row still has to come back scored exactly.
+     *
+     * <p>Both sequence comparators are run. They normalize differently, and the minimum
+     * similarity a search carries is what the routing prunes against, so the two do not
+     * exercise the same decision.
      */
     @Test
     void theHybridStructureRoutesSequencesByTermCount() {
-      Random random = new Random(31_337L);
-      long[] shortBase = sequence(random, 20).getTerms();
-      long[] longBase = sequence(random, SignatureIndex.NUM_SIGNATURES_PER_ROW + 40).getTerms();
-      LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
-      for (long rowNum = 1; rowNum <= 8; ++rowNum) {
-        rows.put(rowNum, perturbed(random, shortBase, 1 + random.nextInt(3)));
-      }
-      for (long rowNum = 9; rowNum <= 16; ++rowNum) {
-        rows.put(rowNum, perturbed(random, longBase, 1 + random.nextInt(8)));
-      }
-      HybridIndex index = new HybridIndex(hybridConfig("ngld"), rows, longObjectMap());
-      ScanIndex bruteForce = new ScanIndex(scanConfig("ngld"), rows, longObjectMap());
+      for (String comparatorType : List.of("gld", "ngld")) {
+        Random random = new Random(31_337L);
+        long[] shortBase = sequence(random, 20).getTerms();
+        long[] longBase = sequence(random, SignatureIndex.NUM_SIGNATURES_PER_ROW + 40).getTerms();
+        LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
+        for (long rowNum = 1; rowNum <= 8; ++rowNum) {
+          rows.put(rowNum, perturbed(random, shortBase, 1 + random.nextInt(3)));
+        }
+        for (long rowNum = 9; rowNum <= 16; ++rowNum) {
+          rows.put(rowNum, perturbed(random, longBase, 1 + random.nextInt(8)));
+        }
+        HybridIndex index = new HybridIndex(hybridConfig(comparatorType), rows, longObjectMap());
+        ScanIndex bruteForce = new ScanIndex(scanConfig(comparatorType), rows, longObjectMap());
 
-      assertEquals(8, index.getNumExactRowsForTests());
-      assertEquals(8, index.getNumSignatureRowsForTests());
+        assertEquals(8, index.getNumExactRowsForTests(), comparatorType);
+        assertEquals(8, index.getNumSignatureRowsForTests(), comparatorType);
 
-      for (int trial = 0; trial < 10; ++trial) {
-        long[] base = trial % 2 == 0 ? shortBase : longBase;
-        LongTermsAndValues query = perturbed(random, base, 1 + random.nextInt(3));
-        Map<Long, Float> exact =
-            similaritiesByRowNum(bruteForce.getSimilarRowNums(0.8f, query, null));
+        for (int trial = 0; trial < 10; ++trial) {
+          long[] base = trial % 2 == 0 ? shortBase : longBase;
+          LongTermsAndValues query = perturbed(random, base, 1 + random.nextInt(3));
+          Map<Long, Float> exact =
+              similaritiesByRowNum(bruteForce.getSimilarRowNums(0.0f, query, null));
+          // The threshold comes from the scan rather than being fixed, because the two
+          // comparators normalize differently: one number admits every row for one of them and
+          // no row for the other. The third best admits the query's own cluster either way.
+          float minSimilarity = nthHighest(exact.values(), 3);
 
-        List<RowNumAndSimilarity> results =
-            index.getSimilarRowNums(0.8f, query, MetaFilter.empty());
-        assertTrue(!results.isEmpty(), "trial=" + trial + " found nothing in its own cluster");
-        for (RowNumAndSimilarity result : results) {
-          Float expected = exact.get(result.getRowNum());
-          String message = "trial=" + trial + " rowNum=" + result.getRowNum();
-          assertTrue(expected != null, message + " is not similar enough to qualify");
-          assertEquals(expected, result.getSimilarity(), DELTA, message);
+          List<RowNumAndSimilarity> results =
+              index.getSimilarRowNums(minSimilarity, query, MetaFilter.empty());
+          String where = comparatorType + " trial=" + trial;
+          assertTrue(!results.isEmpty(), where + " found nothing in its own cluster");
+          for (RowNumAndSimilarity result : results) {
+            Float expected = exact.get(result.getRowNum());
+            String message = where + " rowNum=" + result.getRowNum();
+            assertTrue(expected != null, message + " is not similar enough to qualify");
+            assertEquals(expected, result.getSimilarity(), DELTA, message);
+          }
         }
       }
+    }
+
+    /** The nth highest of the similarities, or the lowest when there are fewer than n. */
+    private static float nthHighest(Collection<Float> similarities, int n) {
+      List<Float> ranked = new ArrayList<>(similarities);
+      ranked.sort(java.util.Comparator.reverseOrder());
+      return ranked.get(Math.min(n - 1, ranked.size() - 1));
     }
 
     private static Map<Long, Float> similaritiesByRowNum(List<RowNumAndSimilarity> results) {

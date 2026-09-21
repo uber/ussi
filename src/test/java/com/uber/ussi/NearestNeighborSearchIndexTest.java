@@ -14,6 +14,8 @@ import com.carrotsearch.hppc.LongHashSet;
 import com.carrotsearch.hppc.LongObjectHashMap;
 import com.carrotsearch.hppc.cursors.LongObjectCursor;
 import com.uber.ussi.config.NamespaceConfig;
+import com.uber.ussi.error.InternalIndexException;
+import com.uber.ussi.error.InvalidQueryException;
 import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
@@ -353,7 +355,7 @@ class NearestNeighborSearchIndexTest {
       NearestNeighborSearchIndex index = NearestNeighborSearchIndex.create(config());
 
       assertThrows(
-          IllegalArgumentException.class,
+          InvalidQueryException.class,
           () -> index.getNearestNeighborRowNums(0, denseVector(1f, 0f), MetaFilter.empty()));
     }
 
@@ -374,7 +376,7 @@ class NearestNeighborSearchIndexTest {
       NearestNeighborSearchIndex index = NearestNeighborSearchIndex.create(config());
 
       assertThrows(
-          IllegalArgumentException.class,
+          InvalidQueryException.class,
           () -> index.getSimilarRowNums(1.5f, denseVector(1f, 0f), MetaFilter.empty()));
     }
 
@@ -393,7 +395,7 @@ class NearestNeighborSearchIndexTest {
       setField(index, "nextRowNum", 0L);
 
       assertThrows(
-          IllegalStateException.class, () -> index.insert(denseVector(0f, 1f), Map.of("city", "la")));
+          InternalIndexException.class, () -> index.insert(denseVector(0f, 1f), Map.of("city", "la")));
     }
 
     @Test
@@ -402,7 +404,7 @@ class NearestNeighborSearchIndexTest {
       setField(index, "nextRowNum", Long.MAX_VALUE);
 
       assertThrows(
-          IllegalStateException.class, () -> index.insert(denseVector(1f, 0f), Map.of("city", "sf")));
+          InternalIndexException.class, () -> index.insert(denseVector(1f, 0f), Map.of("city", "sf")));
 
       assertEquals(0, index.size());
     }
@@ -423,7 +425,7 @@ class NearestNeighborSearchIndexTest {
           0);
 
       assertThrows(
-          IllegalStateException.class,
+          InternalIndexException.class,
           () -> index.update(7, denseVector(0f, 1f), Map.of("city", "la")));
     }
 
@@ -681,7 +683,7 @@ class NearestNeighborSearchIndexTest {
       NearestNeighborSearchIndex index = NearestNeighborSearchIndex.create(config());
 
       assertThrows(
-          IllegalArgumentException.class,
+          InvalidQueryException.class,
           () -> index.getSimilarRowNums(-0.1f, denseVector(1f, 0f), MetaFilter.empty()));
     }
 
@@ -830,7 +832,7 @@ class NearestNeighborSearchIndexTest {
           assertThrows(
               ReflectiveOperationException.class, () -> invokeGraduateCache(index, graduating));
 
-      assertTrue(error.getCause() instanceof IllegalStateException);
+      assertTrue(error.getCause() instanceof InternalIndexException);
     }
 
     @Test
@@ -894,7 +896,7 @@ class NearestNeighborSearchIndexTest {
               ReflectiveOperationException.class,
               () -> invokeOrderedSearchableStructures(index, /* newestFirst */ false));
 
-      assertTrue(error.getCause() instanceof IllegalStateException);
+      assertTrue(error.getCause() instanceof InternalIndexException);
     }
 
     @Test
@@ -908,7 +910,7 @@ class NearestNeighborSearchIndexTest {
               ReflectiveOperationException.class,
               () -> invokeOrderedSearchableStructures(index, /* newestFirst */ false));
 
-      assertTrue(error.getCause() instanceof IllegalStateException);
+      assertTrue(error.getCause() instanceof InternalIndexException);
     }
 
     @Test

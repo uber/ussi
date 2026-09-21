@@ -1,6 +1,7 @@
 /* AUTHOR: Ahmed Metwally (ametwally@uber.com) */
 package com.uber.ussi;
 
+import com.uber.ussi.error.SearchCancelledException;
 import java.util.concurrent.Semaphore;
 
 /**
@@ -49,7 +50,7 @@ final class QueryAdmission {
       permits.acquire();
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
-      throw new IllegalStateException("Interrupted while waiting to run a search.", e);
+      throw new SearchCancelledException("Cancelled while waiting to run a search.", e);
     }
   }
 

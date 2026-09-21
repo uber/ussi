@@ -4,6 +4,7 @@ package com.uber.ussi.searchablestructure.index.matrix;
 import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.result.ResultHeaps;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
+import com.uber.ussi.error.SearchCancelledException;
 import java.util.ArrayDeque;
 import java.util.List;
 import javax.annotation.Nullable;
@@ -243,7 +244,7 @@ abstract class BatchedMatrixDotProductScorer<S> implements MatrixDotProductScore
         multiplied.await(WAIT_MICROS, TimeUnit.MICROSECONDS);
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
-        throw new IllegalStateException("Interrupted while waiting for a dense multiply.", e);
+        throw new SearchCancelledException("Cancelled while waiting for a dense multiply.", e);
       }
     }
   }

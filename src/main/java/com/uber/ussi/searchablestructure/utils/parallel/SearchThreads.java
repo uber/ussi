@@ -2,6 +2,7 @@
 package com.uber.ussi.searchablestructure.utils.parallel;
 
 import com.uber.ussi.ProcessorAllowance;
+import com.uber.ussi.error.SearchCancelledException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -128,7 +129,7 @@ public final class SearchThreads {
         submittedWorkUnit.get();
       } catch (InterruptedException e) {
         interrupted = true;
-        failure = failure != null ? failure : new IllegalStateException(WORK_UNIT_FAILED, e);
+        failure = failure != null ? failure : new SearchCancelledException(WORK_UNIT_FAILED, e);
       } catch (ExecutionException e) {
         // An undivided search would have thrown this from the caller's thread, so it is rethrown.
         RuntimeException thrown =

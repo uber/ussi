@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.uber.ussi.ProcessorAllowance;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.IntSupplier;
 import org.junit.jupiter.api.Test;
 
 class ParallelismBudgetTest {
@@ -301,6 +302,38 @@ class ParallelismBudgetTest {
 
     assertFalse(budget.isRebudgeting());
     assertEquals(CORES, budget.getNumThreadsPerSearch());
+  }
+
+  /**
+   * A periodic task that throws is not scheduled again, so a reading that fails once would leave
+   * both counts where they stand for the life of the process.
+   */
+  @Test
+  void aReadingThatFailsDoesNotStopTheBudgetFromBeingReDerived() {
+    ParallelismBudget budget = new ParallelismBudget(CORES, CORES);
+    attachThen(budget, Runnable::run);
+    int[] numReadings = {0};
+    IntSupplier failsOnceThenReportsFullConcurrency =
+        () -> {
+          if (++numReadings[0] == 1) {
+            throw new IllegalStateException("the host cannot report its processors");
+          }
+          return CORES;
+        };
+
+    // Stands in for the scheduler, which drops a periodic task whose run threw.
+    for (int reading = 0; reading < ParallelismBudget.NUM_SAMPLES_PER_UPDATE + 1; ++reading) {
+      budget.sampleWithoutPropagating(failsOnceThenReportsFullConcurrency);
+    }
+
+    assertEquals(
+        ParallelismBudget.NUM_SAMPLES_PER_UPDATE + 1,
+        numReadings[0],
+        "every interval after the failure must still take a reading");
+    assertEquals(
+        1,
+        budget.getNumThreadsPerSearch(),
+        "the readings after the failure must re-derive the budget");
   }
 
   /**

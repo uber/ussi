@@ -81,9 +81,19 @@ public final class ProcessorAllowance {
     return current;
   }
 
-  /** Re-reads the supplier and re-clamps. Called by the budget sampler and after a host change. */
+  /**
+   * Re-reads the supplier and re-clamps. Called by the budget sampler and after a host change.
+   *
+   * <p>A supplier that fails leaves the allowance at what it last reported. The supplier is the
+   * host's own code, and a failure in it is not a reason to narrow search to one processor or to
+   * propagate into the periodic work that reads it.
+   */
   public void refresh() {
-    current = clamp();
+    try {
+      current = clamp();
+    } catch (RuntimeException e) {
+      // Retains the value already in effect.
+    }
   }
 
   private int clamp() {

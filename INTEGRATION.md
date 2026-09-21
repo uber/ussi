@@ -96,6 +96,24 @@ rejects a thread that parks turns back-pressure into rejections.
 runtime, through a supplier rather than a constant. A static number cannot
 track a bursty host.
 
+Setting it is optional. A host that sets nothing gets the processors the
+process may run on, which a processor set or a bandwidth quota may already
+bound, and every count USSI derives comes from that: how many searches are
+admitted at once, how many threads the search pool holds, how many shards an
+inverted index divides into, and how many queries one dense multiply may carry.
+A namespace that never sets the allowance therefore behaves as it would with no
+allowance at all.
+
+Two things still move on their own under the default. A dense namespace that
+loads a native BLAS library registers the number of threads that library
+retains buffers for, and the allowance is lowered to it where the machine has
+more processors than the library serves. Beyond that the default reports one
+number for the life of the process.
+
+A supplier that fails leaves the allowance at what it last reported. USSI does
+not treat a failure in the host's own code as a reason to narrow search, and a
+failed reading does not stop later readings.
+
 Propagation is deferred rather than immediate. The parallelism budget re-reads
 the supplier once per averaging window rather than once per sample, and only
 while at least one namespace is open. A host that needs the new value to take

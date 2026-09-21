@@ -119,19 +119,25 @@ public final class MatrixIndex extends RowStoringIndex {
     return dimension;
   }
 
+  /**
+   * Bytes one row occupies in the map from row number to matrix row index, being its key slot and
+   * its integer value, at the load factor the map is kept at.
+   */
+  private static final long BYTES_PER_ROW_INDEX_ENTRY = 16;
+
   @Override
   public MemoryFootprint getMemoryFootprint() {
-    long onHeap = (long) rowNums.length * Long.BYTES
-        + (long) rowNums.length * Double.BYTES
-        + (long) rowNumToMatrixRowIndex.size() * 24L;
+    long onHeap =
+        getRowStorageBytes()
+            + (long) rowNums.length * Long.BYTES
+            + (long) rowNums.length * Double.BYTES
+            + (long) rowNumToMatrixRowIndex.size() * BYTES_PER_ROW_INDEX_ENTRY;
+    // A scorer holding its own copy releases the chunk arrays, which leaves the row map as the
+    // sole copy on the heap. A scorer reading the chunks leaves both.
     if (matrix.holdsValues()) {
       onHeap += (long) rowNums.length * dimension * Float.BYTES;
     }
-    // The row map holds one float[] per row, which is the same payload as the matrix when both
-    // are retained. When the matrix is released, the row map is the sole on-heap copy.
-    onHeap += (long) rowNums.length * dimension * Float.BYTES;
-    long nativeBytes = dotProductScorer.nativeFootprintBytes();
-    return new MemoryFootprint(onHeap, nativeBytes);
+    return new MemoryFootprint(onHeap, dotProductScorer.nativeFootprintBytes());
   }
 
   @Override

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.uber.ussi.ProcessorAllowance;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -300,6 +301,39 @@ class ParallelismBudgetTest {
 
     assertFalse(budget.isRebudgeting());
     assertEquals(CORES, budget.getNumThreadsPerSearch());
+  }
+
+  /**
+   * The allowance change already runs under exclusivity, so applying it must not ask for
+   * exclusivity again. The semaphore behind it is not reentrant, so a second request would block
+   * on permits the same thread already holds and suspend every search in the process permanently.
+   */
+  @Test
+  void applyingAnAllowanceChangeDoesNotAskForExclusivityAgain() {
+    ParallelismBudget budget = new ParallelismBudget(CORES, CORES / 4);
+    List<String> exclusiveCalls = new ArrayList<>();
+    attachThen(
+        budget,
+        task -> {
+          exclusiveCalls.add("entered");
+          task.run();
+        });
+    budget.onNumThreadsPerBatchChange(threads -> {});
+    exclusiveCalls.clear();
+    // An allowance below one socket's cores is what moves the count a native library holds, which
+    // is the path that would ask for exclusivity a second time.
+    ProcessorAllowance.shared().setNumProcessors(() -> 1);
+    try {
+      // Stands in for the rebudgeter, which reaches exclusivity before applying the change.
+      budget.applyAllowanceChange(1);
+    } finally {
+      ProcessorAllowance.shared()
+          .setNumProcessors(() -> Runtime.getRuntime().availableProcessors());
+    }
+
+    assertEquals(1, budget.getNumThreadsPerSearch(), "the change must have been applied");
+    assertEquals(
+        List.of(), exclusiveCalls, "the change must be applied inline, not through exclusivity");
   }
 
   @Test

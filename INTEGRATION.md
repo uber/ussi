@@ -6,8 +6,7 @@ Ahmed Metwally (ametwally@uber.com) -->
 This document describes the seam between USSI and a host that embeds it. A host
 owns its own storage lifecycle and embeds USSI as an in-memory search index beside
 it. USSI owns its own cache, graduation, and consolidation lifecycle. Those are
-two independent lifecycles over the same documents, and this document says so
-plainly and neutrally.
+two independent lifecycles over the same documents.
 
 The supported integration surface is `NearestNeighborSearchIndex` and the
 types its methods expose: `NamespaceConfig`, `TermsAndValues`, `MetaFilter`,
@@ -89,26 +88,25 @@ drains the admission semaphore first, which suspends every search in the
 process, and admission is fair, so no arriving search overtakes the drain. A
 search holds its permit across its whole traversal, including the dense
 multiply, so the moment the change is applied has no multiply dispatching work.
-This matters because the thread count a native BLAS library holds is
-process-global and setting it rebuilds that library's thread pool, which is
-unsafe to do during a call.
+The thread count a native BLAS library holds is process-global, and setting it
+rebuilds that library's thread pool, which is unsafe during a call.
 
-Two things are deliberately left as they were built:
+Two quantities are fixed when an index is built and do not follow the allowance
+afterwards:
 
-- The batch width a dense scorer allocated its buffers for is fixed when the
-  index is built. Raising the allowance afterwards admits more concurrent
-  searches than one multiply carries, and the surplus waits for the next
-  multiply rather than overflowing a buffer. Rebuild the namespace to widen it.
-- The shard count an inverted index divides into is fixed when the index is
-  built, for the same reason.
+- The batch width a dense scorer allocates its buffers for. Raising the
+  allowance admits more concurrent searches than one multiply carries, and the
+  surplus waits for the next multiply rather than overflowing a buffer.
+  Rebuild the namespace to widen it.
+- The shard count an inverted index divides into.
 
 The allowance is clamped by the processors the process may run on, which a
-  processor set or a bandwidth quota may already bound, and by the per-thread
-  buffer table a loaded BLAS binary retains. Setting the allowance at or above
-  the host's own pool size makes USSI's admission semaphore stop binding, so
-  only one gate governs concurrency. That matters because USSI blocks the
-  caller's thread, and two nested admission limits turn back-pressure into
-  rejections in a host with a bounded pool.
+processor set or a bandwidth quota may already bound, and by the per-thread
+buffer table a loaded BLAS binary retains. Setting the allowance at or above the
+host's own pool size makes USSI's admission semaphore stop binding, so only one
+gate governs concurrency. USSI blocks the caller's thread, and two nested
+admission limits turn back-pressure into rejections in a host with a bounded
+pool.
 
 A processor count is not NUMA support. Memory locality needs thread and
 allocation affinity, which the JVM cannot provide without native help, so it
@@ -132,12 +130,12 @@ before throwing, and throws `SearchCancelledException`.
 - A search cancelled while waiting on a batch another thread was running leaves
   the batch to finish for the other queries in it. The cancelled caller does
   not add its rows.
-- A search cancelled while its work units were in flight waits for them to finish
-  before throwing, since returning earlier would leave a work unit reading a
-  structure that the read lock its caller held is no longer protecting.
+- A search cancelled while its work units were outstanding waits for them to
+  finish before throwing, since returning earlier would leave a work unit reading
+  a structure that the read lock its caller held is no longer protecting.
 
 The exclusive admission path stays uninterruptible. It applies the BLAS thread
-  count, and a timeout must not tear that down.
+count, and a timeout must not tear that down.
 
 ## Exception contract
 
@@ -157,12 +155,18 @@ failures to status codes does not match on message text.
 ## Memory footprint
 
 `NearestNeighborSearchIndex.getMemoryFootprint()` returns a `MemoryFootprint`
-that separates on-heap from native or device bytes. The on-heap estimate counts
-the arrays and maps the index retains. The native estimate counts the buffers a
-scorer allocated outside the heap. Both are estimates: the on-heap figure omits
-the per-object overhead the JVM carries, and the native figure omits the
-per-thread buffers a loaded BLAS library retains for the whole process, since
-those are not owned by any one index.
+that separates on-heap from native or device bytes.
+
+The on-heap estimate counts the rows, the structure answering metadata filters,
+and the auxiliary structures an index type builds beside them: the dense matrix
+where it is retained, and the inverted lists, the indexed and verification row
+maps, the unilateral values, and the discarded terms of an inverted index. The
+native estimate counts the buffers a scorer allocated outside the heap.
+
+Both are estimates. The on-heap figure omits the per-object overhead the JVM
+carries and approximates the encoded metadata per distinct value. The native
+figure omits the per-thread buffers a loaded BLAS library retains for the whole
+process, since those are not owned by any one index.
 
 Deletes do not shrink the estimate. A deleted row keeps its place in the matrix
 until the index is rebuilt, so the estimate reflects allocated rows rather than

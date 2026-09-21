@@ -75,8 +75,12 @@ final class OpenBlas implements NativeBlas<FloatPointer> {
     ParallelismBudget.shared()
         .onNumThreadsPerBatchChange(numThreads -> blasNumThreadsSetter.accept(Math.min(numThreads, maxNumThreads)));
     // The per-thread buffer table the loaded binary retains bounds the concurrent native callers,
-    // so the processor allowance is clamped by it as well.
-    ProcessorAllowance.shared().setNativeMaxProcessorsSupplier(OpenBlas::readMaxNumThreads);
+    // so the processor allowance is clamped by it as well. The number read at construction is the
+    // one registered, rather than a fresh read: reading it sets the count and restores it, which
+    // is the very modification that is unsafe during a multiply, and the allowance re-clamps
+    // outside the moment with no search running. The table is fixed when the binary is built, so
+    // the number cannot change within a process.
+    ProcessorAllowance.shared().setNativeMaxProcessorsSupplier(() -> maxNumThreads);
   }
 
   int getMaxNumThreads() {

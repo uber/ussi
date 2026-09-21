@@ -80,10 +80,27 @@ track a bursty host.
 
 Propagation is deferred rather than immediate. The parallelism budget re-reads
 the supplier once per averaging window rather than once per sample, and only
-while at least one namespace is open. A change is then applied under a moment
-with no search running, so a multiply in flight is never torn down. A host that
-needs the new value to take effect at once builds the namespace after setting
-it, since a namespace reads the allowance as it is built.
+while at least one namespace is open. A host that needs the new value to take
+effect at once builds the namespace after setting it, since a namespace reads
+the allowance as it is built.
+
+A change is applied only after every running search has finished. The budget
+drains the admission semaphore first, which suspends every search in the
+process, and admission is fair, so no arriving search overtakes the drain. A
+search holds its permit across its whole traversal, including the dense
+multiply, so the moment the change is applied has no multiply dispatching work.
+This matters because the thread count a native BLAS library holds is
+process-global and setting it rebuilds that library's thread pool, which is
+unsafe to do during a call.
+
+Two things are deliberately left as they were built:
+
+- The batch width a dense scorer allocated its buffers for is fixed when the
+  index is built. Raising the allowance afterwards admits more concurrent
+  searches than one multiply carries, and the surplus waits for the next
+  multiply rather than overflowing a buffer. Rebuild the namespace to widen it.
+- The shard count an inverted index divides into is fixed when the index is
+  built, for the same reason.
 
 The allowance is clamped by the processors the process may run on, which a
   processor set or a bandwidth quota may already bound, and by the per-thread

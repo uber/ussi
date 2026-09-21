@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import com.uber.ussi.ProcessorAllowance;
 import com.uber.ussi.searchablestructure.utils.parallel.ParallelismBudget;
 import org.bytedeco.javacpp.FloatPointer;
 import java.util.ArrayList;
@@ -68,6 +69,32 @@ class OpenBlasTest {
         OpenBlas.isSupportedPlatform() ? 1 : 0,
         fakeOpenBlas.numNativeLoadProbes,
         "availability must be memoized");
+  }
+
+  /**
+   * Re-clamping the allowance must not set the thread count. The allowance is re-clamped outside
+   * the moment with no search running, and setting the count rebuilds the library's thread pool,
+   * which is unsafe while a multiply is dispatching work.
+   */
+  @Test
+  void reClampingTheAllowanceLeavesTheThreadCountAlone() {
+    FakeOpenBlas fakeOpenBlas = new FakeOpenBlas();
+
+    withFakeOpenBlas(
+        fakeOpenBlas,
+        () -> {
+          new OpenBlas();
+          int numUpdatesAtConstruction = fakeOpenBlas.numThreadsUpdates.size();
+
+          ProcessorAllowance.shared().refresh();
+          ProcessorAllowance.shared().refresh();
+          ProcessorAllowance.shared().refresh();
+
+          assertEquals(
+              numUpdatesAtConstruction,
+              fakeOpenBlas.numThreadsUpdates.size(),
+              "re-clamping the allowance must not set the thread count");
+        });
   }
 
   /**

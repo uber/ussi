@@ -1,6 +1,7 @@
 /* AUTHOR: Ahmed Metwally (ametwally@uber.com) */
 package com.uber.ussi.searchablestructure.utils.parallel;
 
+import com.uber.ussi.ProcessorAllowance;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -56,14 +57,21 @@ public final class ParallelismBudget {
 
   private static final ParallelismBudget SHARED =
       new ParallelismBudget(
-          Math.max(1, Runtime.getRuntime().availableProcessors()),
+          ProcessorAllowance.shared().getNumProcessors(),
           ProcessorTopology.getNumCoresPerSocket());
 
-  private final int maxNumThreadsPerSearch;
-  private final int maxNumThreadsPerBatch;
+  private volatile int maxNumThreadsPerSearch;
+  private final int socketCores;
+  private volatile int maxNumThreadsPerBatch;
   private volatile int numThreadsPerBatch;
   private volatile int numThreadsPerSearch;
   private volatile IntConsumer onNumThreadsPerBatchChange = NO_HOLDER;
+  /**
+   * Applied under {@link #exclusively} when the processor allowance changes, so the admission
+   * semaphore and the search pool resize with no search running. Registered by the facade that
+   * owns the admission.
+   */
+  private volatile IntConsumer onAllowanceChange = allowance -> {};
   /**
    * Until {@link #attach attach()} there are no searches, so running a change inline is already
    * exclusive.
@@ -84,6 +92,7 @@ public final class ParallelismBudget {
           "maxNumThreadsPerBatch must be >= 1 and <= maxNumThreadsPerSearch.");
     }
     this.maxNumThreadsPerSearch = maxNumThreadsPerSearch;
+    this.socketCores = maxNumThreadsPerBatch;
     this.maxNumThreadsPerBatch = maxNumThreadsPerBatch;
     this.numThreadsPerSearch = maxNumThreadsPerSearch;
     this.numThreadsPerBatch = maxNumThreadsPerBatch;
@@ -154,6 +163,31 @@ public final class ParallelismBudget {
     rebudgeter = null;
   }
 
+  /**
+   * Re-derives {@link #maxNumThreadsPerSearch} from the processor allowance and re-derives both
+   * counts from the current concurrency. Must be called under {@link #exclusively}, since a running
+   * search reads {@link #numThreadsPerSearch} and a native library reads {@link
+   * #numThreadsPerBatch}.
+   */
+  void applyAllowanceChange(int numConcurrentSearches) {
+    int newMax = ProcessorAllowance.shared().getNumProcessors();
+    if (newMax < 1) {
+      newMax = 1;
+    }
+    maxNumThreadsPerSearch = newMax;
+    maxNumThreadsPerBatch = Math.min(socketCores, newMax);
+    onAllowanceChange.accept(newMax);
+    update(numConcurrentSearches);
+  }
+
+  /**
+   * Registers the callback applied when the processor allowance changes, so the admission
+   * semaphore and the search pool resize under a moment with no search running.
+   */
+  public void onAllowanceChange(IntConsumer callback) {
+    onAllowanceChange = java.util.Objects.requireNonNull(callback, "callback");
+  }
+
   int getNumAttachments() {
     return numAttachments;
   }
@@ -206,7 +240,16 @@ public final class ParallelismBudget {
         (int) Math.round((double) numConcurrentSearchesSampled / numSamples);
     numSamples = 0;
     numConcurrentSearchesSampled = 0;
-    update(averageNumConcurrentSearches);
+    if (isRebudgeting() && allowanceChanged()) {
+      exclusively.accept(() -> applyAllowanceChange(averageNumConcurrentSearches));
+    } else {
+      update(averageNumConcurrentSearches);
+    }
+  }
+
+  private boolean allowanceChanged() {
+    ProcessorAllowance.shared().refresh();
+    return ProcessorAllowance.shared().getNumProcessors() != maxNumThreadsPerSearch;
   }
 
   /**

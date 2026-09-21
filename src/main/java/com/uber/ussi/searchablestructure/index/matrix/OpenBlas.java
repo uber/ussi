@@ -5,6 +5,7 @@ import static org.bytedeco.openblas.global.openblas.CblasNoTrans;
 import static org.bytedeco.openblas.global.openblas.CblasRowMajor;
 import static org.bytedeco.openblas.global.openblas.CblasTrans;
 
+import com.uber.ussi.ProcessorAllowance;
 import com.uber.ussi.searchablestructure.utils.parallel.ParallelismBudget;
 import com.uber.ussi.utils.Utils;
 import java.util.function.IntConsumer;
@@ -73,6 +74,9 @@ final class OpenBlas implements NativeBlas<FloatPointer> {
     // threads the loaded binary retains buffers for, since asking for more than that is refused.
     ParallelismBudget.shared()
         .onNumThreadsPerBatchChange(numThreads -> blasNumThreadsSetter.accept(Math.min(numThreads, maxNumThreads)));
+    // The per-thread buffer table the loaded binary retains bounds the concurrent native callers,
+    // so the processor allowance is clamped by it as well.
+    ProcessorAllowance.shared().setNativeMaxProcessorsSupplier(OpenBlas::readMaxNumThreads);
   }
 
   int getMaxNumThreads() {

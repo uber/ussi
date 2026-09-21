@@ -90,6 +90,9 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
     // what that concurrency is worth, and neither needs to know about the other.
     ParallelismBudget.shared()
         .attach(queryAdmission::getNumConcurrentSearches, queryAdmission::runExclusively);
+    ParallelismBudget.shared()
+        .onAllowanceChange(
+            allowance -> queryAdmission.setMaxNumConcurrentSearches(allowance));
     this.nextRowNum = 0;
     this.nextStructureGeneration = 0;
     this.consolidationInProgress = false;

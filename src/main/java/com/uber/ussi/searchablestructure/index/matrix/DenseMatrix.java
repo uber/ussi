@@ -94,6 +94,21 @@ final class DenseMatrix {
     return chunks[row / rowsPerChunk][offsetInChunk(row) + column];
   }
 
+  /**
+   * Drops the chunk arrays, so they are eligible for collection once no scorer holds them. The
+   * geometry stays, so a scorer that copied the values into its own buffers still walks the ranges.
+   */
+  void releaseValues() {
+    for (int chunk = 0; chunk < chunks.length; chunk++) {
+      chunks[chunk] = null;
+    }
+  }
+
+  /** Whether the chunk arrays are still held, which a scorer that did not copy them needs. */
+  boolean holdsValues() {
+    return chunks.length == 0 || chunks[0] != null;
+  }
+
   /** Where a row starts within its own chunk. Inside {@code int} range because a chunk is. */
   private int offsetInChunk(int row) {
     return (row % rowsPerChunk) * dimension;

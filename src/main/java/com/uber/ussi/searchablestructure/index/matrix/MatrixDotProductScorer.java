@@ -16,6 +16,20 @@ interface MatrixDotProductScorer extends AutoCloseable {
   /** The rows this query keeps, in the order the bounded heap holds them. */
   List<RowNumAndSimilarity> selectRows(float[] queryValues, RowSelection selection);
 
+  /**
+   * Whether this scorer holds its own copy of the matrix, so the Java chunk arrays may be released
+   * after it is built.
+   */
+  boolean hasOwnMatrixCopy();
+
+  /**
+   * The bytes this scorer holds in native or device buffers, which a host limiting memory cannot
+   * see through the heap.
+   */
+  default long nativeFootprintBytes() {
+    return 0;
+  }
+
   @Override
   default void close() {}
 }

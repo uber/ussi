@@ -8,6 +8,7 @@ import com.carrotsearch.hppc.LongObjectHashMap;
 import com.carrotsearch.hppc.cursors.IntCursor;
 import com.carrotsearch.hppc.cursors.LongCursor;
 import com.carrotsearch.hppc.cursors.LongObjectCursor;
+import com.uber.ussi.MemoryFootprint;
 import com.uber.ussi.comparator.DotProductScored;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.LongMeta;
@@ -73,6 +74,12 @@ public final class MatrixIndex extends RowStoringIndex {
             matrix,
             new MatrixRows(rowNums, rowUniValues, dotProductScored),
             namespaceConfig.getMaxNumSimilarities());
+    // A scorer that copied the matrix into its own buffers no longer needs the Java chunk arrays.
+    // Filtered paths read the row map instead, which the index holds for graduation and
+    // consolidation in any case.
+    if (dotProductScorer.hasOwnMatrixCopy()) {
+      matrix.releaseValues();
+    }
     // Dense bulk scoring cannot push metadata filters down, so AUTO pre-filters or post-filters.
     this.metadataFilteredSearchExecutor =
         new MetadataFilteredSearchExecutor(
@@ -110,6 +117,21 @@ public final class MatrixIndex extends RowStoringIndex {
 
   int getDimensionForTests() {
     return dimension;
+  }
+
+  @Override
+  public MemoryFootprint getMemoryFootprint() {
+    long onHeap = (long) rowNums.length * Long.BYTES
+        + (long) rowNums.length * Double.BYTES
+        + (long) rowNumToMatrixRowIndex.size() * 24L;
+    if (matrix.holdsValues()) {
+      onHeap += (long) rowNums.length * dimension * Float.BYTES;
+    }
+    // The row map holds one float[] per row, which is the same payload as the matrix when both
+    // are retained. When the matrix is released, the row map is the sole on-heap copy.
+    onHeap += (long) rowNums.length * dimension * Float.BYTES;
+    long nativeBytes = dotProductScorer.nativeFootprintBytes();
+    return new MemoryFootprint(onHeap, nativeBytes);
   }
 
   @Override
@@ -256,9 +278,21 @@ public final class MatrixIndex extends RowStoringIndex {
   /** Scores one row without the bulk multiply, for a search that reaches only some of them. */
   private float computeSimilarityForMatrixRow(
       float[] queryValues, double queryUniValue, int matrixRowIndex) {
-    double dotProduct = 0.0d;
-    for (int i = 0; i < dimension; ++i) {
-      dotProduct += (double) queryValues[i] * matrix.valueAt(matrixRowIndex, i);
+    double dotProduct;
+    if (matrix.holdsValues()) {
+      dotProduct = 0.0d;
+      for (int i = 0; i < dimension; ++i) {
+        dotProduct += (double) queryValues[i] * matrix.valueAt(matrixRowIndex, i);
+      }
+    } else {
+      // A native or device scorer holds its own copy, so the Java chunk arrays were released.
+      // The row map still holds the row, which is what graduation and consolidation rebuild from.
+      long rowNum = rowNums[matrixRowIndex];
+      LongTermsAndValues row = rowNumToTermsAndValuesMap.get(rowNum);
+      dotProduct = 0.0d;
+      for (int i = 0; i < dimension; ++i) {
+        dotProduct += (double) queryValues[i] * row.getValue(i);
+      }
     }
     return computeSimilarityFromDotProduct(queryUniValue, matrixRowIndex, dotProduct);
   }

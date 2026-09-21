@@ -447,6 +447,20 @@ final class CudaMatrixDotProductScorer
     zero.deallocate();
   }
 
+  @Override
+  public long nativeFootprintBytes() {
+    int batch = getMaxNumQueriesInABatch();
+    long matrixBytes = (long) numRows * dimension * Float.BYTES;
+    long rowUniValuesBytes = (long) numRows * Float.BYTES;
+    long queryUniValuesBytes = (long) batch * Float.BYTES;
+    long queryBytes = (long) batch * dimension * Float.BYTES;
+    long productBytes = (long) batch * numRows * Float.BYTES;
+    long keptDotProductBytes = (long) batch * numKeptPerQuery * Float.BYTES;
+    long keptRowNumBytes = (long) batch * numKeptPerQuery * Long.BYTES;
+    return matrixBytes + rowUniValuesBytes + queryUniValuesBytes + queryBytes
+        + productBytes + keptDotProductBytes + keptRowNumBytes;
+  }
+
   private void copyQueriesToDevice(
       float[][] queryValues, RowSelection[] selections, int numQueries) {
     try (FloatPointer queries = new FloatPointer((long) numQueries * dimension);

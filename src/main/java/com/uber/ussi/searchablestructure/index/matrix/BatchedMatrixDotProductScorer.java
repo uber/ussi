@@ -167,7 +167,10 @@ abstract class BatchedMatrixDotProductScorer<S> implements MatrixDotProductScore
     return rows;
   }
 
-  /** The most queries one multiply may carry, which sizes the working buffers. */
+  /**
+   * The most queries one multiply may carry, which is the batch width this scorer sized its
+   * working buffers for.
+   */
   protected final int getMaxNumQueriesInABatch() {
     return maxNumQueriesInABatch;
   }

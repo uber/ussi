@@ -102,12 +102,13 @@ public final class ParallelismBudget {
   }
 
   /**
-   * The budget for this process, whose batch width is the narrower of one socket's cores and the
-   * processor allowance.
+   * The budget for this process. The threads a native library holds are the narrower of one
+   * socket's cores and the processor allowance.
    *
    * <p>A host may lower the allowance below one socket's cores before the first namespace is built,
-   * and the batch width may not exceed the threads one search may use. The socket width is retained
-   * undivided, so raising the allowance again widens the batch back to what the machine has.
+   * and the threads a native library holds may not exceed the threads one search may use. The
+   * cores of one socket are retained undivided, so raising the allowance again returns that count
+   * to what the machine has.
    */
   static ParallelismBudget createShared() {
     int numThreadsPerSearch = Math.max(1, ProcessorAllowance.shared().getNumProcessors());

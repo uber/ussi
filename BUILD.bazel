@@ -16,18 +16,22 @@ java_plugin(
 )
 
 # Lombok is compile-time only (annotations are stripped by the processor),
-# so it must not leak into the runtime classpath.
+# so it must not leak into the runtime classpath. The tag keeps it out of the generated POM as
+# well, since neverlink governs the Bazel runtime classpath alone.
 java_library(
     name = "lombok_compile_only",
     neverlink = True,
+    tags = ["maven:compile-only"],
     exports = ["@maven//:org_projectlombok_lombok"],
 )
 
 # The CUDA bindings are compile-time only. A deployment that wants the device scorer adds the
-# platform jar itself, and every other deployment carries nothing.
+# platform jar itself, and every other deployment carries nothing. The tag keeps them out of the
+# generated POM as well, since neverlink governs the Bazel runtime classpath alone.
 java_library(
     name = "cuda_compile_only",
     neverlink = True,
+    tags = ["maven:compile-only"],
     exports = ["@maven//:org_bytedeco_cuda"],
 )
 

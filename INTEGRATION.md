@@ -13,6 +13,25 @@ types its methods expose: `NamespaceConfig`, `TermsAndValues`, `MetaFilter`,
 `SearchResults`, `MemoryFootprint`, and `ProcessorAllowance`. Other public
 classes are implementation details and may change.
 
+## Terms
+
+The vocabulary the rest of this document uses. [README.md](README.md) covers
+records, comparators, and index types.
+
+| Term | Meaning |
+| --- | --- |
+| Namespace | One `NearestNeighborSearchIndex`, holding one configuration and the rows inserted into it. |
+| Row | One record USSI holds, addressed by a `rowNum`, which is a signed 64-bit handle USSI allocates. |
+| Active cache | The mutable structure every insert lands in, until it reaches `maxCacheSize` rows. |
+| Graduation | Building an immutable index from a full active cache, in the background. |
+| Consolidation | Merging several indexes into one, in the background, when their count reaches `maxNumSearchableStructures`. |
+| Unilateral value | A quantity derived from one record alone, which a comparator combines with a dot product to yield a similarity. Replacing it with a value that is not a number is how a delete is recorded. |
+| Admission | The process-wide semaphore a search acquires a permit from before it runs, which bounds how many searches run at once. |
+| Work unit | One piece of a search that divides itself, run on the search pool. |
+| Shard | One part of an inverted index, searched as its own work unit. |
+| Batch | The queries one dense matrix multiply carries. Its width is the most queries that multiply may carry at once. |
+| Parallelism budget | What derives, from the processor allowance and the observed concurrency, the threads one search may use and the threads a native library holds. |
+
 ## What USSI owns
 
 USSI owns the in-memory structures a namespace is built from:
@@ -49,11 +68,11 @@ The host owns everything USSI does not:
 
 There is no persistence and no incremental restore. On restart the host must
 recreate the `NamespaceConfig`, call `NearestNeighborSearchIndex.create`, and
-re-insert every live document. The cost is bounded by the number of rows, the
-  dimension, and the cache size at which graduation triggers
-  (`maxCacheSize`). A dense namespace of two million rows of 512 dimensions
-  occupies roughly 4.1 GB on the Java heap and 4.1 GB in native buffers once the
-  matrix index is built, so a restart re-pays that allocation as well.
+re-insert every live document. The cost increases monotonically with the number
+of rows and with the dimension, and `maxCacheSize` decides how often a
+graduation runs while it proceeds. A dense namespace of two million rows of 512
+dimensions occupies roughly 4.1 GB on the Java heap and 4.1 GB in native buffers
+once the matrix index is built, so a restart re-pays that allocation as well.
 
 ## Blocking model
 
@@ -69,7 +88,7 @@ expect its threads to park inside USSI. There are three blocking sites:
    search pool and waits for every one to finish.
 
 Do not schedule USSI on a bounded pool unless that pool can block. A pool that
-  rejects a thread that parks turns back-pressure into rejections.
+rejects a thread that parks turns back-pressure into rejections.
 
 ## Processor allowance
 
@@ -96,9 +115,9 @@ afterwards:
 
 - The batch width a dense scorer allocates its buffers for. Raising the
   allowance admits more concurrent searches than one multiply carries, and the
-  surplus waits for the next multiply rather than overflowing a buffer.
-  Rebuild the namespace to widen it.
-- The shard count an inverted index divides into.
+  surplus waits for the next multiply rather than overflowing a buffer. Rebuild
+  the namespace to widen it.
+- The number of shards an inverted index divides into.
 
 The allowance is clamped by the processors the process may run on, which a
 processor set or a bandwidth quota may already bound, and by the per-thread
@@ -198,15 +217,21 @@ native code.
 ## Maven consumption
 
 USSI is published as `com.uber.ussi:ussi:0.1.0`. Consumers build with Gradle
-or Maven and declare the coordinate as a dependency. The generated POM carries
-the compile and runtime dependencies, including the OpenBLAS and JavaCPP
-platform jars that dense search needs. The CUDA bindings stay out of the
-consumer classpath unless the deployment adds them.
+or Maven and declare the coordinate as a dependency.
 
-To publish to a local Maven repository for verification:
+The generated POM lists the runtime dependencies, including the OpenBLAS and
+JavaCPP platform jars that dense search needs, one per platform. The CUDA
+bindings and Lombok are compile-time only and are absent from it, so a consumer
+that wants the device scorer declares the CUDA platform jar itself.
+
+Publishing takes the repository to publish to, which may be any Maven
+repository. A `file://` URL writes to a directory, which is what verifying the
+artifact locally uses:
 
 ```text
-bazel run --define maven_repo=file://$HOME/.m2/repository //:src_main.publish
+bazel run --define maven_repo=file:///absolute/path/to/repository //:src_main.publish
 ```
 
-No Maven Central or GitHub Packages publication is configured in this work.
+A remote repository takes credentials the same way, through `--define
+maven_user` and `--define maven_password`. No Maven Central or GitHub Packages
+publication is configured in this work.

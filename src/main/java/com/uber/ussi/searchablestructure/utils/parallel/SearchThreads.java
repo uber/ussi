@@ -1,6 +1,7 @@
 /* AUTHOR: Ahmed Metwally (ametwally@uber.com) */
 package com.uber.ussi.searchablestructure.utils.parallel;
 
+import com.uber.ussi.ProcessorAllowance;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -21,17 +22,23 @@ import java.util.function.IntConsumer;
  * searches together stay within the cores. A structure holding threads of its own would spend
  * cores the others had already been promised.
  *
- * <p>A search submits every work unit it has. The pool holds one thread per core, so work units
- * wait in it while the cores are busy, and it serves them by the ticket a search takes once rather
- * than by the order they were submitted. A search therefore keeps its place while it is being
- * served, instead of queueing behind the searches that arrived in the meantime.
+ * <p>A search submits every work unit it has. The pool holds one thread per processor the allowance
+ * permits, so work units wait in it while the cores are busy, and it serves them by the ticket a
+ * search takes once rather than by the order they were submitted. A search therefore keeps its
+ * place while it is being served, instead of queueing behind the searches that arrived in the
+ * meantime.
  *
  * <p>The calling thread runs one work unit rather than only waiting. This uses the thread already
  * here, and it keeps the search moving when every pool thread is busy.
+ *
+ * <p>The pool is sized from {@link ProcessorAllowance} and may be resized while no search is running.
+ * A host unloading uSSI, or a test, must call {@link #shutdown()} to release its threads.
  */
 public final class SearchThreads {
 
-  private static final ThreadPoolExecutor SEARCHERS = createThreadPool();
+  private static final Object POOL_LOCK = new Object();
+  // Guarded by POOL_LOCK for creation and shutdown; read without the lock once assigned.
+  private static volatile ThreadPoolExecutor searchers;
 
   /**
    * Taken once per query, so that every work unit of one query is served at the query's arrival.
@@ -106,7 +113,7 @@ public final class SearchThreads {
               workUnit.run();
               return null;
             });
-    SEARCHERS.execute(ticketed);
+    searchers().execute(ticketed);
     return ticketed;
   }
 
@@ -141,12 +148,66 @@ public final class SearchThreads {
 
   private static final String WORK_UNIT_FAILED = "Failed to run one work unit of a search.";
 
-  private static ThreadPoolExecutor createThreadPool() {
+  private static ThreadPoolExecutor searchers() {
+    ThreadPoolExecutor pool = searchers;
+    if (pool != null) {
+      return pool;
+    }
+    synchronized (POOL_LOCK) {
+      pool = searchers;
+      if (pool == null) {
+        pool = createThreadPool(ProcessorAllowance.shared().getNumProcessors());
+        searchers = pool;
+      }
+      return pool;
+    }
+  }
+
+  /**
+   * Resizes the pool to the given number of threads. Must be called with no search running, since a
+   * running work unit holds a thread the new size may not account for.
+   */
+  public static void resize(int numThreads) {
+    if (numThreads < 1) {
+      numThreads = 1;
+    }
+    ThreadPoolExecutor pool = searchers();
+    int currentCore = pool.getCorePoolSize();
+    if (numThreads > currentCore) {
+      pool.setMaximumPoolSize(numThreads);
+      pool.setCorePoolSize(numThreads);
+    } else if (numThreads < currentCore) {
+      pool.setCorePoolSize(numThreads);
+      pool.setMaximumPoolSize(numThreads);
+    }
+  }
+
+  /**
+   * Shuts down the pool and releases its threads. Must be called with no search running. A host
+   * unloading uSSI, or a test, calls this so the daemon threads do not outlive the work.
+   */
+  public static void shutdown() {
+    synchronized (POOL_LOCK) {
+      ThreadPoolExecutor pool = searchers;
+      if (pool == null) {
+        return;
+      }
+      pool.shutdownNow();
+      try {
+        pool.awaitTermination(5, TimeUnit.SECONDS);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+      searchers = null;
+    }
+  }
+
+  private static ThreadPoolExecutor createThreadPool(int numThreads) {
     AtomicInteger threadNumber = new AtomicInteger(1);
-    int numThreads = Math.max(1, Runtime.getRuntime().availableProcessors());
+    int poolSize = Math.max(1, numThreads);
     return new ThreadPoolExecutor(
-        numThreads,
-        numThreads,
+        poolSize,
+        poolSize,
         0L,
         TimeUnit.MILLISECONDS,
         new PriorityBlockingQueue<>(),

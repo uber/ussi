@@ -22,6 +22,7 @@ import com.uber.ussi.searchablestructure.index.IndexFactory;
 import com.uber.ussi.searchablestructure.result.ResultHeaps;
 import com.uber.ussi.searchablestructure.utils.parallel.ParallelismBudget;
 import com.uber.ussi.searchablestructure.utils.parallel.SearchThreads;
+import com.uber.ussi.searchablestructure.utils.parallel.SearchThreads;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -92,7 +93,10 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
         .attach(queryAdmission::getNumConcurrentSearches, queryAdmission::runExclusively);
     ParallelismBudget.shared()
         .onAllowanceChange(
-            allowance -> queryAdmission.setMaxNumConcurrentSearches(allowance));
+            allowance -> {
+              queryAdmission.setMaxNumConcurrentSearches(allowance);
+              SearchThreads.resize(allowance);
+            });
     this.nextRowNum = 0;
     this.nextStructureGeneration = 0;
     this.consolidationInProgress = false;

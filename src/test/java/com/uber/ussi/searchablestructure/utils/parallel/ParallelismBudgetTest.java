@@ -304,6 +304,33 @@ class ParallelismBudgetTest {
   }
 
   /**
+   * A host lowers the allowance before building its first namespace, which is what brings the
+   * shared budget into existence. An allowance below one socket's cores must narrow the batch
+   * width rather than violate the invariant that it never exceeds the threads one search may use.
+   */
+  @Test
+  void theSharedBudgetNarrowsTheBatchWidthToAnAllowanceBelowOneSocket() {
+    int socketCores = ProcessorTopology.getNumCoresPerSocket();
+    ProcessorAllowance.shared().setNumProcessors(() -> 1);
+    try {
+      ParallelismBudget budget = ParallelismBudget.createShared();
+
+      assertEquals(1, budget.getNumThreadsPerSearch());
+      assertEquals(1, budget.getNumThreadsPerBatchFor(1));
+
+      // The socket width is a property of the machine, so raising the allowance widens the batch
+      // back to it rather than leaving it at what a transient allowance narrowed it to.
+      ProcessorAllowance.shared().setNumProcessors(() -> socketCores);
+      budget.applyAllowanceChange(1);
+
+      assertEquals(socketCores, budget.getNumThreadsPerBatchFor(1));
+    } finally {
+      ProcessorAllowance.shared()
+          .setNumProcessors(() -> Runtime.getRuntime().availableProcessors());
+    }
+  }
+
+  /**
    * The allowance change already runs under exclusivity, so applying it must not ask for
    * exclusivity again. The semaphore behind it is not reentrant, so a second request would block
    * on permits the same thread already holds and suspend every search in the process permanently.

@@ -274,6 +274,10 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
    * <p>The active cache and the graduating caches are excluded. Each is bounded by {@code
    * maxCacheSize} rows, so what they hold is bounded by that count times the number of structures
    * a namespace permits, whereas an index grows with the namespace.
+   *
+   * <p>The estimate is derived rather than memoized, so it traverses every row and every inverted
+   * list and runs in time linear in what the namespace holds. It is meant for a host that samples
+   * it periodically rather than one that reads it per request.
    */
   public MemoryFootprint getMemoryFootprint() {
     lock.readLock().lock();

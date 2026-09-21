@@ -56,10 +56,7 @@ public final class ParallelismBudget {
    */
   private static final int NUM_SAMPLES_PER_UPDATE = 10;
 
-  private static final ParallelismBudget SHARED =
-      new ParallelismBudget(
-          ProcessorAllowance.shared().getNumProcessors(),
-          ProcessorTopology.getNumCoresPerSocket());
+  private static final ParallelismBudget SHARED = createShared();
 
   private volatile int maxNumThreadsPerSearch;
   private final int socketCores;
@@ -85,6 +82,11 @@ public final class ParallelismBudget {
   private long numConcurrentSearchesSampled;
 
   ParallelismBudget(int maxNumThreadsPerSearch, int maxNumThreadsPerBatch) {
+    this(maxNumThreadsPerSearch, maxNumThreadsPerBatch, maxNumThreadsPerBatch);
+  }
+
+  private ParallelismBudget(
+      int maxNumThreadsPerSearch, int maxNumThreadsPerBatch, int socketCores) {
     if (maxNumThreadsPerSearch < 1) {
       throw new IllegalArgumentException("maxNumThreadsPerSearch must be >= 1.");
     }
@@ -93,10 +95,25 @@ public final class ParallelismBudget {
           "maxNumThreadsPerBatch must be >= 1 and <= maxNumThreadsPerSearch.");
     }
     this.maxNumThreadsPerSearch = maxNumThreadsPerSearch;
-    this.socketCores = maxNumThreadsPerBatch;
+    this.socketCores = socketCores;
     this.maxNumThreadsPerBatch = maxNumThreadsPerBatch;
     this.numThreadsPerSearch = maxNumThreadsPerSearch;
     this.numThreadsPerBatch = maxNumThreadsPerBatch;
+  }
+
+  /**
+   * The budget for this process, whose batch width is the narrower of one socket's cores and the
+   * processor allowance.
+   *
+   * <p>A host may lower the allowance below one socket's cores before the first namespace is built,
+   * and the batch width may not exceed the threads one search may use. The socket width is retained
+   * undivided, so raising the allowance again widens the batch back to what the machine has.
+   */
+  static ParallelismBudget createShared() {
+    int numThreadsPerSearch = Math.max(1, ProcessorAllowance.shared().getNumProcessors());
+    int socketCores = Math.max(1, ProcessorTopology.getNumCoresPerSocket());
+    return new ParallelismBudget(
+        numThreadsPerSearch, Math.min(socketCores, numThreadsPerSearch), socketCores);
   }
 
   public static ParallelismBudget shared() {

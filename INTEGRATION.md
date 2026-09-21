@@ -168,6 +168,10 @@ carries and approximates the encoded metadata per distinct value. The native
 figure omits the per-thread buffers a loaded BLAS library retains for the whole
 process, since those are not owned by any one index.
 
+The estimate is derived rather than memoized, so it traverses every row and every
+inverted list and runs in time linear in what the namespace holds. Sample it
+periodically rather than reading it per request.
+
 Deletes do not shrink the estimate. A deleted row keeps its place in the matrix
 until the index is rebuilt, so the estimate reflects allocated rows rather than
 live ones.

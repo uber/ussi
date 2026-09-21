@@ -54,7 +54,7 @@ public final class ParallelismBudget {
    * Readings averaged into one update, which bounds how often a process-global thread count moves
    * and so how often the engine is quiesced to move it.
    */
-  private static final int NUM_SAMPLES_PER_UPDATE = 10;
+  static final int NUM_SAMPLES_PER_UPDATE = 10;
 
   private static final ParallelismBudget SHARED = createShared();
 
@@ -167,10 +167,26 @@ public final class ParallelismBudget {
     numSamples = 0;
     numConcurrentSearchesSampled = 0;
     rebudgeter.scheduleWithFixedDelay(
-        () -> sample(numConcurrentSearchesSource.getAsInt()),
+        () -> sampleWithoutPropagating(numConcurrentSearchesSource),
         SAMPLE_INTERVAL_MILLIS,
         SAMPLE_INTERVAL_MILLIS,
         TimeUnit.MILLISECONDS);
+  }
+
+  /**
+   * Takes one reading and contains whatever it throws.
+   *
+   * <p>A periodic task that throws is not scheduled again, so a single failure would leave both
+   * counts at the values they last held for the life of the process. The reading passes through
+   * the processor allowance, which a host supplies, so the failure is not uniformly this library's
+   * to prevent.
+   */
+  void sampleWithoutPropagating(IntSupplier numConcurrentSearchesSource) {
+    try {
+      sample(numConcurrentSearchesSource.getAsInt());
+    } catch (RuntimeException e) {
+      // Leaves both counts as they are, and takes the next reading on the next interval.
+    }
   }
 
   /** Stops re-deriving both counts once the last attachment has ended. */

@@ -64,6 +64,25 @@ class ProcessorAllowanceTest {
     assertEquals(AVAILABLE, allowance.getNumProcessors());
   }
 
+  /**
+   * The supplier is the host's own code. A failure in it must not narrow search to one processor,
+   * which is what flooring a failed reading would do.
+   */
+  @Test
+  void keepsTheAllowanceInEffectWhenTheHostSupplierFails() {
+    ProcessorAllowance allowance = ProcessorAllowance.shared();
+    allowance.setNumProcessors(() -> 1);
+
+    assertEquals(1, allowance.getNumProcessors());
+
+    allowance.setNumProcessors(
+        () -> {
+          throw new IllegalStateException("the host cannot report its processors");
+        });
+
+    assertEquals(1, allowance.getNumProcessors(), "the allowance last reported stays in effect");
+  }
+
   @Test
   void rejectsANullSupplier() {
     ProcessorAllowance allowance = ProcessorAllowance.shared();

@@ -281,7 +281,13 @@ public final class MatrixIndex extends RowStoringIndex {
   }
 
 
-  /** Scores one row without the bulk multiply, for a search that reaches only some of them. */
+  /**
+   * Scores one row without the bulk multiply, for a search that reaches only some of them.
+   *
+   * <p>Reading the row from the map costs a lookup per row where reading the matrix costs an index,
+   * so a filtered search is slower against a scorer holding its own copy than against one reading
+   * the chunks. That is what releasing the chunks is exchanged for.
+   */
   private float computeSimilarityForMatrixRow(
       float[] queryValues, double queryUniValue, int matrixRowIndex) {
     double dotProduct;

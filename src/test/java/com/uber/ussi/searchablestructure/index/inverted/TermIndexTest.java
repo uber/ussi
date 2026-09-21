@@ -43,6 +43,51 @@ class TermIndexTest {
   private static final String CANDIDATES_ONLY =
       NamespaceConfig.PopularTermDiscardScope.CANDIDATES_ONLY.getParamValue();
 
+  /**
+   * A scan index over the same rows holds the rows and the metadata and nothing else, so anything
+   * the inverted index holds beyond them must raise its estimate above the scan index's.
+   */
+  @Test
+  void memoryFootprintCountsTheInvertedListsAndNotOnlyTheRows() {
+    LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
+    for (long rowNum = 1; rowNum <= 20; ++rowNum) {
+      rows.put(rowNum, jaccard(new long[] {1, 2, 3, 4}, 1, 1, 1, 1));
+    }
+
+    TermIndex termIndex = new TermIndex(config("jaccard"), rows, longObjectMap());
+    ScanIndex scanIndex = new ScanIndex(config("jaccard", Map.of(), "scan"), rows, longObjectMap());
+
+    long termIndexBytes = termIndex.getMemoryFootprint().getOnHeapBytes();
+    long scanIndexBytes = scanIndex.getMemoryFootprint().getOnHeapBytes();
+
+    assertTrue(
+        termIndexBytes > scanIndexBytes,
+        "the inverted lists and the maps beside them are uncounted: inverted "
+            + termIndexBytes + " against scan " + scanIndexBytes);
+  }
+
+  /** The structure answering metadata filters holds one entry per row, so it must be counted. */
+  @Test
+  void memoryFootprintCountsTheMetadataStructure() {
+    LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
+    LongObjectHashMap<LongMeta> metadata = longObjectMap();
+    for (long rowNum = 1; rowNum <= 20; ++rowNum) {
+      rows.put(rowNum, jaccard(new long[] {1, 2}, 1, 1));
+      metadata.put(rowNum, new LongMeta(Map.of("city", "city" + rowNum), false));
+    }
+
+    long withoutMetadata =
+        new TermIndex(config("jaccard"), rows, longObjectMap())
+            .getMemoryFootprint()
+            .getOnHeapBytes();
+    long withMetadata =
+        new TermIndex(config("jaccard"), rows, metadata).getMemoryFootprint().getOnHeapBytes();
+
+    assertTrue(
+        withMetadata > withoutMetadata,
+        "the metadata structure is uncounted: " + withMetadata + " against " + withoutMetadata);
+  }
+
   @Test
   void constructorBuildsForwardAndUniValueSortedInvertedLists() {
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();

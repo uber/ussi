@@ -111,7 +111,7 @@ public abstract class RowStoringIndex extends Index {
 
   @Override
   public MemoryFootprint getMemoryFootprint() {
-    return new MemoryFootprint(getRowStorageBytes(), 0);
+    return new MemoryFootprint(getRowStorageBytes() + getMetadataStorageBytes(), 0);
   }
 
   /**
@@ -120,8 +120,21 @@ public abstract class RowStoringIndex extends Index {
    * live ones.
    */
   protected final long getRowStorageBytes() {
+    return estimateRowMapBytes(rowNumToTermsAndValuesMap);
+  }
+
+  /** Bytes the structure answering metadata filters holds. */
+  protected final long getMetadataStorageBytes() {
+    return metadataFilteringModule.getEstimatedBytes();
+  }
+
+  /**
+   * Bytes a map from rowNum to record holds, being its slots and the two arrays of every record in
+   * it. A subclass keeping a further map of the same shape sizes it through this.
+   */
+  protected static long estimateRowMapBytes(LongObjectHashMap<LongTermsAndValues> rowMap) {
     long bytes = 0;
-    for (LongObjectCursor<LongTermsAndValues> entry : rowNumToTermsAndValuesMap) {
+    for (LongObjectCursor<LongTermsAndValues> entry : rowMap) {
       bytes += BYTES_PER_ROW_MAP_ENTRY + BYTES_PER_RECORD_HEADER;
       bytes += (long) entry.value.termsLength() * Long.BYTES;
       bytes += (long) entry.value.valuesLength() * Float.BYTES;

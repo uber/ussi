@@ -2,7 +2,7 @@
 package com.uber.ussi.error;
 
 /**
- * A query a host submitted that uSSI rejected as malformed.
+ * A query a host submitted that USSI rejected as malformed.
  *
  * <p>Thrown for a {@code k} that is not positive, a {@code minSimilarity} outside {@code [0.0,
  * 1.0]}, a record whose shape does not match the namespace, and a configuration that fails

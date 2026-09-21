@@ -33,7 +33,7 @@ import java.util.function.IntConsumer;
  * here, and it keeps the search moving when every pool thread is busy.
  *
  * <p>The pool is sized from {@link ProcessorAllowance} and may be resized while no search is running.
- * A host unloading uSSI, or a test, must call {@link #shutdown()} to release its threads.
+ * A host unloading USSI, or a test, must call {@link #shutdown()} to release its threads.
  */
 public final class SearchThreads {
 
@@ -185,7 +185,7 @@ public final class SearchThreads {
 
   /**
    * Shuts down the pool and releases its threads. Must be called with no search running. A host
-   * unloading uSSI, or a test, calls this so the daemon threads do not outlive the work.
+   * unloading USSI, or a test, calls this so the daemon threads do not outlive the work.
    */
   public static void shutdown() {
     synchronized (POOL_LOCK) {

@@ -8,6 +8,7 @@ import com.carrotsearch.hppc.LongObjectHashMap;
 import com.carrotsearch.hppc.cursors.LongCursor;
 import com.carrotsearch.hppc.cursors.LongIntCursor;
 import com.carrotsearch.hppc.cursors.LongObjectCursor;
+import com.uber.ussi.MemoryFootprint;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.config.NamespaceConfig.CandidateGeneratorType;
 import com.uber.ussi.config.NamespaceConfig.PopularTermDiscardScope;
@@ -59,6 +60,18 @@ import javax.annotation.Nullable;
 abstract class BaseInvertedIndex extends RowStoringIndex {
   private static final long[] EMPTY_ROW_NUMS = new long[0];
   private static final float[] EMPTY_VALUES = new float[0];
+
+  /** Bytes one key occupies in the map to its inverted list, being a slot and a reference. */
+  private static final long BYTES_PER_INVERTED_LIST_ENTRY = 24;
+
+  /** Bytes one inverted list occupies beyond its arrays, being the object and the two headers. */
+  private static final long BYTES_PER_INVERTED_LIST_HEADER = 48;
+
+  /** Bytes one rowNum occupies in the map to its unilateral value, being two long slots. */
+  private static final long BYTES_PER_UNI_VALUE_ENTRY = 16;
+
+  /** Bytes one discarded term occupies in the set holding them. */
+  private static final long BYTES_PER_DISCARDED_TERM = 8;
 
   /**
    * Rows a shard holds once an index is divided as finely as it will be. It sizes the shard count
@@ -535,6 +548,31 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
     if (indexedRow != null) {
       indexedRowNumToTermsAndValuesMap.put(rowNum, indexedRow.markAsDeleted());
     }
+  }
+
+  /**
+   * Adds the inverted lists and the further maps this index keeps to the rows and metadata the
+   * superclass counts. The verification map is counted only where it is a map of its own, since
+   * leaving the popular terms in the scored records aliases it to the map already counted.
+   */
+  @Override
+  public MemoryFootprint getMemoryFootprint() {
+    MemoryFootprint rowsAndMetadata = super.getMemoryFootprint();
+    long bytes = rowsAndMetadata.getOnHeapBytes();
+    bytes += estimateRowMapBytes(indexedRowNumToTermsAndValuesMap);
+    if (verificationRowNumToTermsAndValuesMap != rowNumToTermsAndValuesMap) {
+      bytes += estimateRowMapBytes(verificationRowNumToTermsAndValuesMap);
+    }
+    bytes += (long) rowNumToUniValue.size() * BYTES_PER_UNI_VALUE_ENTRY;
+    bytes += (long) discardedTerms.size() * BYTES_PER_DISCARDED_TERM;
+    for (LongObjectHashMap<InvertedList> keyToInvertedList : keyToInvertedListByShard) {
+      for (LongObjectCursor<InvertedList> entry : keyToInvertedList) {
+        bytes += BYTES_PER_INVERTED_LIST_ENTRY + BYTES_PER_INVERTED_LIST_HEADER;
+        bytes += (long) entry.value.getRowNums().length * Long.BYTES;
+        bytes += (long) entry.value.getValues().length * Float.BYTES;
+      }
+    }
+    return new MemoryFootprint(bytes, rowsAndMetadata.getNativeBytes());
   }
 
   private KeyAndPrefixFilteringData[] collectFilteredSearchQueryKeys(

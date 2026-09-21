@@ -18,6 +18,23 @@ import javax.annotation.Nullable;
  * it.
  */
 public final class MetadataFilteringModule {
+
+  /** Bytes one row occupies in the map to its dictionary key, being two long slots. */
+  private static final long BYTES_PER_ROW_NUM_ENTRY = 16;
+
+  /** Bytes one distinct metadata value occupies in the dictionary, being a slot and a reference. */
+  private static final long BYTES_PER_DICTIONARY_ENTRY = 24;
+
+  /**
+   * Bytes one distinct metadata value occupies beyond the rowNums sharing it, being the entry, the
+   * encoded metadata, and the set holding it. Approximated by a constant, since the dictionary
+   * holds one per distinct value rather than one per row.
+   */
+  private static final long BYTES_PER_DICTIONARY_VALUE = 96;
+
+  /** Bytes one rowNum occupies in the set of rowNums sharing a metadata value. */
+  private static final long BYTES_PER_SHARED_ROW_NUM = 8;
+
   private final LongLongHashMap rowNumToMetadataDictionaryKeyMap;
   private final LongObjectHashMap<MetadataDictionaryEntry> metadataDictionary;
 
@@ -33,6 +50,21 @@ public final class MetadataFilteringModule {
         put(entry.key, entry.value);
       }
     }
+  }
+
+  /**
+   * An estimate of the bytes these two maps hold. The map from rowNum to dictionary key and the
+   * rowNums sharing each metadata value are counted per row. The encoded metadata is counted per
+   * distinct value, since the dictionary holds one of each.
+   */
+  public long getEstimatedBytes() {
+    long bytes = (long) rowNumToMetadataDictionaryKeyMap.size() * BYTES_PER_ROW_NUM_ENTRY;
+    bytes += (long) metadataDictionary.size() * (BYTES_PER_DICTIONARY_ENTRY
+        + BYTES_PER_DICTIONARY_VALUE);
+    for (LongObjectCursor<MetadataDictionaryEntry> entry : metadataDictionary) {
+      bytes += (long) entry.value.size() * BYTES_PER_SHARED_ROW_NUM;
+    }
+    return bytes;
   }
 
   public boolean put(long rowNum, LongMeta metadata) {

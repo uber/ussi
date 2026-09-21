@@ -164,6 +164,25 @@ verification reads. The unilateral values an inverted index orders its lists by
 are left alone, since candidate generation prunes against them and an order it
 cannot compare would stop pruning working.
 
+What the representation saves differs by structure. The matrix index gains the
+most. It derives a similarity for every row from that value, so excluding a
+deleted row incurs no cost beyond the arithmetic the search already performs,
+where a set would add a lookup for every row of every query. A scan index and
+the caches gain nearly as much, since the tombstone is a field of the record
+they have already fetched rather than a second structure to consult. An inverted
+index gains least. Its lists are ordered by unilateral value, so the tombstone
+cannot sit on the key the search prunes against, and a deleted row is generated
+as a candidate and dropped when verification reads its record. What it still
+gains is the absence of a second structure to maintain.
+
+The representation is also available wherever the scoring is. A scorer that
+selects where it scores and returns only the rows it kept has to apply deletion
+at that site, and the unilateral values are already copied there for the
+arithmetic. Such a scorer therefore returns as many live rows as the query asked
+for. A set would have to be copied to the same place and kept in step with every
+delete, or the selection would return deleted rows for the caller to drop,
+leaving it short by an amount nothing bounds.
+
 An update is a delete of the old version followed by an insert of the new one
 under the same `rowNum`, so the active cache always holds the latest version.
 

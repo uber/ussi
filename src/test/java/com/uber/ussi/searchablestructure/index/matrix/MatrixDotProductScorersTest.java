@@ -154,5 +154,10 @@ class MatrixDotProductScorersTest {
     public List<RowNumAndSimilarity> selectRows(float[] queryValues, RowSelection selection) {
       return List.of();
     }
+
+    @Override
+    public boolean hasOwnMatrixCopy() {
+      return false;
+    }
   }
 }

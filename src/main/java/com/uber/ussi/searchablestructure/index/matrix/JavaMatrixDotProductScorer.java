@@ -50,6 +50,11 @@ final class JavaMatrixDotProductScorer implements MatrixDotProductScorer {
     return kept.toList();
   }
 
+  @Override
+  public boolean hasOwnMatrixCopy() {
+    return false;
+  }
+
   /**
    * Batching queries was measured and not adopted here. The gain elsewhere comes from sharing a
    * cost a library pays once per call whatever the query count, and this multiply has no such cost:

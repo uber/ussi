@@ -143,6 +143,18 @@ final class NativeMatrixDotProductScorer<B> extends BatchedMatrixDotProductScore
     blas.free(products);
   }
 
+  @Override
+  public long nativeFootprintBytes() {
+    DenseMatrix matrix = getMatrix();
+    long chunkBytes = 0;
+    for (int chunk = 0; chunk < matrix.numChunks(); ++chunk) {
+      chunkBytes += (long) matrix.numRowsInChunk(chunk) * matrix.dimension() * Float.BYTES;
+    }
+    long queryBytes = (long) getMaxNumQueriesInABatch() * matrix.dimension() * Float.BYTES;
+    long productBytes = (long) getMaxNumQueriesInABatch() * MAX_NUM_ROWS_IN_A_RANGE * Float.BYTES;
+    return chunkBytes + queryBytes + productBytes;
+  }
+
   /** Walks every range of every chunk, in row order. */
   private void forEachRange(RangeMultiply rangeMultiply) {
     DenseMatrix matrix = getMatrix();

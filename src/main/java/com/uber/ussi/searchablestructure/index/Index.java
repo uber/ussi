@@ -2,6 +2,7 @@
 package com.uber.ussi.searchablestructure.index;
 
 import com.carrotsearch.hppc.LongObjectHashMap;
+import com.uber.ussi.MemoryFootprint;
 import com.uber.ussi.comparator.Comparator;
 import com.uber.ussi.comparator.ComparatorConfigValidator;
 import com.uber.ussi.comparator.ComparatorFactory;
@@ -61,6 +62,14 @@ public abstract class Index implements SearchableStructure, AutoCloseable {
 
   /** Whether this index was built with no rows at all, deleted or otherwise. */
   public abstract boolean isEmpty();
+
+  /**
+   * An estimate of the memory this index holds, separating on-heap from native or device bytes.
+   * Returns zeros for an index that holds no large buffers of its own.
+   */
+  public MemoryFootprint getMemoryFootprint() {
+    return new MemoryFootprint(0, 0);
+  }
 
   @Override
   public void close() {}

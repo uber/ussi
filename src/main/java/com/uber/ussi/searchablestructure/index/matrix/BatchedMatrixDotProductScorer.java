@@ -157,8 +157,18 @@ abstract class BatchedMatrixDotProductScorer<S> implements MatrixDotProductScore
     return matrix;
   }
 
+  @Override
+  public boolean hasOwnMatrixCopy() {
+    return true;
+  }
+
   protected final MatrixRows getRows() {
     return rows;
+  }
+
+  /** The most queries one multiply may carry, which sizes the working buffers. */
+  protected final int getMaxNumQueriesInABatch() {
+    return maxNumQueriesInABatch;
   }
 
   /** Multiplies so far, and the queries they carried, which report how the load batched. */

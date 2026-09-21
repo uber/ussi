@@ -7,6 +7,7 @@ import com.carrotsearch.hppc.cursors.LongObjectCursor;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.meta.MetaFilter;
+import com.uber.ussi.MemoryFootprint;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.index.Index;
@@ -145,6 +146,16 @@ public final class HybridIndex extends Index {
   @Override
   public boolean isEmpty() {
     return termIndex.isEmpty() && signatureIndex.isEmpty();
+  }
+
+  /** The rows are divided between the two indexes, so the estimate is the sum of theirs. */
+  @Override
+  public MemoryFootprint getMemoryFootprint() {
+    MemoryFootprint termFootprint = termIndex.getMemoryFootprint();
+    MemoryFootprint signatureFootprint = signatureIndex.getMemoryFootprint();
+    return new MemoryFootprint(
+        termFootprint.getOnHeapBytes() + signatureFootprint.getOnHeapBytes(),
+        termFootprint.getNativeBytes() + signatureFootprint.getNativeBytes());
   }
 
   @Override

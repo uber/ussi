@@ -52,8 +52,13 @@ public final class ProcessorAllowance {
   }
 
   /**
-   * Sets the supplier the host uses to lower or raise the allowance at runtime. The supplier is read
-   * on the budget sampling cadence, so a change takes effect within one sampling window.
+   * Sets the supplier the host uses to lower or raise the allowance at runtime.
+   *
+   * <p>{@link #getNumProcessors()} reports the new value as soon as this returns. Propagating it to
+   * the admission semaphore, the parallelism budget, and the search pool is deferred: those follow
+   * on the budget's own cadence, which re-derives once per averaging window rather than once per
+   * sample, and only while at least one index is open. A namespace built after this call reads the
+   * new value directly.
    */
   public void setNumProcessors(IntSupplier supplier) {
     this.supplier = Objects.requireNonNull(supplier, "supplier");

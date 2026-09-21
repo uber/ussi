@@ -2,6 +2,7 @@
 package com.uber.ussi.searchablestructure.utils.parallel;
 
 import com.uber.ussi.ProcessorAllowance;
+import java.util.Objects;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -164,20 +165,26 @@ public final class ParallelismBudget {
   }
 
   /**
-   * Re-derives {@link #maxNumThreadsPerSearch} from the processor allowance and re-derives both
-   * counts from the current concurrency. Must be called under {@link #exclusively}, since a running
-   * search reads {@link #numThreadsPerSearch} and a native library reads {@link
-   * #numThreadsPerBatch}.
+   * Re-derives both counts from the processor allowance and the given concurrency, and applies the
+   * new allowance to whoever registered for it.
+   *
+   * <p>Must be called by a caller that already holds exclusivity, since a running search reads
+   * {@link #numThreadsPerSearch} and a native library reads {@link #numThreadsPerBatch}. Everything
+   * here is therefore applied inline rather than through {@link #exclusively}. Re-entering it would
+   * acquire a non-reentrant semaphore whose permits this caller already holds, which deadlocks
+   * every search in the process.
    */
   void applyAllowanceChange(int numConcurrentSearches) {
-    int newMax = ProcessorAllowance.shared().getNumProcessors();
-    if (newMax < 1) {
-      newMax = 1;
-    }
+    int newMax = Math.max(1, ProcessorAllowance.shared().getNumProcessors());
     maxNumThreadsPerSearch = newMax;
-    maxNumThreadsPerBatch = Math.min(socketCores, newMax);
     onAllowanceChange.accept(newMax);
-    update(numConcurrentSearches);
+    numThreadsPerSearch = getNumThreadsPerSearchFor(numConcurrentSearches);
+    int updatedNumThreadsPerBatch = Math.min(socketCores, newMax);
+    if (updatedNumThreadsPerBatch != numThreadsPerBatch) {
+      maxNumThreadsPerBatch = updatedNumThreadsPerBatch;
+      onNumThreadsPerBatchChange.accept(updatedNumThreadsPerBatch);
+      numThreadsPerBatch = updatedNumThreadsPerBatch;
+    }
   }
 
   /**
@@ -185,7 +192,7 @@ public final class ParallelismBudget {
    * semaphore and the search pool resize under a moment with no search running.
    */
   public void onAllowanceChange(IntConsumer callback) {
-    onAllowanceChange = java.util.Objects.requireNonNull(callback, "callback");
+    onAllowanceChange = Objects.requireNonNull(callback, "callback");
   }
 
   int getNumAttachments() {

@@ -3,6 +3,7 @@ package com.uber.ussi.searchablestructure.index;
 
 import com.carrotsearch.hppc.LongObjectHashMap;
 import com.carrotsearch.hppc.cursors.LongObjectCursor;
+import com.uber.ussi.MemoryFootprint;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.meta.MetaFilter;
@@ -19,6 +20,18 @@ import javax.annotation.Nullable;
  * answers for all three.
  */
 public abstract class RowStoringIndex extends Index {
+
+  /**
+   * Bytes one row occupies in the row map itself, being its key slot and the reference to its
+   * record, at the load factor the map is kept at.
+   */
+  private static final long BYTES_PER_ROW_MAP_ENTRY = 24;
+
+  /**
+   * Bytes one record occupies beyond its two arrays, being the object header, the references to
+   * those arrays, and the unilateral value.
+   */
+  private static final long BYTES_PER_RECORD_HEADER = 40;
 
   protected final LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap;
   protected final MetadataFilteringModule metadataFilteringModule;
@@ -94,6 +107,26 @@ public abstract class RowStoringIndex extends Index {
   @Override
   public final boolean isEmpty() {
     return rowNumToTermsAndValuesMap.isEmpty();
+  }
+
+  @Override
+  public MemoryFootprint getMemoryFootprint() {
+    return new MemoryFootprint(getRowStorageBytes(), 0);
+  }
+
+  /**
+   * Bytes the row map holds, counting every row the map still has a slot for. A deleted row keeps
+   * its slot and its arrays until the index is rebuilt, so this counts allocated rows rather than
+   * live ones.
+   */
+  protected final long getRowStorageBytes() {
+    long bytes = 0;
+    for (LongObjectCursor<LongTermsAndValues> entry : rowNumToTermsAndValuesMap) {
+      bytes += BYTES_PER_ROW_MAP_ENTRY + BYTES_PER_RECORD_HEADER;
+      bytes += (long) entry.value.termsLength() * Long.BYTES;
+      bytes += (long) entry.value.valuesLength() * Float.BYTES;
+    }
+    return bytes;
   }
 
   protected final boolean matchesMetaFilter(long rowNum, MetaFilter metadataFilter) {

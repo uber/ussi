@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.carrotsearch.hppc.LongFloatHashMap;
 import com.carrotsearch.hppc.LongObjectHashMap;
+import com.uber.ussi.MemoryFootprint;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.meta.MetaFilter;
@@ -18,6 +19,7 @@ import com.uber.ussi.searchablestructure.index.Index;
 import com.uber.ussi.searchablestructure.utils.metadata.MetadataFilteringStrategy;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 class MatrixIndexTest {
@@ -588,5 +590,71 @@ class MatrixIndexTest {
 
   private static List<Long> sortedRowNums(List<RowNumAndSimilarity> rows) {
     return rows.stream().map(RowNumAndSimilarity::getRowNum).sorted().toList();
+  }
+
+  /**
+   * Which scorer is built depends on the libraries this machine carries, so these assert the
+   * relations the estimate must hold under either rather than one machine's byte totals.
+   */
+  @Nested
+  class MemoryFootprintEstimate {
+
+    @Test
+    void holdsTheMatrixPayloadOnceNativelyAndOnceOnTheHeapOrTwiceOnTheHeap() {
+      MatrixIndex index = new MatrixIndex(config(), rows(), metadata());
+
+      MemoryFootprint footprint = index.getMemoryFootprint();
+      long matrixPayload = (long) index.size() * index.getDimensionForTests() * Float.BYTES;
+
+      // The row map holds one copy whichever scorer was built, so the heap never falls below it.
+      assertTrue(
+          footprint.getOnHeapBytes() > matrixPayload,
+          "on-heap " + footprint.getOnHeapBytes() + " against a payload of " + matrixPayload);
+      if (footprint.getNativeBytes() > 0) {
+        assertTrue(
+            footprint.getNativeBytes() >= matrixPayload,
+            "a scorer holding its own copy must count at least the matrix");
+      } else {
+        assertTrue(
+            footprint.getOnHeapBytes() >= 2 * matrixPayload,
+            "a scorer reading the chunks leaves both copies on the heap");
+      }
+      index.close();
+    }
+
+    @Test
+    void growsWithTheRowCount() {
+      int[] rowCounts = {1, 2, 4, 8};
+      long previousOnHeapBytes = 0;
+      for (int rowCount : rowCounts) {
+        LongObjectHashMap<LongTermsAndValues> denseRows = longObjectMap();
+        for (int rowNum = 0; rowNum < rowCount; ++rowNum) {
+          denseRows.put(rowNum, denseInternal(1f, 0f));
+        }
+        MatrixIndex index = new MatrixIndex(config(), denseRows, longObjectMap());
+
+        long onHeapBytes = index.getMemoryFootprint().getOnHeapBytes();
+
+        assertTrue(
+            onHeapBytes > previousOnHeapBytes,
+            rowCount + " rows estimated " + onHeapBytes + ", not above " + previousOnHeapBytes);
+        previousOnHeapBytes = onHeapBytes;
+        index.close();
+      }
+    }
+
+    @Test
+    void countsDeletedRowsUntilTheIndexIsRebuilt() {
+      MatrixIndex index = new MatrixIndex(config(), rows(), metadata());
+      long beforeDelete = index.getMemoryFootprint().getOnHeapBytes();
+
+      index.delete(10);
+
+      assertEquals(
+          beforeDelete,
+          index.getMemoryFootprint().getOnHeapBytes(),
+          "a deleted row keeps its slot, so the estimate must not fall");
+      index.close();
+    }
   }
 }

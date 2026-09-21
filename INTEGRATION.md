@@ -76,9 +76,14 @@ Do not schedule USSI on a bounded pool unless that pool can block. A pool that
 
 `ProcessorAllowance.shared()` lets a host lower the processors USSI may use at
 runtime, through a supplier rather than a constant. A static number cannot
-track a bursty host. The supplier is read on the same cadence the parallelism
-budget samples concurrency, and a change is applied under a moment with no
-search running, so a multiply in flight is never torn down.
+track a bursty host.
+
+Propagation is deferred rather than immediate. The parallelism budget re-reads
+the supplier once per averaging window rather than once per sample, and only
+while at least one namespace is open. A change is then applied under a moment
+with no search running, so a multiply in flight is never torn down. A host that
+needs the new value to take effect at once builds the namespace after setting
+it, since a namespace reads the allowance as it is built.
 
 The allowance is clamped by the processors the process may run on, which a
   processor set or a bandwidth quota may already bound, and by the per-thread

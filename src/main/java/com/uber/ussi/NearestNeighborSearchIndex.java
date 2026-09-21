@@ -268,8 +268,12 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
   }
 
   /**
-   * An estimate of the memory this namespace holds, separating on-heap from native or device bytes.
-   * Sums the active cache, the graduating caches, and the indexes under the read lock.
+   * An estimate of the memory the indexes of this namespace hold, separating on-heap from native or
+   * device bytes, summed under the read lock.
+   *
+   * <p>The active cache and the graduating caches are excluded. Each is bounded by {@code
+   * maxCacheSize} rows, so what they hold is bounded by that count times the number of structures
+   * a namespace permits, whereas an index grows with the namespace.
    */
   public MemoryFootprint getMemoryFootprint() {
     lock.readLock().lock();

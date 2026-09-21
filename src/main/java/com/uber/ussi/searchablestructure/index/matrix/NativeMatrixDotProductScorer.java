@@ -1,6 +1,7 @@
 /* AUTHOR: Shijie Lu (shijie@uber.com), Shalini Kedlaya (skedlaya@uber.com), Ahmed Metwally (ametwally@uber.com) */
 package com.uber.ussi.searchablestructure.index.matrix;
 
+import com.uber.ussi.ProcessorAllowance;
 import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
 import java.util.ArrayList;
@@ -41,7 +42,7 @@ final class NativeMatrixDotProductScorer<B> extends BatchedMatrixDotProductScore
   private final float[] readBuffer;
 
   NativeMatrixDotProductScorer(DenseMatrix matrix, MatrixRows rows, NativeBlas<B> blas) {
-    this(matrix, rows, blas, Math.max(1, Runtime.getRuntime().availableProcessors()));
+    this(matrix, rows, blas, ProcessorAllowance.shared().getNumProcessors());
   }
 
   /**

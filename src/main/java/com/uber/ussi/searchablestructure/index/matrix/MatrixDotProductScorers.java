@@ -1,6 +1,7 @@
 /* AUTHOR: Shijie Lu (shijie@uber.com), Shalini Kedlaya (skedlaya@uber.com), Ahmed Metwally (ametwally@uber.com) */
 package com.uber.ussi.searchablestructure.index.matrix;
 
+import com.uber.ussi.ProcessorAllowance;
 import java.util.List;
 
 /**
@@ -48,7 +49,7 @@ final class MatrixDotProductScorers {
           return new CudaMatrixDotProductScorer(
               matrix,
               rows,
-              Math.max(1, Runtime.getRuntime().availableProcessors()),
+              ProcessorAllowance.shared().getNumProcessors(),
               maxNumSimilarities);
         }
       };

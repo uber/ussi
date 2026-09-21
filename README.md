@@ -14,7 +14,8 @@ and ordered sequences.
 
 USSI keeps nothing on disk and leaves several concerns to its host; see [What
 USSI Does Not Do](#what-ussi-does-not-do). For how it works inside, see
-[DESIGN.md](DESIGN.md).
+[DESIGN.md](DESIGN.md). For embedding it in a host process, see
+[INTEGRATION.md](INTEGRATION.md).
 
 ## Quick Start
 

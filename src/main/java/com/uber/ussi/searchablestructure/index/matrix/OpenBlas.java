@@ -74,13 +74,6 @@ final class OpenBlas implements NativeBlas<FloatPointer> {
     // threads the loaded binary retains buffers for, since asking for more than that is refused.
     ParallelismBudget.shared()
         .onNumThreadsPerBatchChange(numThreads -> blasNumThreadsSetter.accept(Math.min(numThreads, maxNumThreads)));
-    // The per-thread buffer table the loaded binary retains bounds the concurrent native callers,
-    // so the processor allowance is clamped by it as well. The number read at construction is the
-    // one registered, rather than a fresh read: reading it sets the count and restores it, which
-    // is the very modification that is unsafe during a multiply, and the allowance re-clamps
-    // outside the moment with no search running. The table is fixed when the binary is built, so
-    // the number cannot change within a process.
-    ProcessorAllowance.shared().setNativeMaxProcessorsSupplier(() -> maxNumThreads);
   }
 
   int getMaxNumThreads() {
@@ -95,6 +88,17 @@ final class OpenBlas implements NativeBlas<FloatPointer> {
         current = shared;
         if (current == null) {
           current = new OpenBlas();
+          // The per-thread buffer table the loaded binary retains bounds the concurrent native
+          // callers, so the processor allowance is clamped by it. The number read at construction
+          // is the one registered, rather than a fresh read: reading it sets the count and restores
+          // it, which is the modification that is unsafe during a multiply, and the allowance
+          // re-clamps outside the moment with no search running. The table is fixed when the binary
+          // is built, so the number cannot change within a process.
+          //
+          // Registered for the instance serving the process rather than in the constructor, so an
+          // instance built to exercise this class does not bound every search in the process.
+          int maxNumThreads = current.maxNumThreads;
+          ProcessorAllowance.shared().setNativeMaxProcessorsSupplier(() -> maxNumThreads);
           shared = current;
         }
       }

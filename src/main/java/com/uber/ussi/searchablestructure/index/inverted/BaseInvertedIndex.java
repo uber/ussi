@@ -9,6 +9,7 @@ import com.carrotsearch.hppc.cursors.LongCursor;
 import com.carrotsearch.hppc.cursors.LongIntCursor;
 import com.carrotsearch.hppc.cursors.LongObjectCursor;
 import com.uber.ussi.MemoryFootprint;
+import com.uber.ussi.ProcessorAllowance;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.config.NamespaceConfig.CandidateGeneratorType;
 import com.uber.ussi.config.NamespaceConfig.PopularTermDiscardScope;
@@ -768,8 +769,8 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
    * load searches the same shards with fewer threads.
    */
   static int getNumShards(int numRows) {
-    int numCores = Math.max(1, Runtime.getRuntime().availableProcessors());
-    return Math.max(1, Math.min(numCores, numRows / MIN_NUM_ROWS_PER_SHARD));
+    int numProcessors = Math.max(1, ProcessorAllowance.shared().getNumProcessors());
+    return Math.max(1, Math.min(numProcessors, numRows / MIN_NUM_ROWS_PER_SHARD));
   }
 
   private void validateRows() {

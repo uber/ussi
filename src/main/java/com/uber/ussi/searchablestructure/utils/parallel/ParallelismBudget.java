@@ -195,6 +195,7 @@ public final class ParallelismBudget {
     int newMax = Math.max(1, ProcessorAllowance.shared().getNumProcessors());
     maxNumThreadsPerSearch = newMax;
     onAllowanceChange.accept(newMax);
+    SearchThreads.resize(newMax);
     numThreadsPerSearch = getNumThreadsPerSearchFor(numConcurrentSearches);
     int updatedNumThreadsPerBatch = Math.min(socketCores, newMax);
     if (updatedNumThreadsPerBatch != numThreadsPerBatch) {
@@ -210,6 +211,14 @@ public final class ParallelismBudget {
    */
   public void onAllowanceChange(IntConsumer callback) {
     onAllowanceChange = Objects.requireNonNull(callback, "callback");
+  }
+
+  /**
+   * Runs the task with no search running. Before {@link #attach attach()} there are no searches, so
+   * the task runs inline.
+   */
+  void runExclusively(Runnable task) {
+    exclusively.accept(task);
   }
 
   int getNumAttachments() {

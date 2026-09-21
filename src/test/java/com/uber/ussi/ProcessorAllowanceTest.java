@@ -21,31 +21,31 @@ class ProcessorAllowanceTest {
     assertEquals(AVAILABLE, ProcessorAllowance.shared().getNumProcessors());
   }
 
+  /** Exercises the arithmetic directly, so no case leaves a bound behind for another test. */
   @Test
   void clampsWhatTheHostAsksForByTheOperatingSystemAndTheNativeBound() {
-    int[][] requestedNativeMaxAndExpected = {
+    int[][] requestedAvailableNativeMaxAndExpected = {
       // A host asking for one gets one.
-      {1, Integer.MAX_VALUE, 1},
-      // A host asking for more than the process may use is reduced to what it may use.
-      {Integer.MAX_VALUE, Integer.MAX_VALUE, AVAILABLE},
+      {1, 16, Integer.MAX_VALUE, 1},
+      // A host asking for more than the process may run on is reduced to what it may run on.
+      {Integer.MAX_VALUE, 16, Integer.MAX_VALUE, 16},
       // A native bound below both is what binds.
-      {Integer.MAX_VALUE, 1, 1},
+      {Integer.MAX_VALUE, 16, 4, 4},
       // A non-positive request is floored at one rather than disabling search.
-      {0, Integer.MAX_VALUE, 1},
-      {-5, Integer.MAX_VALUE, 1},
+      {0, 16, Integer.MAX_VALUE, 1},
+      {-5, 16, Integer.MAX_VALUE, 1},
       // Neither bound binds below what the host asked for.
-      {2, Integer.MAX_VALUE, Math.min(2, AVAILABLE)},
+      {2, 16, Integer.MAX_VALUE, 2},
+      // A non-positive bound is floored rather than disabling search.
+      {8, 0, Integer.MAX_VALUE, 1},
+      {8, 16, 0, 1},
     };
-    for (int[] testCase : requestedNativeMaxAndExpected) {
-      ProcessorAllowance.resetForTests();
-      ProcessorAllowance allowance = ProcessorAllowance.shared();
-      allowance.setNativeMaxProcessorsSupplier(() -> testCase[1]);
-      allowance.setNumProcessors(() -> testCase[0]);
-
+    for (int[] testCase : requestedAvailableNativeMaxAndExpected) {
       assertEquals(
-          testCase[2],
-          allowance.getNumProcessors(),
-          "requested " + testCase[0] + " against a native bound of " + testCase[1]);
+          testCase[3],
+          ProcessorAllowance.clamp(testCase[0], testCase[1], testCase[2]),
+          "requested " + testCase[0] + " against " + testCase[1] + " available and a native bound "
+              + "of " + testCase[2]);
     }
   }
 

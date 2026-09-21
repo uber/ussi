@@ -32,21 +32,25 @@ import java.util.function.IntSupplier;
  */
 public final class ProcessorAllowance {
 
-  private static volatile ProcessorAllowance shared = new ProcessorAllowance();
+  /** Applied until a host sets one of its own, and restored when a test resets the allowance. */
+  private static final IntSupplier DEFAULT_SUPPLIER =
+      () -> Math.max(1, Runtime.getRuntime().availableProcessors());
+
+  private static final ProcessorAllowance SHARED = new ProcessorAllowance();
 
   private volatile IntSupplier supplier;
   private volatile IntSupplier nativeMaxProcessorsSupplier;
   private volatile int current;
 
   private ProcessorAllowance() {
-    this.supplier = () -> Math.max(1, Runtime.getRuntime().availableProcessors());
+    this.supplier = DEFAULT_SUPPLIER;
     this.nativeMaxProcessorsSupplier = () -> Integer.MAX_VALUE;
     this.current = clamp();
   }
 
   /** The instance for this process. */
   public static ProcessorAllowance shared() {
-    return shared;
+    return SHARED;
   }
 
   /**
@@ -83,14 +87,30 @@ public final class ProcessorAllowance {
   }
 
   private int clamp() {
-    int requested = Math.max(1, supplier.getAsInt());
-    int available = Math.max(1, Runtime.getRuntime().availableProcessors());
-    int nativeMax = Math.max(1, nativeMaxProcessorsSupplier.getAsInt());
-    return Math.min(Math.min(requested, available), nativeMax);
+    return clamp(
+        supplier.getAsInt(),
+        Runtime.getRuntime().availableProcessors(),
+        nativeMaxProcessorsSupplier.getAsInt());
   }
 
-  /** Resets the shared instance to its default, so a test may vary the allowance in isolation. */
+  /**
+   * The processors USSI may use, being the least of what the host asked for, what the process may
+   * run on, and what a native library retains buffers for. Never below one, so a non-positive
+   * request narrows search rather than disabling it.
+   */
+  static int clamp(int requested, int available, int nativeMax) {
+    return Math.min(
+        Math.min(Math.max(1, requested), Math.max(1, available)), Math.max(1, nativeMax));
+  }
+
+  /**
+   * Restores the default supplier, so a test may vary the allowance in isolation.
+   *
+   * <p>The bound a native library registered is retained. That registration happens once per
+   * process, when the library loads, so discarding it here would leave every test that ran
+   * afterwards without the clamp and make the outcome depend on the order the tests ran in.
+   */
   static void resetForTests() {
-    shared = new ProcessorAllowance();
+    SHARED.setNumProcessors(DEFAULT_SUPPLIER);
   }
 }

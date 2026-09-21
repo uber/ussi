@@ -66,6 +66,38 @@ class TermIndexTest {
             + termIndexBytes + " against scan " + scanIndexBytes);
   }
 
+  /**
+   * A merging generator scores from the inverted lists, so each list carries a value per row
+   * beside the row number. The other generator carries row numbers alone.
+   */
+  @Test
+  void memoryFootprintCountsTheValuesAMergingGeneratorKeeps() {
+    LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
+    for (long rowNum = 1; rowNum <= 20; ++rowNum) {
+      rows.put(rowNum, jaccard(new long[] {1, 2, 3, 4}, 1, 1, 1, 1));
+    }
+
+    long sparsBytes =
+        new TermIndex(
+                config("jaccard", Map.of(ConfigKeys.CANDIDATE_GENERATOR, "spars")),
+                rows,
+                longObjectMap())
+            .getMemoryFootprint()
+            .getOnHeapBytes();
+    long sparsMergeBytes =
+        new TermIndex(
+                config("jaccard", Map.of(ConfigKeys.CANDIDATE_GENERATOR, "spars_merge")),
+                rows,
+                longObjectMap())
+            .getMemoryFootprint()
+            .getOnHeapBytes();
+
+    assertTrue(
+        sparsMergeBytes > sparsBytes,
+        "the values a merging generator keeps are uncounted: spars_merge "
+            + sparsMergeBytes + " against spars " + sparsBytes);
+  }
+
   /** The structure answering metadata filters holds one entry per row, so it must be counted. */
   @Test
   void memoryFootprintCountsTheMetadataStructure() {

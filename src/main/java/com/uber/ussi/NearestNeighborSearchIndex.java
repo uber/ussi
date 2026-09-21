@@ -8,6 +8,8 @@ import com.uber.ussi.comparator.Comparator;
 import com.uber.ussi.comparator.ComparatorConfigValidator;
 import com.uber.ussi.comparator.ComparatorFactory;
 import com.uber.ussi.config.NamespaceConfig;
+import com.uber.ussi.error.InternalIndexException;
+import com.uber.ussi.error.InvalidQueryException;
 import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
@@ -118,11 +120,11 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
     lock.writeLock().lock();
     try {
       if (nextRowNum == Long.MAX_VALUE) {
-        throw new IllegalStateException("nextRowNum has reached Long.MAX_VALUE.");
+        throw new InternalIndexException("nextRowNum has reached Long.MAX_VALUE.");
       }
       rowNum = nextRowNum++;
       if (!cache.insertWithRowNum(rowNum, encodedRecord, metadata)) {
-        throw new IllegalStateException(
+        throw new InternalIndexException(
             String.format("rowNum %s already exists in cache.", rowNum));
       }
       cacheToGraduate = rotateCacheForGraduationIfReadyLocked();
@@ -155,7 +157,7 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
       // Updates keep the rowNum but move the current row version back into the active cache.
       boolean inserted = cache.insertWithRowNum(rowNum, encodedRecord, metadata);
       if (!inserted) {
-        throw new IllegalStateException(
+        throw new InternalIndexException(
             String.format("rowNum %s already exists in active cache after delete.", rowNum));
       }
       cacheToGraduate = rotateCacheForGraduationIfReadyLocked();
@@ -171,7 +173,7 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
   public SearchResults getNearestNeighborRowNums(
       int k, TermsAndValues record, MetaFilter metadataFilter) {
     if (k <= 0) {
-      throw new IllegalArgumentException("k must be greater than 0.");
+      throw new InvalidQueryException("k must be greater than 0.");
     }
     // Admission is taken before the read lock so that searches queued for a turn do not hold the
     // lock and stall an insert, delete or update.
@@ -204,7 +206,7 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
   public SearchResults getSimilarRowNums(
       float minSimilarity, TermsAndValues record, MetaFilter metadataFilter) {
     if (minSimilarity < 0.0f || minSimilarity > 1.0f) {
-      throw new IllegalArgumentException("minSimilarity must be in the range [0.0, 1.0].");
+      throw new InvalidQueryException("minSimilarity must be in the range [0.0, 1.0].");
     }
     queryAdmission.acquire();
     try {
@@ -653,7 +655,7 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
   private int getIndexGenerationLocked(Index index, int position) {
     Integer generation = indexGenerations.get(index);
     if (generation == null) {
-      throw new IllegalStateException(
+      throw new InternalIndexException(
           String.format("Missing generation for index at position %s.", position));
     }
     return generation.intValue();
@@ -662,7 +664,7 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
   private int getGraduatingCacheGenerationLocked(Cache graduatingCache, int position) {
     Integer generation = graduatingCacheGenerations.get(graduatingCache);
     if (generation == null) {
-      throw new IllegalStateException(
+      throw new InternalIndexException(
           String.format("Missing generation for graduating cache at position %s.", position));
     }
     return generation.intValue();
@@ -671,7 +673,7 @@ public final class NearestNeighborSearchIndex implements AutoCloseable {
   private int removeGraduatingCacheGenerationLocked(Cache graduatingCache) {
     Integer generation = graduatingCacheGenerations.remove(graduatingCache);
     if (generation == null) {
-      throw new IllegalStateException("Missing generation for graduating cache.");
+      throw new InternalIndexException("Missing generation for graduating cache.");
     }
     return generation.intValue();
   }

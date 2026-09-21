@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.uber.ussi.error.SearchCancelledException;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
@@ -192,7 +193,7 @@ class QueryAdmissionTest {
               Thread.currentThread().interrupt();
               try {
                 admission.acquire();
-              } catch (IllegalStateException e) {
+              } catch (SearchCancelledException e) {
                 thrown.add(e.getClass());
               }
               stillInterrupted.add(Thread.currentThread().isInterrupted());
@@ -200,7 +201,7 @@ class QueryAdmissionTest {
     thread.start();
     thread.join();
 
-    assertEquals(List.of(IllegalStateException.class), List.copyOf(thrown));
+    assertEquals(List.of(SearchCancelledException.class), List.copyOf(thrown));
     assertEquals(List.of(Boolean.TRUE), List.copyOf(stillInterrupted));
     admission.release();
   }

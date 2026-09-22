@@ -316,6 +316,46 @@ class NamespaceConfigTest {
     assertTrue(error.getMessage().contains("minTermsAndValuesLength must be >= 0"));
   }
 
+  /**
+   * Equality decides whether a namespace may be reused for a configuration, so a difference in any
+   * one field has to be visible. Each case differs from the same base in exactly one field.
+   */
+  @Test
+  void distinguishesConfigsDifferingInAnySingleField() {
+    NamespaceConfig base = fullBuilder().build();
+    List<NamespaceConfig> differingInOneField =
+        List.of(
+            fullBuilder().minTermsAndValuesLength(2).build(),
+            fullBuilder().maxTermsAndValuesLength(5).build(),
+            fullBuilder().maxCacheSize(11).build(),
+            fullBuilder().maxNumSearchableStructures(4).build(),
+            fullBuilder().maxNumSimilarities(6).build(),
+            fullBuilder().cacheType("inverted_term").build(),
+            fullBuilder().cacheParams(Map.of("ck", "other")).build(),
+            fullBuilder().indexType("matrix").build(),
+            fullBuilder().indexParams(Map.of("ik", "other")).build(),
+            fullBuilder().comparatorType("jaccard").build(),
+            fullBuilder().comparatorParams(Map.of("pk", "other")).build(),
+            fullBuilder().comparatorNormalizerType("reciprocal").build(),
+            fullBuilder().comparatorNormalizerParams(Map.of("nk", "other")).build());
+
+    for (NamespaceConfig other : differingInOneField) {
+      assertNotEquals(base, other, other.toString());
+    }
+  }
+
+  @Test
+  void equalsItselfAndAnIdenticalConfigAndNothingElse() {
+    NamespaceConfig config = fullBuilder().build();
+    NamespaceConfig identical = fullBuilder().build();
+
+    assertEquals(config, config);
+    assertEquals(config, identical);
+    assertEquals(config.hashCode(), identical.hashCode());
+    assertNotEquals(config, null);
+    assertNotEquals(config, "not a config");
+  }
+
   @FunctionalInterface
   private interface ParamLookup {
     String apply(NamespaceConfig config, String key);

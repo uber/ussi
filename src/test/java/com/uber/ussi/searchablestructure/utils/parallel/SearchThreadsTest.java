@@ -85,7 +85,9 @@ class SearchThreadsTest {
   @Test
   void waitsForEveryWorkUnitBeforeReportingACancellation() {
     // The pool must be able to run both submitted work units at once, since each waits for the
-    // other to arrive before either finishes.
+    // other to arrive before either finishes. Resizing reaches an existing pool alone, so this
+    // creates one before widening it.
+    SearchThreads.runInParallel(2, workUnit -> {});
     SearchThreads.resize(4);
     CountDownLatch bothStarted = new CountDownLatch(2);
     AtomicInteger finished = new AtomicInteger();

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.uber.ussi.ProcessorAllowance;
 import java.util.ArrayList;
@@ -301,6 +302,67 @@ class ParallelismBudgetTest {
     ParallelismBudget budget = new ParallelismBudget(CORES, CORES);
 
     assertFalse(budget.isRebudgeting());
+    assertEquals(CORES, budget.getNumThreadsPerSearch());
+  }
+
+  /**
+   * A window of readings re-derives from the concurrency alone while the allowance stands still,
+   * and reaches for a moment with no search running only once the allowance has moved.
+   */
+  @Test
+  void reachesForAMomentWithoutSearchesOnlyOnceTheAllowanceHasMoved() {
+    // The allowance is clamped by the processors the process may run on, so the budget is built at
+    // what it actually reports rather than at a number it would be reduced from.
+    int allowance = ProcessorAllowance.shared().getNumProcessors();
+    assumeTrue(allowance >= 2, "a machine of one processor cannot lower its allowance");
+    ParallelismBudget budget = new ParallelismBudget(allowance, allowance);
+    List<String> exclusiveCalls = new ArrayList<>();
+    budget.attach(() -> 0, task -> {
+      exclusiveCalls.add("entered");
+      task.run();
+    });
+    try {
+      // A full window at the allowance the budget was built at, which moves neither count.
+      for (int reading = 0; reading < ParallelismBudget.NUM_SAMPLES_PER_UPDATE; ++reading) {
+        budget.sampleWithoutPropagating(() -> 4);
+      }
+
+      assertEquals(List.of(), exclusiveCalls, "an allowance standing still suspends nothing");
+      assertEquals(
+          Math.max(1, allowance / 4),
+          budget.getNumThreadsPerSearch(),
+          "the concurrency still re-derives");
+
+      ProcessorAllowance.shared().setNumProcessors(() -> 1);
+      for (int reading = 0; reading < ParallelismBudget.NUM_SAMPLES_PER_UPDATE; ++reading) {
+        budget.sampleWithoutPropagating(() -> 1);
+      }
+
+      assertEquals(List.of("entered"), exclusiveCalls, "a moved allowance is applied exclusively");
+      assertEquals(1, budget.getNumThreadsPerSearch());
+    } finally {
+      budget.detach();
+      ProcessorAllowance.shared()
+          .setNumProcessors(() -> Runtime.getRuntime().availableProcessors());
+    }
+  }
+
+  /**
+   * A process whose structures all choose their own thread count has no holder registered, so a
+   * count that moves is recorded without suspending any search to apply it to no one.
+   */
+  @Test
+  void aCountNoHolderKeepsIsRecordedWithoutSuspendingAnySearch() {
+    ParallelismBudget budget = new ParallelismBudget(CORES, CORES);
+    List<String> exclusiveCalls = new ArrayList<>();
+    attachThen(budget, task -> {
+      exclusiveCalls.add("entered");
+      task.run();
+    });
+
+    budget.update(1);
+
+    assertEquals(List.of(), exclusiveCalls, "no holder is registered, so nothing is suspended");
     assertEquals(CORES, budget.getNumThreadsPerSearch());
   }
 

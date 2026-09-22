@@ -9,6 +9,7 @@ import com.uber.ussi.ProcessorAllowance;
 import com.uber.ussi.searchablestructure.utils.parallel.ParallelismBudget;
 import com.uber.ussi.utils.Utils;
 import java.util.function.IntConsumer;
+import java.util.function.IntSupplier;
 import javax.annotation.Nullable;
 import org.bytedeco.javacpp.FloatPointer;
 import org.bytedeco.openblas.global.openblas;
@@ -40,10 +41,11 @@ final class OpenBlas implements NativeBlas<FloatPointer> {
    * the load, since carrying a binary is weaker than loading one.
    */
   private static final boolean IS_SUPPORTED_PLATFORM =
-      (Utils.isRunningOnLinux() && Utils.isRunningOnArm())
-          || (Utils.isRunningOnLinux() && Utils.isRunningOnX86())
-          || (Utils.isRunningOnMacOs() && Utils.isRunningOnArm())
-          || (Utils.isRunningOnMacOs() && Utils.isRunningOnX86());
+      isSupportedPlatform(
+          Utils.isRunningOnLinux(),
+          Utils.isRunningOnMacOs(),
+          Utils.isRunningOnArm(),
+          Utils.isRunningOnX86());
 
   static FloatArrayPointerFactory floatArrayPointerFactory = FloatPointer::new;
   static FloatSizePointerFactory floatSizePointerFactory = FloatPointer::new;
@@ -55,6 +57,7 @@ final class OpenBlas implements NativeBlas<FloatPointer> {
   static SgemmOperation sgemmOperation = openblas::cblas_sgemm;
   static Runnable blasNativeLoadProbe = openblas_nolapack::blas_get_num_threads;
   static IntConsumer blasNumThreadsSetter = CachedBlasThreadCountSetter::setNumThreads;
+  static IntSupplier blasNumThreadsGetter = openblas_full::openblas_get_num_threads;
 
   /**
    * Memoized because the probe loads native code, and a failing load is repeated for every dense
@@ -123,6 +126,14 @@ final class OpenBlas implements NativeBlas<FloatPointer> {
   /** Whether a native binary is carried for this platform, which is short of it having loaded. */
   static boolean isSupportedPlatform() {
     return IS_SUPPORTED_PLATFORM;
+  }
+
+  /**
+   * Whether a native binary is carried for the named platform. One entry per binary this library
+   * depends on, so a platform outside them carries none.
+   */
+  static boolean isSupportedPlatform(boolean linux, boolean macOs, boolean arm, boolean x86) {
+    return (linux && arm) || (linux && x86) || (macOs && arm) || (macOs && x86);
   }
 
   static boolean isAvailable(boolean isSupportedPlatform, Runnable nativeLoadProbe) {
@@ -241,9 +252,9 @@ final class OpenBlas implements NativeBlas<FloatPointer> {
    */
   static int readMaxNumThreads() {
     try {
-      int configuredNumThreads = openblas_full.openblas_get_num_threads();
+      int configuredNumThreads = blasNumThreadsGetter.getAsInt();
       blasNumThreadsSetter.accept(Integer.MAX_VALUE);
-      int maxNumThreads = openblas_full.openblas_get_num_threads();
+      int maxNumThreads = blasNumThreadsGetter.getAsInt();
       if (configuredNumThreads > 0) {
         blasNumThreadsSetter.accept(configuredNumThreads);
       }

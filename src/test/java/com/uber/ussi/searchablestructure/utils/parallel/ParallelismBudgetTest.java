@@ -305,6 +305,46 @@ class ParallelismBudgetTest {
   }
 
   /**
+   * An allowance that has not moved leaves the count a native library holds alone, so applying it
+   * again suspends nothing and re-applies nothing.
+   */
+  @Test
+  void applyingAnAllowanceThatHasNotMovedReAppliesNothing() {
+    ParallelismBudget budget = new ParallelismBudget(CORES, CORES / 4);
+    List<Integer> applied = new ArrayList<>();
+    budget.onNumThreadsPerBatchChange(applied::add);
+    ProcessorAllowance.shared().setNumProcessors(() -> 1);
+    try {
+      budget.applyAllowanceChange(1);
+      applied.clear();
+
+      budget.applyAllowanceChange(1);
+
+      assertEquals(List.of(), applied, "an unchanged count is never re-applied");
+      assertEquals(1, budget.getNumThreadsPerBatchFor(1));
+    } finally {
+      ProcessorAllowance.shared()
+          .setNumProcessors(() -> Runtime.getRuntime().availableProcessors());
+    }
+  }
+
+  /**
+   * A budget nothing is attached to takes its readings without reaching for the allowance, since
+   * there are no searches to suspend and nothing to apply a change to.
+   */
+  @Test
+  void anUnattachedBudgetReDerivesFromTheConcurrencyAlone() {
+    ParallelismBudget budget = new ParallelismBudget(CORES, CORES);
+
+    for (int reading = 0; reading < ParallelismBudget.NUM_SAMPLES_PER_UPDATE; ++reading) {
+      budget.sampleWithoutPropagating(() -> 4);
+    }
+
+    assertFalse(budget.isRebudgeting());
+    assertEquals(CORES / 4, budget.getNumThreadsPerSearch(), "the readings still re-derive it");
+  }
+
+  /**
    * A periodic task that throws is not scheduled again, so a reading that fails once would leave
    * both counts where they stand for the life of the process.
    */

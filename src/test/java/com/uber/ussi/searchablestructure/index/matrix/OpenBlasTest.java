@@ -14,12 +14,77 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.function.IntConsumer;
+import java.util.function.IntSupplier;
 import org.junit.jupiter.api.Test;
 
 /** What is specific to OpenBLAS: whether it loads, what it rations, and its thread count. */
 class OpenBlasTest {
   private static final float DELTA = 1e-6f;
   private static final RowSelection SELECTION = new RowSelection(0, Float.NEGATIVE_INFINITY, 10);
+
+  /** One entry per native binary this library depends on, and nothing outside them. */
+  @Test
+  void carriesABinaryForEachPlatformItDependsOnAndNoOther() {
+    boolean[][] linuxMacOsArmX86AndIsSupported = {
+      {true, false, true, false, true},
+      {true, false, false, true, true},
+      {false, true, true, false, true},
+      {false, true, false, true, true},
+      // An operating system it carries no binary for, whichever the architecture.
+      {false, false, true, false, false},
+      {false, false, false, true, false},
+      // An architecture it carries no binary for, whichever the operating system.
+      {true, false, false, false, false},
+      {false, true, false, false, false},
+    };
+    for (boolean[] testCase : linuxMacOsArmX86AndIsSupported) {
+      assertEquals(
+          testCase[4],
+          OpenBlas.isSupportedPlatform(testCase[0], testCase[1], testCase[2], testCase[3]),
+          "linux=" + testCase[0] + " macOs=" + testCase[1] + " arm=" + testCase[2]
+              + " x86=" + testCase[3]);
+    }
+  }
+
+  /**
+   * The maximum is obtained by asking for more threads than any binary provides and restoring what
+   * was configured. A binary reporting nothing leaves the number every binary observed retains.
+   */
+  @Test
+  void readsTheMaxNumThreadsAndRestoresWhatWasConfigured() {
+    int[][] configuredMaxAndExpected = {
+      // A binary reporting its maximum, with the configured count restored afterwards.
+      {8, 64, 64},
+      // A binary reporting nothing for its maximum leaves the fallback.
+      {8, 0, 64},
+      {8, -1, 64},
+      // A binary reporting no configured count has none to restore.
+      {0, 64, 64},
+      {-1, 64, 64},
+    };
+    for (int[] testCase : configuredMaxAndExpected) {
+      FakeOpenBlas fakeOpenBlas = new FakeOpenBlas();
+      int[] numReads = {0};
+      IntSupplier originalGetter = OpenBlas.blasNumThreadsGetter;
+      withFakeOpenBlas(
+          fakeOpenBlas,
+          () -> {
+            OpenBlas.blasNumThreadsGetter = () -> ++numReads[0] == 1 ? testCase[0] : testCase[1];
+
+            assertEquals(
+                testCase[2],
+                OpenBlas.readMaxNumThreads(),
+                "configured " + testCase[0] + " maximum " + testCase[1]);
+
+            assertEquals(
+                testCase[0] > 0 ? List.of(Integer.MAX_VALUE, testCase[0]) : List.of(
+                    Integer.MAX_VALUE),
+                fakeOpenBlas.numThreadsUpdates,
+                "a count configured beforehand is restored and nothing else is written");
+          });
+      OpenBlas.blasNumThreadsGetter = originalGetter;
+    }
+  }
 
   @Test
   void isAvailableReturnsFalseOnUnsupportedPlatform() {

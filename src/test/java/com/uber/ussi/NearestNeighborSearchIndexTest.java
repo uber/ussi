@@ -275,6 +275,57 @@ class NearestNeighborSearchIndexTest {
         .build();
   }
 
+  /**
+   * A dense scorer holding its own copy of the matrix releases the Java one, so a namespace that
+   * graduates and consolidates under this configuration rebuilds from the rows it kept rather than
+   * from the matrix it released.
+   */
+  @Test
+  void matrixNamespaceGraduatesAndConsolidatesFromTheRowsItKeeps() {
+    try (NearestNeighborSearchIndex index =
+        NearestNeighborSearchIndex.create(matrixConfigWithMaxCacheSize(1))) {
+      for (int row = 0; row < 6; ++row) {
+        index.insert(denseVector(row, 1f), Map.of("city", "sf"));
+        index.awaitBackgroundTasks();
+      }
+
+      assertEquals(6, index.size());
+      assertTrue(
+          index.getNumSearchableStructures() < 6,
+          "the indexes must have consolidated rather than accumulated");
+
+      // Every row must still be found by its own vector, which is only possible if the values
+      // survived both the graduation that built each index and the consolidation that merged them.
+      for (int row = 0; row < 6; ++row) {
+        SearchResults results =
+            index.getNearestNeighborRowNums(1, denseVector(row, 1f), MetaFilter.empty());
+
+        assertEquals(1, results.size(), "row " + row + " must be found");
+        assertEquals(row, results.getRowNum(0), "row " + row + " must be nearest to itself");
+        assertEquals(1.0f, results.getSimilarity(0), 1e-6f, "an exact match scores one");
+      }
+    }
+  }
+
+  /** Distinct dense vectors, so each row is nearest to itself. */
+  private static TermsAndValues denseVector(int row, float second) {
+    return new TermsAndValues(new String[0], new float[] {row, second});
+  }
+
+  private static NamespaceConfig matrixConfigWithMaxCacheSize(int maxCacheSize) {
+    return NamespaceConfig.builder()
+        .minTermsAndValuesLength(0)
+        .maxTermsAndValuesLength(2)
+        .maxCacheSize(maxCacheSize)
+        .cacheType("scan")
+        .indexType("matrix")
+        .comparatorType("l2")
+        .comparatorNormalizerType("reciprocal")
+        .maxNumSearchableStructures(3)
+        .maxNumSimilarities(10)
+        .build();
+  }
+
   private static NamespaceConfig sparseConfigWithMaxCacheSize(int maxCacheSize) {
     return NamespaceConfig.builder()
         .minTermsAndValuesLength(0)

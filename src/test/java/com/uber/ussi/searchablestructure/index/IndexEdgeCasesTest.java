@@ -2,6 +2,7 @@ package com.uber.ussi.searchablestructure.index;
 
 import static com.uber.ussi.TestLongObjectMaps.longObjectMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -12,6 +13,7 @@ import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
 import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
+import com.uber.ussi.searchablestructure.utils.metadata.MetadataFilteringStrategy;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -42,6 +44,43 @@ class IndexEdgeCasesTest {
             5, new MetaFilter(Map.of("city", List.of("missing"))));
 
     assertEquals(0, maxResults);
+  }
+
+  /** A strategy named by nothing at all leaves the default, and a name no strategy has is fatal. */
+  @Test
+  void resolvesTheMetadataFilteringStrategyFromItsParam() {
+    for (String blank : new String[] {"", "   "}) {
+      TestIndex index =
+          new TestIndex(
+              config(Map.of(Index.METADATA_FILTERING_STRATEGY, blank)),
+              longObjectMap(),
+              longObjectMap());
+
+      assertEquals(MetadataFilteringStrategy.AUTO, index.getMetadataFilteringStrategyForTests());
+      index.close();
+    }
+
+    IllegalArgumentException error =
+        assertThrows(
+            IllegalArgumentException.class,
+            () ->
+                new TestIndex(
+                    config(Map.of(Index.METADATA_FILTERING_STRATEGY, "sideways")),
+                    longObjectMap(),
+                    longObjectMap()));
+
+    assertTrue(error.getMessage().contains("sideways"), error.getMessage());
+  }
+
+  /** An absent filter is no filter, which is how a search that carries none is told apart. */
+  @Test
+  void treatsAnAbsentAndAnEmptyFilterAsNoFilter() {
+    TestIndex index = new TestIndex(config(Map.of()), longObjectMap(), longObjectMap());
+
+    assertFalse(index.hasMetadataFilterForTests(null));
+    assertFalse(index.hasMetadataFilterForTests(MetaFilter.empty()));
+    assertTrue(index.hasMetadataFilterForTests(new MetaFilter(Map.of("city", List.of("sf")))));
+    index.close();
   }
 
   @Test
@@ -100,6 +139,14 @@ class IndexEdgeCasesTest {
 
     private int getPostFilteringMaxResultsForTests(int maxResults, MetaFilter metadataFilter) {
       return getPostFilteringMaxResults(maxResults, metadataFilter);
+    }
+
+    private MetadataFilteringStrategy getMetadataFilteringStrategyForTests() {
+      return metadataFilteringStrategy;
+    }
+
+    private boolean hasMetadataFilterForTests(MetaFilter metadataFilter) {
+      return hasMetadataFilter(metadataFilter);
     }
 
     @Override

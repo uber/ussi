@@ -19,6 +19,8 @@ import com.uber.ussi.searchablestructure.index.Index;
 import com.uber.ussi.searchablestructure.utils.metadata.MetadataFilteringStrategy;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -38,6 +40,47 @@ class MatrixIndexTest {
     assertTrue(index.getAll().containsKey(10));
     assertTrue(index.getAll().containsKey(11));
     assertTrue(index.getAll().containsKey(12));
+  }
+
+  @Test
+  void rejectsAMinimumSimilarityOutsideTheUnitRange() {
+    MatrixIndex index = new MatrixIndex(config(), rows(), metadata());
+
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> index.getSimilarRowNums(-0.1f, denseVector(1f, 0f), MetaFilter.empty()));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> index.getSimilarRowNums(1.1f, denseVector(1f, 0f), MetaFilter.empty()));
+
+    assertTrue(index.getSimilarRowNums(0.0f, denseVector(1f, 0f), MetaFilter.empty()).size() > 0);
+    index.close();
+  }
+
+  /**
+   * Pre-filtering asks the metadata structure which rows match, and a row it names that the matrix
+   * does not hold is skipped rather than looked up at an index the matrix has no row for.
+   */
+  @Test
+  void skipsACandidateTheMatrixDoesNotHold() {
+    LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
+    rows.put(10, denseInternal(1f, 0f));
+    rows.put(11, denseInternal(0f, 1f));
+    LongObjectHashMap<LongMeta> metadata = longObjectMap();
+    metadata.put(10, longMeta("city", "sf"));
+    metadata.put(11, longMeta("city", "la"));
+    MatrixIndex index =
+        new MatrixIndex(preFilteringConfig(), rows, metadata);
+    // Deleting a row leaves the metadata structure naming it no longer, and leaves the matrix
+    // holding its slot, which is the pair the skip exists for.
+    index.delete(11);
+
+    List<RowNumAndSimilarity> result =
+        index.getNearestNeighborRowNums(
+            2, denseVector(1f, 0f), new MetaFilter(Map.of("city", List.of("sf"))));
+
+    assertEquals(List.of(10L), sortedRowNums(result));
+    index.close();
   }
 
   @Test
@@ -486,6 +529,14 @@ class MatrixIndexTest {
         .build();
   }
 
+  /** Pre-filtering whenever the filter matches at all, so the candidate path is always taken. */
+  private static NamespaceConfig preFilteringConfig() {
+    return configWithIndexParams(
+        Map.of(
+            Index.METADATA_FILTERING_STRATEGY, "pre_filtering",
+            Index.MAX_PRE_FILTERING_ROWS_RATIO, "1.0"));
+  }
+
   private static NamespaceConfig configWithIndexParams(Map<String, String> indexParams) {
     return NamespaceConfig.builder()
         .minTermsAndValuesLength(0)
@@ -590,6 +641,64 @@ class MatrixIndexTest {
 
   private static List<Long> sortedRowNums(List<RowNumAndSimilarity> rows) {
     return rows.stream().map(RowNumAndSimilarity::getRowNum).sorted().toList();
+  }
+
+  /**
+   * A machine carrying no native BLAS, which is where the pure Java scorer runs. That scorer reads
+   * the matrix rather than copying it, so the chunks stay and the index scores from them.
+   */
+  @Nested
+  class WithoutANativeLibrary {
+
+    private Runnable originalNativeLoadProbe;
+
+    @BeforeEach
+    void makeTheNativeLibraryUnavailable() {
+      originalNativeLoadProbe = OpenBlas.blasNativeLoadProbe;
+      OpenBlas.blasNativeLoadProbe =
+          () -> {
+            throw new UnsatisfiedLinkError("this machine carries no native BLAS");
+          };
+      OpenBlas.forgetAvailability();
+    }
+
+    @AfterEach
+    void makeItAvailableAgain() {
+      OpenBlas.blasNativeLoadProbe = originalNativeLoadProbe;
+      OpenBlas.forgetAvailability();
+    }
+
+    @Test
+    void keepsTheMatrixAndScoresEveryPathFromIt() {
+      MatrixIndex index = new MatrixIndex(config(), rows(), metadata());
+
+      // Unfiltered, which the scorer answers in bulk from the chunks it did not copy.
+      List<RowNumAndSimilarity> unfiltered =
+          index.getNearestNeighborRowNums(1, denseVector(1f, 0f), MetaFilter.empty());
+      // Filtered, which scores row by row from those same chunks.
+      List<RowNumAndSimilarity> filtered =
+          index.getNearestNeighborRowNums(
+              1, denseVector(1f, 0f), new MetaFilter(Map.of("city", List.of("sf"))));
+
+      assertEquals(10L, unfiltered.get(0).getRowNum());
+      assertEquals(10L, filtered.get(0).getRowNum());
+      index.close();
+    }
+
+    /** No copy was made, so the chunks are the only copy and the estimate counts them. */
+    @Test
+    void countsTheMatrixItKeptAndNoNativeMemory() {
+      MatrixIndex index = new MatrixIndex(config(), rows(), metadata());
+
+      MemoryFootprint footprint = index.getMemoryFootprint();
+
+      assertEquals(0, footprint.getNativeBytes(), "a scorer reading the chunks allocates none");
+      assertTrue(
+          footprint.getOnHeapBytes()
+              > 2L * index.size() * index.getDimensionForTests() * Float.BYTES,
+          "the chunks and the rows are both on the heap, got " + footprint.getOnHeapBytes());
+      index.close();
+    }
   }
 
   /**

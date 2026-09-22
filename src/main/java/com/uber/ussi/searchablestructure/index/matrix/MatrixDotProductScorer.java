@@ -30,6 +30,14 @@ interface MatrixDotProductScorer extends AutoCloseable {
     return 0;
   }
 
+  /**
+   * The bytes this scorer retains on the Java heap, being the working buffers it keeps between
+   * queries rather than the matrix, which the index accounts for itself.
+   */
+  default long onHeapFootprintBytes() {
+    return 0;
+  }
+
   @Override
   default void close() {}
 }

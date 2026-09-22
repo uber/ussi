@@ -137,6 +137,7 @@ public final class MatrixIndex extends RowStoringIndex {
     if (matrix.holdsValues()) {
       onHeap += (long) rowNums.length * dimension * Float.BYTES;
     }
+    onHeap += dotProductScorer.onHeapFootprintBytes();
     return new MemoryFootprint(onHeap, dotProductScorer.nativeFootprintBytes());
   }
 

@@ -196,9 +196,14 @@ that separates on-heap from native or device bytes.
 
 The on-heap estimate counts the rows, the structure answering metadata filters,
 and the auxiliary structures an index type builds beside them: the dense matrix
-where it is retained, and the inverted lists, the indexed and verification row
-maps, the unilateral values, and the discarded terms of an inverted index. The
-native estimate counts the buffers a scorer allocated outside the heap.
+where it is retained, the working buffers a dense scorer keeps between queries,
+and the inverted lists, the indexed and verification row maps, the unilateral
+values, and the discarded terms of an inverted index. The native estimate counts
+the buffers a scorer allocated outside the heap.
+
+A dense scorer retains one dot product per row for each query one multiply may
+carry, which is the term that grows with both the namespace and the processor
+allowance rather than with the namespace alone.
 
 Both are estimates. The on-heap figure omits the per-object overhead the JVM
 carries and approximates the encoded metadata per distinct value. The native

@@ -143,6 +143,17 @@ final class NativeMatrixDotProductScorer<B> extends BatchedMatrixDotProductScore
     blas.free(products);
   }
 
+  /**
+   * The products of one range are read back through one buffer, and a dot product per row is
+   * recycled rather than allocated again, up to the queries one multiply may carry. Both are
+   * retained for the life of the scorer, so both are counted at the size they settle at.
+   */
+  @Override
+  public long onHeapFootprintBytes() {
+    return (long) readBuffer.length * Float.BYTES
+        + (long) getMaxNumQueriesInABatch() * getMatrix().numRows() * Float.BYTES;
+  }
+
   @Override
   public long nativeFootprintBytes() {
     DenseMatrix matrix = getMatrix();

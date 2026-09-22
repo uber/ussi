@@ -3,10 +3,17 @@ package com.uber.ussi.searchablestructure.utils.parallel;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class ProcessorTopologyTest {
 
@@ -46,6 +53,82 @@ class ProcessorTopologyTest {
       processorNums.add(processorNum);
     }
     return processorNums;
+  }
+
+  /**
+   * A machine whose kernel names its processors, which is every machine the reading below was
+   * written for. A kernel that names none is the other path, and is what this machine may present.
+   */
+  @Nested
+  class AKernelThatNamesItsProcessors {
+
+    @TempDir Path kernel;
+
+    private Path originalProcessors;
+
+    @BeforeEach
+    void readTheKernelUnderTheTemporaryFolder() {
+      originalProcessors = ProcessorTopology.processors;
+      ProcessorTopology.processors = kernel;
+    }
+
+    @AfterEach
+    void readTheRealKernelAgain() {
+      ProcessorTopology.processors = originalProcessors;
+    }
+
+    @Test
+    void countsTheCoresOfOneSocketFromWhatTheKernelNames() throws IOException {
+      int numProcessors = Math.max(1, Runtime.getRuntime().availableProcessors());
+      // Eight processors over two sockets of two-threaded cores, which is two cores a socket.
+      // Entries the reading must skip: a folder naming no processor, and a processor whose
+      // topology the kernel does not describe.
+      for (int processorNum = 0; processorNum < 8; ++processorNum) {
+        writeProcessor(processorNum, String.valueOf(processorNum / 4), siblingsOf(processorNum));
+      }
+      Files.createDirectories(kernel.resolve("cpufreq"));
+      Files.createDirectories(kernel.resolve("cpu8"));
+
+      int numCoresPerSocket = ProcessorTopology.getNumCoresPerSocket();
+
+      assertEquals(Math.min(numProcessors, 2), numCoresPerSocket);
+    }
+
+    /**
+     * A kernel that describes no socket and no core leaves one of each, so the processors it names
+     * are taken to be the cores of one socket.
+     */
+    @Test
+    void takesUndescribedProcessorsAsTheCoresOfOneSocket() throws IOException {
+      int numProcessors = Math.max(1, Runtime.getRuntime().availableProcessors());
+      for (int processorNum = 0; processorNum < 4; ++processorNum) {
+        Files.createDirectories(kernel.resolve("cpu" + processorNum));
+      }
+
+      assertEquals(Math.min(numProcessors, 4), ProcessorTopology.getNumCoresPerSocket());
+    }
+
+    /** A kernel naming no processor at all leaves the processors the process may run on. */
+    @Test
+    void fallsBackToTheProcessorsTheProcessMayRunOn() {
+      assertEquals(
+          Math.max(1, Runtime.getRuntime().availableProcessors()),
+          ProcessorTopology.getNumCoresPerSocket());
+    }
+
+    /** Both hardware threads of one core name each other, so the core is two processors wide. */
+    private String siblingsOf(int processorNum) {
+      int firstOfPair = processorNum - (processorNum % 2);
+      return firstOfPair + "-" + (firstOfPair + 1);
+    }
+
+    private void writeProcessor(int processorNum, String socketId, String threadSiblings)
+        throws IOException {
+      Path topology = kernel.resolve("cpu" + processorNum).resolve("topology");
+      Files.createDirectories(topology);
+      Files.writeString(topology.resolve("physical_package_id"), socketId + "\n");
+      Files.writeString(topology.resolve("thread_siblings_list"), threadSiblings + "\n");
+    }
   }
 
   @Test

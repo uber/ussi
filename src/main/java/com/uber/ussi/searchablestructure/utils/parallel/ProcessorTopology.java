@@ -31,7 +31,12 @@ import java.util.stream.Stream;
  */
 final class ProcessorTopology {
 
-  private static final Path PROCESSORS = Path.of("/sys/devices/system/cpu");
+  /**
+   * Where the kernel describes the processors of the machine. Held in a field rather than a
+   * constant so a test may point it at a tree it wrote, since a machine whose kernel names no
+   * processor exercises none of the reading below.
+   */
+  static Path processors = Path.of("/sys/devices/system/cpu");
 
   private ProcessorTopology() {}
 
@@ -55,8 +60,8 @@ final class ProcessorTopology {
   /** Every processor the kernel holds a folder for, which is every processor of the machine. */
   private static Set<Integer> getMachineProcessorNums() {
     Set<Integer> processorNums = new TreeSet<>();
-    try (Stream<Path> processors = Files.list(PROCESSORS)) {
-      for (Path processor : processors.toList()) {
+    try (Stream<Path> processorFolders = Files.list(processors)) {
+      for (Path processor : processorFolders.toList()) {
         String name = processor.getFileName().toString();
         if (name.matches("cpu\\d+")) {
           processorNums.add(Integer.parseInt(name.substring("cpu".length())));
@@ -102,7 +107,7 @@ final class ProcessorTopology {
    * What a processor's topology folder holds under {@code name}, or null where it holds nothing.
    */
   private static String readTopology(int processorNum, String name) {
-    Path held = PROCESSORS.resolve("cpu" + processorNum).resolve("topology").resolve(name);
+    Path held = processors.resolve("cpu" + processorNum).resolve("topology").resolve(name);
     try {
       return Files.isReadable(held) ? Files.readString(held).trim() : null;
     } catch (IOException | RuntimeException e) {

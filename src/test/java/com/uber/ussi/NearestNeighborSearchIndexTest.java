@@ -276,6 +276,73 @@ class NearestNeighborSearchIndexTest {
   }
 
   /**
+   * Closing is what a host does on unload. Closing again releases nothing further, since the
+   * structures a namespace shares with the rest of the process are released once per namespace.
+   */
+  @Test
+  void closingTwiceReleasesOnce() {
+    NearestNeighborSearchIndex index =
+        NearestNeighborSearchIndex.create(configWithMaxCacheSize(1));
+    index.insert(denseVector(1f, 0f), Map.of("city", "sf"));
+    index.awaitBackgroundTasks();
+
+    index.close();
+    int sizeAfterClosing = index.size();
+    index.close();
+
+    assertEquals(sizeAfterClosing, index.size(), "closing again releases nothing further");
+  }
+
+  /**
+   * The estimate covers the indexes, so a namespace holding its rows in the active cache alone
+   * reports nothing, and one that has graduated reports what the index it built holds.
+   */
+  @Test
+  void estimatesNothingUntilRowsHaveGraduated() {
+    try (NearestNeighborSearchIndex index =
+        NearestNeighborSearchIndex.create(configWithMaxCacheSize(100))) {
+      index.insert(denseVector(1f, 0f), Map.of("city", "sf"));
+
+      MemoryFootprint beforeGraduation = index.getMemoryFootprint();
+
+      assertEquals(0, beforeGraduation.getOnHeapBytes(), "the active cache is not counted");
+      assertEquals(0, beforeGraduation.getNativeBytes());
+    }
+
+    try (NearestNeighborSearchIndex index =
+        NearestNeighborSearchIndex.create(configWithMaxCacheSize(1))) {
+      index.insert(denseVector(1f, 0f), Map.of("city", "sf"));
+      index.awaitBackgroundTasks();
+
+      assertTrue(
+          index.getMemoryFootprint().getOnHeapBytes() > 0, "a graduated index holds rows");
+    }
+  }
+
+  /**
+   * A rowNum lives in exactly one structure, so a delete visits the structures until it finds the
+   * one holding it rather than stopping at the first it asks.
+   */
+  @Test
+  void deletingVisitsTheStructuresUntilItFindsTheRowNum() {
+    try (NearestNeighborSearchIndex index =
+        NearestNeighborSearchIndex.create(configWithMaxCacheSize(1))) {
+      long first = index.insert(denseVector(1f, 0f), Map.of("city", "sf"));
+      index.awaitBackgroundTasks();
+      long second = index.insert(denseVector(0f, 1f), Map.of("city", "la"));
+      index.awaitBackgroundTasks();
+
+      // The newest structure is asked first, so reaching the oldest row visits past it.
+      assertTrue(index.delete(first), "the row in the older index is found");
+
+      assertEquals(1, index.size());
+      assertFalse(index.delete(first), "a row deleted once is not deleted again");
+      assertTrue(index.delete(second));
+      assertEquals(0, index.size());
+    }
+  }
+
+  /**
    * A dense scorer holding its own copy of the matrix releases the Java one, so a namespace that
    * graduates and consolidates under this configuration rebuilds from the rows it kept rather than
    * from the matrix it released.

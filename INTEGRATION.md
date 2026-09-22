@@ -3,10 +3,13 @@ Ahmed Metwally (ametwally@uber.com) -->
 
 # Integrating USSI
 
-This document describes the seam between USSI and a host that embeds it. A host
-owns its own storage lifecycle and embeds USSI as an in-memory search index beside
-it. USSI owns its own cache, graduation, and consolidation lifecycle. Those are
-two independent lifecycles over the same documents.
+This document describes the seam between USSI and a host that embeds it: what
+each of them owns, what a host has to supply, and what USSI does to the process
+it runs in.
+
+USSI is an in-memory search index a host holds beside its own storage. Each of
+them runs a lifecycle of its own over the same documents, and [Two
+lifecycles](#two-lifecycles) describes how those meet.
 
 The supported integration surface is `NearestNeighborSearchIndex` and the
 types its methods expose: `NamespaceConfig`, `TermsAndValues`, `MetaFilter`,
@@ -23,13 +26,16 @@ records, comparators, and index types.
 | Namespace | One `NearestNeighborSearchIndex`, holding one configuration and the rows inserted into it. |
 | Row | One record USSI holds, addressed by a `rowNum`, which is a signed 64-bit handle USSI allocates. |
 | Active cache | The mutable structure every insert lands in, until it reaches `maxCacheSize` rows. |
-| Graduation | Building an immutable index from a full active cache, in the background. |
+| Index | An immutable structure built from an active cache that filled. It takes no further insert, and a delete marks a row in it rather than removing one. |
+| Graduation | Building an index from a full active cache, in the background. |
 | Consolidation | Merging several indexes into one, in the background, when their count reaches `maxNumSearchableStructures`. |
-| Unilateral value | A quantity derived from one record alone, which a comparator combines with a dot product to yield a similarity. Replacing it with a value that is not a number is how a delete is recorded. |
+| Unilateral value | A quantity derived from one record alone, which a comparator combines with a dot product to yield a similarity. A delete is recorded as a tombstone in it, by replacing it with a value that is not a number, which no minimum similarity admits. [DESIGN.md](DESIGN.md) covers why. |
 | Admission | The process-wide semaphore a search acquires a permit from before it runs, which bounds how many searches run at once. |
-| Work unit | One piece of a search that divides itself, run on the search pool. |
+| Work unit | One piece of a search that divides itself. |
+| Search pool | The process-wide threads work units run on, shared by every namespace. See [Search threads](#search-threads). |
 | Shard | One part of an inverted index, searched as its own work unit. |
 | Batch | The queries one dense matrix multiply carries. Its size is a measurement of the load offered at that instant, bounded by the most queries one multiply may carry. |
+| Processor allowance | The processors USSI may use, which a host may lower. See [Processor allowance](#processor-allowance). |
 | Parallelism budget | What derives, from the processor allowance and the observed concurrency, the threads one search may use and the threads a native library holds. |
 
 ## Two lifecycles
@@ -67,6 +73,8 @@ What that costs a host to know:
 - There is no way to wait for a graduation or a consolidation to finish. A host
   that has just finished inserting cannot be told when the rows have settled into
   an index, only that searches return the same answers either way.
+
+The two sections below enumerate the split this rests on.
 
 ## What USSI owns
 

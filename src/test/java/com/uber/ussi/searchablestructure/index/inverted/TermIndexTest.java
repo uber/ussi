@@ -66,6 +66,51 @@ class TermIndexTest {
             + termIndexBytes + " against scan " + scanIndexBytes);
   }
 
+  @Test
+  void rejectsAMinimumSimilarityOutsideTheUnitRange() {
+    TermIndex index =
+        new TermIndex(config("jaccard"), longObjectMap(1, jaccard(new long[] {1}, 1)),
+            longObjectMap());
+
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> index.getSimilarRowNums(-0.1f, jaccard(new long[] {1}, 1), MetaFilter.empty()));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> index.getSimilarRowNums(1.1f, jaccard(new long[] {1}, 1), MetaFilter.empty()));
+  }
+
+  @Test
+  void searchingAnIndexOfNoRowsFindsNothing() {
+    TermIndex index = new TermIndex(config("jaccard"), longObjectMap(), longObjectMap());
+
+    assertTrue(
+        index.getNearestNeighborRowNums(1, jaccard(new long[] {1}, 1), MetaFilter.empty())
+            .isEmpty());
+    assertTrue(
+        index.getSimilarRowNums(0.0f, jaccard(new long[] {1}, 1), MetaFilter.empty()).isEmpty());
+  }
+
+  /**
+   * A record's unilateral value is what length filtering prunes on, so one that does not describe
+   * the record would prune a row that qualifies.
+   */
+  @Test
+  void rejectsARecordWhoseUnilateralValueDoesNotDescribeIt() {
+    double[] invalidUniValues = {Double.NaN, Double.POSITIVE_INFINITY, -1.0, 99.0};
+    for (double uniValue : invalidUniValues) {
+      LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
+      rows.put(
+          1,
+          LongTermsAndValuesTestFactory.create(new long[] {1, 2}, new float[] {1f, 1f}, uniValue));
+
+      assertThrows(
+          IndexCreationError.class,
+          () -> new TermIndex(config("jaccard"), rows, longObjectMap()),
+          "unilateral value " + uniValue);
+    }
+  }
+
   /**
    * Discarding a popular term gives the rows keyed by the lists records of their own, and the scope
    * decides whether the rows scored are those records or the records as supplied. The estimate must

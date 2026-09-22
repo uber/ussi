@@ -128,18 +128,26 @@ public final class SearchThreads {
     RuntimeException failure = null;
     boolean interrupted = false;
     for (Future<?> submittedWorkUnit : submitted) {
-      try {
-        submittedWorkUnit.get();
-      } catch (InterruptedException e) {
-        interrupted = true;
-        failure = failure != null ? failure : new SearchCancelledException(WORK_UNIT_FAILED, e);
-      } catch (ExecutionException e) {
-        // An undivided search would have thrown this from the caller's thread, so it is rethrown.
-        RuntimeException thrown =
-            e.getCause() instanceof RuntimeException runtimeCause
-                ? runtimeCause
-                : new IllegalStateException(WORK_UNIT_FAILED, e.getCause());
-        failure = failure != null ? failure : thrown;
+      // A cancellation is recorded and waited through rather than returned on. Abandoning the wait
+      // would leave this work unit reading a structure that the read lock its caller searches under
+      // is no longer protecting, which is what waiting for every one of them exists to prevent.
+      boolean awaited = false;
+      while (!awaited) {
+        try {
+          submittedWorkUnit.get();
+          awaited = true;
+        } catch (InterruptedException e) {
+          interrupted = true;
+          failure = failure != null ? failure : new SearchCancelledException(WORK_UNIT_FAILED, e);
+        } catch (ExecutionException e) {
+          // An undivided search would have thrown this from the caller's thread, so it is rethrown.
+          RuntimeException thrown =
+              e.getCause() instanceof RuntimeException runtimeCause
+                  ? runtimeCause
+                  : new IllegalStateException(WORK_UNIT_FAILED, e.getCause());
+          failure = failure != null ? failure : thrown;
+          awaited = true;
+        }
       }
     }
     if (interrupted) {

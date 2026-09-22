@@ -9,6 +9,7 @@ import com.uber.ussi.error.SearchCancelledException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -74,12 +75,20 @@ class SearchThreadsTest {
   }
 
   /**
-   * A search cancelled while its work units are outstanding waits for them and reports the
-   * cancellation, rather than returning while a work unit still reads the structure.
+   * A search cancelled while its work units are outstanding waits for every one of them before
+   * reporting the cancellation. Returning earlier would leave a work unit reading a structure that
+   * the read lock its caller searches under is no longer protecting.
+   *
+   * <p>The work units are held until the caller has been interrupted, so the wait is entered with
+   * every one of them outstanding rather than already finished.
    */
   @Test
-  void reportsACancellationRaisedWhileAwaitingTheWorkUnits() {
-    AtomicInteger ran = new AtomicInteger();
+  void waitsForEveryWorkUnitBeforeReportingACancellation() {
+    // The pool must be able to run both submitted work units at once, since each waits for the
+    // other to arrive before either finishes.
+    SearchThreads.resize(4);
+    CountDownLatch bothStarted = new CountDownLatch(2);
+    AtomicInteger finished = new AtomicInteger();
     try {
       assertThrows(
           SearchCancelledException.class,
@@ -87,14 +96,22 @@ class SearchThreadsTest {
               SearchThreads.runInParallel(
                   3,
                   workUnit -> {
-                    ran.incrementAndGet();
                     if (workUnit == 0) {
-                      // The caller runs this one, and awaits the rest already interrupted.
+                      // The caller runs this one, and enters the wait already interrupted.
+                      Thread.currentThread().interrupt();
+                      return;
+                    }
+                    bothStarted.countDown();
+                    try {
+                      bothStarted.await();
+                    } catch (InterruptedException e) {
                       Thread.currentThread().interrupt();
                     }
+                    finished.incrementAndGet();
                   }));
 
-      assertEquals(3, ran.get(), "every work unit runs before the cancellation is reported");
+      assertEquals(
+          2, finished.get(), "every submitted work unit finished before the caller returned");
     } finally {
       // The contract restores the flag, so the harness clears it rather than leaking it.
       assertTrue(Thread.interrupted(), "the interrupt must be restored before throwing");

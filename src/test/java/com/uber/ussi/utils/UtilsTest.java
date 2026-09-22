@@ -1,6 +1,7 @@
 package com.uber.ussi.utils;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -65,5 +66,31 @@ class UtilsTest {
   @Test
   void longHashCodeRejectsUnsupportedType() {
     assertThrows(RuntimeException.class, () -> Utils.longHashCode((Object) List.of(1)));
+  }
+
+  /** A runtime names one architecture under either of two strings, so both must be recognised. */
+  @Test
+  void recognisesAnArchitectureUnderEitherNameARuntimeReports() {
+    Object[][] architectureIsArmAndIsX86 = {
+      {"aarch64", true, false},
+      {"arm64", true, false},
+      {"x86_64", false, true},
+      {"amd64", false, true},
+      {"ppc64le", false, false},
+    };
+    for (Object[] testCase : architectureIsArmAndIsX86) {
+      String osArchitecture = (String) testCase[0];
+
+      assertEquals(testCase[1], Utils.isArmArchitecture(osArchitecture), osArchitecture + " is ARM");
+      assertEquals(testCase[2], Utils.isX86Architecture(osArchitecture), osArchitecture + " is x86");
+    }
+  }
+
+  /** Whichever architecture this machine reports, it is named by exactly one of the two. */
+  @Test
+  void theRunningArchitectureIsRecognisedByAtMostOneName() {
+    assertFalse(
+        Utils.isRunningOnArm() && Utils.isRunningOnX86(),
+        "an architecture cannot be both ARM and x86");
   }
 }

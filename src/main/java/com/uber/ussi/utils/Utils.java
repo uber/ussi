@@ -21,12 +21,20 @@ public final class Utils {
   }
 
   public static boolean isRunningOnArm() {
-    String osArchitecture = System.getProperty("os.arch").toLowerCase();
-    return osArchitecture.contains("arm") || osArchitecture.contains("aarch64");
+    return isArmArchitecture(System.getProperty("os.arch").toLowerCase());
   }
 
   public static boolean isRunningOnX86() {
-    String osArchitecture = System.getProperty("os.arch").toLowerCase();
+    return isX86Architecture(System.getProperty("os.arch").toLowerCase());
+  }
+
+  /** Whether the architecture names an ARM processor, under either name a runtime reports. */
+  static boolean isArmArchitecture(String osArchitecture) {
+    return osArchitecture.contains("arm") || osArchitecture.contains("aarch64");
+  }
+
+  /** Whether the architecture names an x86 processor, under either name a runtime reports. */
+  static boolean isX86Architecture(String osArchitecture) {
     return osArchitecture.contains("x86") || osArchitecture.contains("amd64");
   }
 

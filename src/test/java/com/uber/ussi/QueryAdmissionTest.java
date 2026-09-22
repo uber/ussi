@@ -20,6 +20,42 @@ class QueryAdmissionTest {
   }
 
   @Test
+  void rejectsANonPositiveNewBound() {
+    QueryAdmission admission = new QueryAdmission(2);
+
+    assertThrows(IllegalArgumentException.class, () -> admission.setMaxNumConcurrentSearches(0));
+    assertThrows(IllegalArgumentException.class, () -> admission.setMaxNumConcurrentSearches(-1));
+    assertEquals(2, admission.getMaxNumConcurrentSearches(), "a rejected bound changes nothing");
+  }
+
+  /**
+   * The bound is changed while every permit is held, and the permits released on the way out are
+   * the new bound, so the semaphore ends up admitting the new number.
+   */
+  @Test
+  void raisingAndLoweringTheBoundUnderExclusivityLeavesTheNewNumberOfPermits() {
+    QueryAdmission admission = new QueryAdmission(2);
+
+    admission.runExclusively(() -> admission.setMaxNumConcurrentSearches(4));
+
+    assertEquals(4, admission.getMaxNumConcurrentSearches());
+    for (int search = 0; search < 4; ++search) {
+      admission.acquire();
+    }
+    assertEquals(4, admission.getNumConcurrentSearches(), "the raised bound admits four searches");
+    for (int search = 0; search < 4; ++search) {
+      admission.release();
+    }
+
+    admission.runExclusively(() -> admission.setMaxNumConcurrentSearches(1));
+
+    assertEquals(1, admission.getMaxNumConcurrentSearches());
+    admission.acquire();
+    assertEquals(0, admission.getNumWaitingSearches());
+    admission.release();
+  }
+
+  @Test
   void theSharedBoundIsTheCoreCount() {
     assertEquals(
         Math.max(1, Runtime.getRuntime().availableProcessors()),

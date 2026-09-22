@@ -32,6 +32,42 @@ records, comparators, and index types.
 | Batch | The queries one dense matrix multiply carries. Its size is a measurement of the load offered at that instant, bounded by the most queries one multiply may carry. |
 | Parallelism budget | What derives, from the processor allowance and the observed concurrency, the threads one search may use and the threads a native library holds. |
 
+## Two lifecycles
+
+USSI runs a lifecycle of its own and does not surrender it to a host. Inside one
+namespace, rows land in the active cache, a full cache graduates into an
+immutable index in the background, and indexes consolidate once there are too
+many. Nothing suspends that, drives it, or waits for it from outside. Searches
+are correct at every point in it, so a host does not need to know where a row
+currently sits.
+
+A host runs its own lifecycle one level above, over whole namespaces rather than
+over the rows inside one. The two compose because they do not meet: a host
+creates a namespace, fills it, searches it, and closes it, while USSI moves rows
+between structures within it.
+
+A host that keeps immutable units of its own, built once and discarded whole,
+holds one namespace per unit. Build it by inserting every row, search it for as
+long as the unit lives, and close it when the unit is discarded. A host that
+keeps one mutable corpus instead holds one namespace and inserts, updates, and
+deletes against it. Both are the same API.
+
+What that costs a host to know:
+
+- A `rowNum` is allocated by the namespace that holds it, counting from zero, so
+  two namespaces allocate the same values for different rows. A `rowNum` names a
+  row only within the namespace that returned it, and a host holding several must
+  key its own mapping by the namespace as well.
+- Closing a namespace releases the indexes it built, including their native
+  memory, and the threads it used to build them. It does not release what the
+  namespace shares with the rest of the process.
+- Those shared structures bound concurrency once for the process rather than once
+  per namespace, so holding ten namespaces does not give USSI ten times the
+  threads. See [Processor allowance](#processor-allowance).
+- There is no way to wait for a graduation or a consolidation to finish. A host
+  that has just finished inserting cannot be told when the rows have settled into
+  an index, only that searches return the same answers either way.
+
 ## What USSI owns
 
 USSI owns the in-memory structures a namespace is built from:
@@ -56,7 +92,8 @@ The host owns everything USSI does not:
 - Persistence. USSI keeps nothing on disk, so the host remains the source of
   truth.
 - The mapping from the host's document identifiers to `rowNum`. USSI allocates
-  `rowNum` values but assigns no meaning to them. Keep your own mapping.
+  `rowNum` values but assigns no meaning to them, and allocates them per
+  namespace, so the mapping is keyed by the namespace as well. Keep your own.
 - Rebuild on restart or relocation. USSI holds no state across process
   boundaries, so every restart re-inserts every live document.
 - Authorization. USSI enforces none.

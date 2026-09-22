@@ -178,6 +178,36 @@ class HostLifecycleTest {
     }
   }
 
+  /**
+   * A rowNum is allocated by the namespace that holds it, from zero, so two namespaces allocate
+   * the same values for different rows. A host keying its own mapping by rowNum alone would
+   * conflate them.
+   */
+  @Test
+  void rowNumsAreAllocatedPerNamespaceAndCollideBetweenThem() {
+    try (NearestNeighborSearchIndex first = NearestNeighborSearchIndex.create(config());
+        NearestNeighborSearchIndex second = NearestNeighborSearchIndex.create(config())) {
+      List<Long> firstRowNums = new ArrayList<>();
+      List<Long> secondRowNums = new ArrayList<>();
+      for (int row = 0; row < 3; ++row) {
+        firstRowNums.add(first.insert(vector(row), Map.of("city", "sf")));
+        secondRowNums.add(second.insert(vector(row + 3), Map.of("city", "la")));
+      }
+
+      assertEquals(List.of(0L, 1L, 2L), firstRowNums);
+      assertEquals(
+          firstRowNums,
+          secondRowNums,
+          "both namespaces allocate from zero, so a rowNum names a row only within one of them");
+
+      // The same rowNum names a different row in each, which is what a host must not conflate.
+      assertEquals(
+          0L, first.getNearestNeighborRowNums(1, query(0), MetaFilter.empty()).getRowNum(0));
+      assertEquals(
+          0L, second.getNearestNeighborRowNums(1, query(3), MetaFilter.empty()).getRowNum(0));
+    }
+  }
+
   /** Two namespaces at once share those structures rather than each holding their own. */
   @Test
   void twoNamespacesInOneProcessSearchIndependently() {

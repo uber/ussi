@@ -36,6 +36,56 @@ class InvertedTermCacheTest {
       NamespaceConfig.PopularTermDiscardScope.CANDIDATES_AND_VERIFICATION.getParamValue();
 
   @Test
+  void rejectsAMinimumSimilarityOutsideTheUnitRange() {
+    InvertedTermCache cache = new InvertedTermCache(config("jaccard"));
+    cache.insert(jaccard(new long[] {1}, 1), Map.of());
+
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> cache.getSimilarRowNums(-0.1f, jaccard(new long[] {1}, 1), MetaFilter.empty()));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> cache.getSimilarRowNums(1.1f, jaccard(new long[] {1}, 1), MetaFilter.empty()));
+  }
+
+  @Test
+  void searchingACacheOfNoRowsFindsNothing() {
+    InvertedTermCache cache = new InvertedTermCache(config("jaccard"));
+
+    assertTrue(
+        cache.getNearestNeighborRowNums(1, jaccard(new long[] {1}, 1), MetaFilter.empty())
+            .isEmpty());
+    assertTrue(
+        cache.getSimilarRowNums(0.0f, jaccard(new long[] {1}, 1), MetaFilter.empty()).isEmpty());
+  }
+
+  /**
+   * A row every one of whose terms is discarded has no form left to score, so it is absent from
+   * verification rather than scored as an empty record.
+   */
+  @Test
+  void leavesNoVerificationRowForARowOfOnlyDiscardedTerms() {
+    Map<String, String> discardHalf =
+        Map.of(
+            ConfigKeys.MAX_FRACTION_IDS_PER_TERM, "0.5",
+            ConfigKeys.POPULAR_TERM_DISCARD_SCOPE, CANDIDATES_AND_VERIFICATION,
+            ConfigKeys.MAX_FRACTION_IDS_PER_TERM_CONFIDENCE, "0.5");
+    InvertedTermCache cache = new InvertedTermCache(config("jaccard", discardHalf));
+    // Term 1 occurs in every row, so it is discarded, which leaves the row holding it alone with
+    // nothing to be scored on.
+    cache.insert(jaccard(new long[] {1, 2}, 1, 1), Map.of());
+    cache.insert(jaccard(new long[] {1, 3}, 1, 1), Map.of());
+    long onlyPopular = cache.insert(jaccard(new long[] {1}, 1), Map.of());
+
+    List<RowNumAndSimilarity> result =
+        cache.getNearestNeighborRowNums(3, jaccard(new long[] {1, 2}, 1, 1), MetaFilter.empty());
+
+    assertFalse(
+        rowNumsNearestFirst(result).contains(onlyPopular),
+        "a row of only discarded terms has nothing left to score");
+  }
+
+  @Test
   void insertedRowsAreSearchableAndRowsSharingNoTermAreOmitted() {
     InvertedTermCache cache = new InvertedTermCache(config("jaccard"));
     long shared12 = cache.insert(jaccard(new long[] {1, 2}, 1, 1), Map.of());

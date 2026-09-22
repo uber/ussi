@@ -324,4 +324,34 @@ class L2ComparatorTest {
             comparatorNormalizer.comparatorValueToNormalizedSimilarityValue(
                 2.0 - MathUtils.EPSILON_12)));
   }
+
+  /**
+   * Position filtering prunes a candidate from a partial scan, so an argument that does not
+   * describe one would prune a row that qualifies.
+   */
+  @Test
+  void positionFilteringRejectsArgumentsThatDoNotDescribeAPartialScan() {
+    // partialUni1, uni1, partialUni2, uni2
+    double[][] invalidArguments = {
+      // Each is a sum of squares, so none of them may be negative.
+      {-1.0, 2.0, 1.0, 2.0},
+      {1.0, -2.0, 1.0, 2.0},
+      {1.0, 2.0, -1.0, 2.0},
+      {1.0, 2.0, 1.0, -2.0},
+      // What has been scanned of a record cannot exceed the whole of it.
+      {3.0, 2.0, 1.0, 2.0},
+      {1.0, 2.0, 3.0, 2.0},
+    };
+    for (double[] arguments : invalidArguments) {
+      assertThrows(
+          IllegalArgumentException.class,
+          () ->
+              L2Comparator.mayPassPositionFilteringInternal(
+                  0.5, arguments[0], arguments[1], arguments[2], arguments[3], 1.0),
+          java.util.Arrays.toString(arguments));
+    }
+
+    // A partial scan of both records, which describes one and is therefore answered.
+    L2Comparator.mayPassPositionFilteringInternal(0.5, 1.0, 2.0, 1.0, 2.0, 1.0);
+  }
 }

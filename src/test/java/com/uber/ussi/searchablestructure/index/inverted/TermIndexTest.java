@@ -67,6 +67,43 @@ class TermIndexTest {
   }
 
   /**
+   * Discarding a popular term gives the rows keyed by the lists records of their own, and the scope
+   * decides whether the rows scored are those records or the records as supplied. The estimate must
+   * count a record set it holds separately and must not count one it only references again.
+   */
+  @Test
+  void memoryFootprintCountsARecordSetDiscardingGivesItSeparately() {
+    LongObjectHashMap<LongTermsAndValues> rows = popularTermRows();
+    Map<String, String> discardAndVerify = Map.of(ConfigKeys.MAX_FRACTION_IDS_PER_TERM, "0.5");
+    Map<String, String> discardCandidatesOnly =
+        Map.of(
+            ConfigKeys.MAX_FRACTION_IDS_PER_TERM, "0.5",
+            ConfigKeys.POPULAR_TERM_DISCARD_SCOPE, CANDIDATES_ONLY);
+
+    long sharedRecordsBytes =
+        new TermIndex(config("jaccard"), rows, longObjectMap())
+            .getMemoryFootprint()
+            .getOnHeapBytes();
+    long discardAndVerifyBytes =
+        new TermIndex(config("jaccard", discardAndVerify), rows, longObjectMap())
+            .getMemoryFootprint()
+            .getOnHeapBytes();
+    long discardCandidatesOnlyBytes =
+        new TermIndex(config("jaccard", discardCandidatesOnly), rows, longObjectMap())
+            .getMemoryFootprint()
+            .getOnHeapBytes();
+
+    assertTrue(
+        discardAndVerifyBytes > sharedRecordsBytes,
+        "records held separately are uncounted: " + discardAndVerifyBytes
+            + " against " + sharedRecordsBytes);
+    assertTrue(
+        discardCandidatesOnlyBytes > sharedRecordsBytes,
+        "records held separately are uncounted: " + discardCandidatesOnlyBytes
+            + " against " + sharedRecordsBytes);
+  }
+
+  /**
    * The rows keyed by the lists and the rows scored are the same records as the rows held, once no
    * term is discarded and the indexed form is the identity. Only the map slots are held again, so
    * counting a second and third copy of the records would report memory never allocated.

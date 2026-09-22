@@ -643,6 +643,25 @@ class MatrixIndexTest {
       }
     }
 
+    /**
+     * A matrix of no rows allocates no chunk to release, so it reports holding its values whichever
+     * scorer was built. It holds no row, and a scorer that keeps working buffers keeps them anyway.
+     */
+    @Test
+    void reportsNoRowPayloadForAnIndexOfNoRows() {
+      MatrixIndex empty = new MatrixIndex(config(), longObjectMap(), longObjectMap());
+      MatrixIndex populated = new MatrixIndex(config(), rows(), metadata());
+
+      MemoryFootprint emptyFootprint = empty.getMemoryFootprint();
+
+      assertTrue(emptyFootprint.getOnHeapBytes() >= 0, "an estimate is never negative");
+      assertTrue(
+          emptyFootprint.getOnHeapBytes() < populated.getMemoryFootprint().getOnHeapBytes(),
+          "an index of no rows must hold less than one with rows");
+      empty.close();
+      populated.close();
+    }
+
     @Test
     void countsDeletedRowsUntilTheIndexIsRebuilt() {
       MatrixIndex index = new MatrixIndex(config(), rows(), metadata());

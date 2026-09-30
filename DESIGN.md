@@ -784,8 +784,8 @@ which is what length and prefix filtering prune on. The comparator then verifies
 each surviving candidate against the ordered sequences, running the banded
 dynamic program under the budget the current `minSimilarity` allows. Both
 `spars` and `spars_merge` follow that scoring path on `inverted_term`. They
-differ only in how the lists are traversed: key-major filtered scan versus
-row-major merge.
+differ only in how the lists are traversed: key-major candidate generation
+(`spars`) versus row-major merge (`spars_merge`).
 
 Each row and each query must have non-empty terms and an empty values array. A
 query and a row need not be the same length as each other. Search only considers
@@ -923,13 +923,14 @@ every inverted index type and every supported comparator.
 advances them in step, so every inverted-list entry belonging to a candidate row
 arrives together. That lets the generator accumulate the row's conjunction,
 which is the part of the similarity the query and the row derive from the keys
-they share, as it goes. What it holds mid-row is a partial conjunction, and
-`maxSimilarityFromPartialConjunction` bounds the best any completion of it could
-reach, using the unscanned keys' unilateral value to bound what the keys still
-to arrive can add. The row is abandoned as soon as that bound falls below the
-minimum similarity the search currently holds. It trades a priority queue over
-the query's keys for the ability to prune a row mid-scan, which pays off when a
-query has many keys and the minimum similarity rejects most rows early.
+they share, as it goes. While the row's shared keys are still arriving, the
+merge holds a partial conjunction, and `maxSimilarityFromPartialConjunction`
+bounds the best any completion of it could reach, using the unscanned keys'
+unilateral value to bound what the keys still to arrive can add. The row is
+abandoned as soon as that bound falls below the minimum similarity the search
+currently holds. It trades a priority queue over the query's keys for the
+ability to abandon a row before all of its shared keys arrive, which pays off
+when a query has many keys and the minimum similarity rejects most rows early.
 
 When the keys are the terms of a sparse record, the inverted lists also carry
 the row's value at that key, so the accumulated conjunction is the row's exact
@@ -940,7 +941,7 @@ comparator, as `spars` does. `inverted_hybrid` applies the generator
 independently to each of the two, so its term index scores from the conjunction
 while its signature index verifies.
 
-Mid-row pruning from partial conjunctions requires a comparator that implements
+Pruning by partial conjunction requires a comparator that implements
 the conjunction hooks and sparse term keys whose lists carry a value at each
 key. On `inverted_term` with sparse records, the accumulated conjunction can be
 the exact similarity. Jaccard, Ruzicka, and L2 implement the hooks, so

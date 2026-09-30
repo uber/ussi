@@ -26,7 +26,8 @@ import java.util.Set;
  *
  * <p>{@code spars} generates candidates with prefix bounds from this comparator over those indexed
  * keys and scores ordered sequences. {@code spars_merge} on {@code inverted_term} uses the same
- * scoring path but row-major merge over the lists instead of a key-major filtered scan.
+ * scoring path but row-major merge over the lists instead of key-major {@code spars}
+ * candidate generation.
  */
 abstract class BaseSequenceComparator extends Comparator implements KeyShareBounded {
 

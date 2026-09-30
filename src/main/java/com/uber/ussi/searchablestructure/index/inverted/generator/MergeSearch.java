@@ -56,7 +56,7 @@ public final class MergeSearch {
       return NONE;
     }
 
-    /** Partial conjunction and mid-row pruning use the configured comparator. */
+    /** Partial-conjunction bounds use the configured comparator. */
     public static PartialConjunctionPolicy fromConfiguredComparator(
         ConjunctionScored conjunctionScored) {
       return new PartialConjunctionPolicy(conjunctionScored, null, true);

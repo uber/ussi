@@ -764,13 +764,13 @@ class TermIndexTest {
     }
   }
 
-  /** The merge generator must reach and score the same rows as the filtered scan. */
+  /** The merge generator must reach and score the same rows as {@code spars}. */
   @Test
-  void randomizedMergeResultsMatchFilteredScanForEverySparseComparator() {
+  void randomizedMergeResultsMatchSparsForEverySparseComparator() {
     for (String comparatorType : List.of("jaccard", "ruzicka", "l2")) {
       Random random = new Random(826_366L + comparatorType.hashCode());
       LongObjectHashMap<LongTermsAndValues> rows = randomRows(random, comparatorType, 80);
-      TermIndex filteredScanIndex =
+      TermIndex sparsIndex =
           new TermIndex(config(comparatorType, Map.of(), "inverted_term"), rows, longObjectMap());
       TermIndex mergeIndex = new TermIndex(mergeConfig(comparatorType), rows, longObjectMap());
 
@@ -781,7 +781,7 @@ class TermIndexTest {
 
         assertEquivalent(
             comparatorType + " merge nearest queryIndex=" + queryIndex + " k=" + k,
-            filteredScanIndex.getNearestNeighborRowNums(k, query, MetaFilter.empty()),
+            sparsIndex.getNearestNeighborRowNums(k, query, MetaFilter.empty()),
             mergeIndex.getNearestNeighborRowNums(k, query, MetaFilter.empty()));
         assertEquivalent(
             comparatorType
@@ -789,18 +789,18 @@ class TermIndexTest {
                 + queryIndex
                 + " minSimilarity="
                 + minSimilarity,
-            filteredScanIndex.getSimilarRowNums(minSimilarity, query, MetaFilter.empty()),
+            sparsIndex.getSimilarRowNums(minSimilarity, query, MetaFilter.empty()),
             mergeIndex.getSimilarRowNums(minSimilarity, query, MetaFilter.empty()));
       }
     }
   }
 
   /**
-   * Metadata filtering wraps candidate generation, so the merge must agree with the filtered scan
+   * Metadata filtering wraps candidate generation, so the merge must agree with {@code spars}
    * under every strategy, including pre-filtering, which bypasses the generator.
    */
   @Test
-  void mergeResultsMatchFilteredScanUnderEveryMetadataFilteringStrategy() {
+  void mergeResultsMatchSparsUnderEveryMetadataFilteringStrategy() {
     for (String comparatorType : List.of("jaccard", "l2")) {
       for (String strategy : List.of("auto", "pre_filtering", "in_filtering", "post_filtering")) {
         Random random = new Random(5_512L + strategy.hashCode() + comparatorType.hashCode());
@@ -813,7 +813,7 @@ class TermIndexTest {
             Map.of(
                 Index.METADATA_FILTERING_STRATEGY, strategy,
                 Index.MAX_PRE_FILTERING_ROWS_RATIO, "0.9");
-        TermIndex filteredScanIndex =
+        TermIndex sparsIndex =
             new TermIndex(config(comparatorType, strategyParams, "inverted_term"), rows, metadata);
         TermIndex mergeIndex =
             new TermIndex(
@@ -831,7 +831,7 @@ class TermIndexTest {
                   + queryIndex
                   + " k="
                   + k,
-              filteredScanIndex.getNearestNeighborRowNums(k, query, sf),
+              sparsIndex.getNearestNeighborRowNums(k, query, sf),
               mergeIndex.getNearestNeighborRowNums(k, query, sf));
           assertEquivalent(
               comparatorType
@@ -839,7 +839,7 @@ class TermIndexTest {
                   + strategy
                   + " merge minimum similarity queryIndex="
                   + queryIndex,
-              filteredScanIndex.getSimilarRowNums(0.2f, query, sf),
+              sparsIndex.getSimilarRowNums(0.2f, query, sf),
               mergeIndex.getSimilarRowNums(0.2f, query, sf));
         }
       }
@@ -851,7 +851,7 @@ class TermIndexTest {
    * agrees with the merge only if it scores the verification rows.
    */
   @Test
-  void mergeResultsMatchFilteredScanWhenPopularTermsAreDropped() {
+  void mergeResultsMatchSparsWhenPopularTermsAreDropped() {
     Random random = new Random(9_713L);
     LongObjectHashMap<LongTermsAndValues> rows = randomRows(random, "jaccard", 40);
     LongObjectHashMap<LongMeta> metadata = longObjectMap();
@@ -863,7 +863,7 @@ class TermIndexTest {
             ConfigKeys.MAX_FRACTION_IDS_PER_TERM, "0.2",
             Index.METADATA_FILTERING_STRATEGY, "pre_filtering",
             Index.MAX_PRE_FILTERING_ROWS_RATIO, "0.9");
-    TermIndex filteredScanIndex =
+    TermIndex sparsIndex =
         new TermIndex(config("jaccard", popularityParams, "inverted_term"), rows, metadata);
     TermIndex mergeIndex =
         new TermIndex(config("jaccard", withMergeParam(popularityParams), "inverted_term"), rows, metadata);
@@ -876,11 +876,11 @@ class TermIndexTest {
       int k = 1 + random.nextInt(8);
       assertEquivalent(
           "merge nearest queryIndex=" + queryIndex + " k=" + k,
-          filteredScanIndex.getNearestNeighborRowNums(k, query, sf),
+          sparsIndex.getNearestNeighborRowNums(k, query, sf),
           mergeIndex.getNearestNeighborRowNums(k, query, sf));
       assertEquivalent(
           "merge minimum similarity queryIndex=" + queryIndex,
-          filteredScanIndex.getSimilarRowNums(0.2f, query, sf),
+          sparsIndex.getSimilarRowNums(0.2f, query, sf),
           mergeIndex.getSimilarRowNums(0.2f, query, sf));
     }
   }
@@ -1287,11 +1287,11 @@ class TermIndexTest {
 
     /** {@code spars_merge} must reach and score the same rows as {@code spars}. */
     @Test
-    void mergeResultsMatchFilteredScanForSequenceComparators() {
+    void mergeResultsMatchSparsForSequenceComparators() {
       Random random = new Random(4_821L);
       for (String comparatorType : COMPARATOR_TYPES) {
         LongObjectHashMap<LongTermsAndValues> rows = randomRows(random, 50);
-        TermIndex filteredScanIndex = new TermIndex(config(comparatorType), rows, longObjectMap());
+        TermIndex sparsIndex = new TermIndex(config(comparatorType), rows, longObjectMap());
         TermIndex mergeIndex = new TermIndex(mergeConfig(comparatorType), rows, longObjectMap());
 
         for (int queryIndex = 0; queryIndex < 40; ++queryIndex) {
@@ -1301,7 +1301,7 @@ class TermIndexTest {
 
           assertEquivalent(
               comparatorType + " merge nearest queryIndex=" + queryIndex + " k=" + k,
-              filteredScanIndex.getNearestNeighborRowNums(k, query, null),
+              sparsIndex.getNearestNeighborRowNums(k, query, null),
               mergeIndex.getNearestNeighborRowNums(k, query, null));
           assertEquivalent(
               comparatorType
@@ -1309,7 +1309,7 @@ class TermIndexTest {
                   + queryIndex
                   + " minSimilarity="
                   + minSimilarity,
-              filteredScanIndex.getSimilarRowNums(minSimilarity, query, null),
+              sparsIndex.getSimilarRowNums(minSimilarity, query, null),
               mergeIndex.getSimilarRowNums(minSimilarity, query, null));
         }
       }

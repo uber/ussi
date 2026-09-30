@@ -166,7 +166,7 @@ class SignatureIndexTest {
 
   /** Signature keys say nothing about values, so the merge must verify through the comparator. */
   @Test
-  void mergeResultsMatchFilteredScanForSignatureKeys() {
+  void mergeResultsMatchSparsForSignatureKeys() {
     for (String[] comparatorAndGenerator :
         new String[][] {{"jaccard", "minhash"}, {"ruzicka", "icws"}}) {
       String comparatorType = comparatorAndGenerator[0];
@@ -176,7 +176,7 @@ class SignatureIndexTest {
       for (long rowNum = 1; rowNum <= 40; ++rowNum) {
         rows.put(rowNum, randomRow(random, comparatorType));
       }
-      SignatureIndex filteredScanIndex =
+      SignatureIndex sparsIndex =
           new SignatureIndex(config(comparatorType, signatureGeneratorType), rows, longObjectMap());
       SignatureIndex mergeIndex =
           new SignatureIndex(
@@ -191,13 +191,13 @@ class SignatureIndexTest {
 
         assertEquals(
             rowNumsAndSimilarities(
-                filteredScanIndex.getNearestNeighborRowNums(k, query, MetaFilter.empty())),
+                sparsIndex.getNearestNeighborRowNums(k, query, MetaFilter.empty())),
             rowNumsAndSimilarities(
                 mergeIndex.getNearestNeighborRowNums(k, query, MetaFilter.empty())),
             comparatorType + " nearest queryIndex=" + queryIndex + " k=" + k);
         assertEquals(
             rowNumsAndSimilarities(
-                filteredScanIndex.getSimilarRowNums(minSimilarity, query, MetaFilter.empty())),
+                sparsIndex.getSimilarRowNums(minSimilarity, query, MetaFilter.empty())),
             rowNumsAndSimilarities(
                 mergeIndex.getSimilarRowNums(minSimilarity, query, MetaFilter.empty())),
             comparatorType
@@ -230,7 +230,7 @@ class SignatureIndexTest {
     assertFalse(
         hasInvertedListValues(
             new TermIndex(termConfig("jaccard", Map.of()), rows, longObjectMap())),
-        "filtered scan");
+        "spars");
   }
 
   @SuppressWarnings("unchecked")
@@ -515,9 +515,10 @@ class SignatureIndexTest {
           LongTermsAndValues query = perturbed(random, base, 1 + random.nextInt(3));
           Map<Long, Float> exact =
               similaritiesByRowNum(bruteForce.getSimilarRowNums(0.0f, query, null));
-          // The threshold comes from the scan rather than being fixed, because the two
-          // comparators normalize differently: one number admits every row for one of them and
-          // no row for the other. The third best admits the query's own cluster either way.
+          // The minimum similarity comes from the reference ScanIndex search rather than being
+          // fixed, because the two comparators normalize differently: one number admits every row
+          // for one of them and no row for the other. The third best admits the query's own
+          // cluster either way.
           float minSimilarity = nthHighest(exact.values(), 3);
 
           List<RowNumAndSimilarity> results =

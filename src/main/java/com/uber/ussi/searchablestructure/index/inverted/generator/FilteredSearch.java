@@ -19,7 +19,7 @@ import java.util.function.LongFunction;
 import javax.annotation.Nullable;
 
 /**
- * Key-major filtered-scan candidate generation over uni-sorted inverted lists.
+ * Key-major candidate generation over uni-sorted inverted lists, implementing {@code spars}.
  *
  * <p>The query's keys are visited cheapest first, and each one's inverted list is narrowed to the
  * rows that length filtering admits. Every candidate is then scored through the comparator, so this

@@ -8,15 +8,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
 /**
- * The bound a partially scanned pair of records can still reach, and the arguments it rejects.
+ * The bound partial unilateral values can still reach, and the arguments position filtering
+ * rejects.
  *
- * <p>The bound prunes a candidate before the rest of it is scanned, so an argument that does not
- * describe a partial scan would prune a row that qualifies.
+ * <p>The bound prunes a candidate before the comparison finishes, so an argument that does not
+ * describe partial unilateral values would prune a row that qualifies.
  */
 class BaseRuzickaComparatorTest {
 
   @Test
-  void rejectsArgumentsThatDoNotDescribeAPartialScan() {
+  void rejectsArgumentsThatDoNotDescribePartialUnilateralValues() {
     // partialUni1, uni1, partialUni2, uni2, scannedIntersection, scannedUnion
     double[][] invalidArguments = {
       // Each quantity is a sum of absolute values, so none of them may be negative.
@@ -26,12 +27,12 @@ class BaseRuzickaComparatorTest {
       {1.0, 2.0, 1.0, -2.0, 0.5, 1.5},
       {1.0, 2.0, 1.0, 2.0, -0.5, 1.5},
       {1.0, 2.0, 1.0, 2.0, 0.5, -1.5},
-      // What has been scanned of a record cannot exceed the whole of it.
+      // A partial unilateral value cannot exceed the record's uni value.
       {3.0, 2.0, 1.0, 2.0, 0.5, 1.5},
       {1.0, 2.0, 3.0, 2.0, 0.5, 1.5},
-      // An intersection cannot exceed the smaller of what was scanned of either record.
+      // An intersection cannot exceed the smaller of the two partial unilateral values.
       {1.0, 2.0, 1.0, 2.0, 1.5, 1.5},
-      // A union holds the intersection and no more than both records scanned.
+      // A union holds the intersection and no more than both partial unilateral values allow.
       {1.0, 2.0, 1.0, 2.0, 0.5, 0.25},
       {1.0, 2.0, 1.0, 2.0, 0.5, 2.5},
     };
@@ -47,15 +48,15 @@ class BaseRuzickaComparatorTest {
   }
 
   @Test
-  void boundsWhatAPartiallyScannedPairCanStillReach() {
-    // Half of each record scanned, sharing all of what was scanned. The unscanned halves may
-    // intersect entirely, so the bound is one.
+  void boundsSimilarityReachableFromPartialUnilateralValues() {
+    // Half of each record's uni value consumed, sharing all of the intersection so far. The
+    // unscanned remainder may intersect entirely, so the bound is one.
     assertEquals(
         1.0,
         BaseRuzickaComparator.computeMaxPossibleComparatorValue(1.0, 2.0, 1.0, 2.0, 1.0, 1.0),
         1e-12);
 
-    // Nothing scanned so far intersects, so the bound is what the unscanned remainder can add
+    // Nothing in the intersection so far, so the bound is what the unscanned remainder can add
     // against the union already accumulated.
     double disjointSoFar =
         BaseRuzickaComparator.computeMaxPossibleComparatorValue(1.0, 2.0, 1.0, 2.0, 0.0, 2.0);
@@ -64,9 +65,9 @@ class BaseRuzickaComparatorTest {
     assertTrue(disjointSoFar >= 0.0, "a bound is never negative, got " + disjointSoFar);
   }
 
-  /** A fully scanned pair has no remainder, so the bound is the similarity itself. */
+  /** When partial unilateral values equal the uni values, the bound is the similarity itself. */
   @Test
-  void aFullyScannedPairIsBoundedByItsOwnSimilarity() {
+  void completePartialUnilateralValuesAreBoundedByOwnSimilarity() {
     assertEquals(
         0.5,
         BaseRuzickaComparator.computeMaxPossibleComparatorValue(2.0, 2.0, 2.0, 2.0, 1.0, 2.0),

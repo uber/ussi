@@ -278,7 +278,7 @@ class HybridIndexTest {
 
   /** The hybrid fans out to both children, so the merge runs both of its scoring paths. */
   @Test
-  void mergeResultsMatchFilteredScanAcrossBothHybridChildren() {
+  void mergeResultsMatchSparsAcrossBothHybridChildren() {
     Random random = new Random(77_213L);
     LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
     for (long rowNum = 1; rowNum <= 12; ++rowNum) {
@@ -286,7 +286,7 @@ class HybridIndexTest {
       int numTerms = rowNum % 2 == 0 ? 271 + random.nextInt(10) : 8 + random.nextInt(20);
       rows.put(rowNum, jaccard(sequentialTerms(numTerms, 1 + random.nextInt(40))));
     }
-    HybridIndex filteredScanIndex = new HybridIndex(config(), rows, longObjectMap());
+    HybridIndex sparsIndex = new HybridIndex(config(), rows, longObjectMap());
     HybridIndex mergeIndex =
         new HybridIndex(
             config(
@@ -307,11 +307,11 @@ class HybridIndexTest {
       int k = 1 + random.nextInt(6);
 
       assertEquals(
-          rowNums(filteredScanIndex.getNearestNeighborRowNums(k, query, MetaFilter.empty())),
+          rowNums(sparsIndex.getNearestNeighborRowNums(k, query, MetaFilter.empty())),
           rowNums(mergeIndex.getNearestNeighborRowNums(k, query, MetaFilter.empty())),
           "nearest queryIndex=" + queryIndex + " k=" + k);
       assertEquals(
-          rowNums(filteredScanIndex.getSimilarRowNums(0.2f, query, MetaFilter.empty())),
+          rowNums(sparsIndex.getSimilarRowNums(0.2f, query, MetaFilter.empty())),
           rowNums(mergeIndex.getSimilarRowNums(0.2f, query, MetaFilter.empty())),
           "minimum similarity queryIndex=" + queryIndex);
     }

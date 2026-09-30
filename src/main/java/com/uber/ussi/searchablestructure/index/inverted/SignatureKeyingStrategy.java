@@ -2,6 +2,7 @@
 package com.uber.ussi.searchablestructure.index.inverted;
 
 import com.uber.ussi.comparator.Comparator;
+import com.uber.ussi.comparator.ComparatorCapabilities;
 import com.uber.ussi.comparator.ComparatorFactory;
 import com.uber.ussi.comparator.KeyShareBounded;
 import com.uber.ussi.comparator.signaturegenerator.SignatureGenerator;
@@ -31,7 +32,12 @@ final class SignatureKeyingStrategy {
 
   SignatureKeyingStrategy(Comparator comparator, SignatureGenerator signatureGenerator) {
     this.comparator = comparator;
-    this.keyShareBound = (KeyShareBounded) comparator;
+    this.keyShareBound =
+        ComparatorCapabilities.keyShareBounded(comparator)
+            .orElseThrow(
+                () ->
+                    new IllegalArgumentException(
+                        "A signature-keyed index requires KeyShareBounded."));
     this.signatureGenerator = signatureGenerator;
   }
 
@@ -44,7 +50,7 @@ final class SignatureKeyingStrategy {
     Objects.requireNonNull(comparator, "comparator is null.");
     SignatureGenerator signatureGenerator =
         ComparatorFactory.createSignatureGenerator(namespaceConfig);
-    if (!(comparator instanceof KeyShareBounded) || signatureGenerator == null) {
+    if (ComparatorCapabilities.keyShareBounded(comparator).isEmpty() || signatureGenerator == null) {
       throw new IndexCreationError(
           "A signature-keyed index requires a comparator with a configured signature generator.");
     }

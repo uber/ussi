@@ -92,7 +92,7 @@ class SearchThreadsTest {
     SearchThreads.runInParallel(2, workUnit -> {});
     SearchThreads.resize(4);
     CountDownLatch workersAtHoldPoint = new CountDownLatch(2);
-    AtomicBoolean holdWorkers = new AtomicBoolean(true);
+    CountDownLatch releaseWorkers = new CountDownLatch(1);
     AtomicInteger finished = new AtomicInteger();
     try {
       assertThrows(
@@ -110,19 +110,24 @@ class SearchThreadsTest {
                         Thread.currentThread().interrupt();
                       }
                       Thread.currentThread().interrupt();
-                      holdWorkers.set(false);
+                      releaseWorkers.countDown();
+                      releaseWorkers.countDown();
                       return;
                     }
                     workersAtHoldPoint.countDown();
-                    while (holdWorkers.get()) {
-                      Thread.onSpinWait();
+                    try {
+                      releaseWorkers.await();
+                    } catch (InterruptedException e) {
+                      Thread.currentThread().interrupt();
+                      return;
                     }
                     finished.incrementAndGet();
                   }));
-
       assertEquals(
           2, finished.get(), "every submitted work unit finished before the caller returned");
     } finally {
+      releaseWorkers.countDown();
+      releaseWorkers.countDown();
       // The contract restores the flag, so the harness clears it rather than leaking it.
       assertTrue(Thread.interrupted(), "the interrupt must be restored before throwing");
     }

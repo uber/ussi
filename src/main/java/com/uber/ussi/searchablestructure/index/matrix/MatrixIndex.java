@@ -9,6 +9,7 @@ import com.carrotsearch.hppc.cursors.IntCursor;
 import com.carrotsearch.hppc.cursors.LongCursor;
 import com.carrotsearch.hppc.cursors.LongObjectCursor;
 import com.uber.ussi.MemoryFootprint;
+import com.uber.ussi.comparator.ComparatorCapabilities;
 import com.uber.ussi.comparator.DotProductScored;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.LongMeta;
@@ -61,7 +62,7 @@ public final class MatrixIndex extends RowStoringIndex {
       LongObjectHashMap<LongMeta> rowNumToMetaMap,
       int maxChunkValues) {
     super(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);
-    this.dotProductScored = (DotProductScored) comparator;
+    this.dotProductScored = ComparatorCapabilities.requireDotProductScored(comparator);
     this.maxChunkValues = maxChunkValues;
     MatrixData matrixData = buildMatrixData();
     this.dimension = matrixData.dimension;

@@ -56,7 +56,6 @@ class IndexConfigValidatorTest {
                 .comparatorType(ComparatorType.L2.getParamValue())
                 .indexParams(Map.of(ConfigKeys.CANDIDATE_GENERATOR, sparsMerge())),
         true),
-    // Sequence comparators need the ordered sequence, not just shared keys, so merge never applies.
     new ValidationCase(
         "spars merge with ngld on the term structure",
         builder ->
@@ -64,7 +63,15 @@ class IndexConfigValidatorTest {
                 .indexType(IndexType.INVERTED_TERM.getParamValue())
                 .comparatorType(ComparatorType.NGLD.getParamValue())
                 .indexParams(Map.of(ConfigKeys.CANDIDATE_GENERATOR, sparsMerge())),
-        false),
+        true),
+    new ValidationCase(
+        "spars merge with gld on the term structure",
+        builder ->
+            builder
+                .indexType(IndexType.INVERTED_TERM.getParamValue())
+                .comparatorType(ComparatorType.GLD.getParamValue())
+                .indexParams(Map.of(ConfigKeys.CANDIDATE_GENERATOR, sparsMerge())),
+        true),
     new ValidationCase(
         "spars merge with gld on the hybrid structure",
         builder ->
@@ -182,13 +189,14 @@ class IndexConfigValidatorTest {
         violations);
   }
 
-  /** Pins the reason: merge is rejected for the sequence comparator, not for the signature rule. */
+  /** Merge on a signature-keyed structure still requires a conjunction-scoring comparator. */
   @Test
-  void mergeWithASequenceComparatorIsRejectedForBeingUnsupported() {
+  void mergeWithASequenceComparatorIsRejectedOnASignatureStructure() {
     NamespaceConfig config =
         validBuilder()
-            .indexType(IndexType.INVERTED_TERM.getParamValue())
+            .indexType(IndexType.INVERTED_SIGNATURE.getParamValue())
             .comparatorType(ComparatorType.NGLD.getParamValue())
+            .comparatorParams(Map.of(ConfigKeys.SIGNATURE_GENERATOR, "icws"))
             .indexParams(Map.of(ConfigKeys.CANDIDATE_GENERATOR, sparsMerge()))
             .build();
 

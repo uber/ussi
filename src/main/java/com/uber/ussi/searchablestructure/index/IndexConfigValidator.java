@@ -212,7 +212,9 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
       return;
     }
     Comparator comparator = ComparatorFactory.tryCreateComparator(config);
-    if (comparator != null && !(comparator instanceof ConjunctionScored)) {
+    if (comparator != null
+        && !(comparator instanceof ConjunctionScored)
+        && !(recordType == RecordType.SEQUENCE && indexType == IndexType.INVERTED_TERM)) {
       violations.add(
           String.format(
               "%s=%s is not supported with comparatorType %s.",

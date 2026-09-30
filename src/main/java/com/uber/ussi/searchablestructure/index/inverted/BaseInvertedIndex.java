@@ -11,6 +11,7 @@ import com.carrotsearch.hppc.cursors.LongObjectCursor;
 import com.uber.ussi.MemoryFootprint;
 import com.uber.ussi.ProcessorAllowance;
 import com.uber.ussi.config.NamespaceConfig;
+import com.uber.ussi.comparator.ConjunctionScored;
 import com.uber.ussi.config.NamespaceConfig.CandidateGeneratorType;
 import com.uber.ussi.config.NamespaceConfig.PopularTermDiscardScope;
 import com.uber.ussi.entity.meta.LongMeta;
@@ -93,6 +94,8 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
   private final CandidateGeneratorType candidateGeneratorType;
   private final PopularTermDiscardScope popularTermDiscardScope;
   private final boolean scoresFromConjunction;
+  private final MergeSearch.PartialConjunctionPolicy partialConjunctionPolicy;
+  private final boolean storesMergePostingValues;
   private final double maxFractionIdsPerTerm;
   private final LongHashSet discardedTerms;
   private final LongObjectHashMap<LongTermsAndValues> verificationRowNumToTermsAndValuesMap;
@@ -158,6 +161,15 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
         candidateGeneratorType == CandidateGeneratorType.SPARS_MERGE
             && indexType.conjunctionDeterminesSimilarity(recordType)
             && popularTermDiscardScope == PopularTermDiscardScope.CANDIDATES_AND_VERIFICATION;
+    this.partialConjunctionPolicy =
+        candidateGeneratorType == CandidateGeneratorType.SPARS_MERGE
+            ? partialConjunctionPolicyForMerge(
+                indexType, recordType, comparator, scoresFromConjunction)
+            : MergeSearch.PartialConjunctionPolicy.none();
+    this.storesMergePostingValues =
+        scoresFromConjunction
+            || (partialConjunctionPolicy.usesPartialConjunction()
+                && indexType.conjunctionDeterminesSimilarity(recordType));
     this.maxFractionIdsPerTerm = parseMaxFractionIdsPerTerm(namespaceConfig);
     validateRows();
     this.discardedTerms =
@@ -191,6 +203,28 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
             this::getMatchingRowNumsIfUnderPreFilteringLimit,
             this::getPostFilteringMaxResults,
             this::matchesMetaFilter);
+  }
+
+  /**
+   * {@code spars_merge} accumulates partial conjunctions only when the configured comparator
+   * implements {@link ConjunctionScored}. Otherwise merge aligns rows on shared keys and scores each
+   * candidate through the comparator, as {@code spars} does.
+   */
+  private static MergeSearch.PartialConjunctionPolicy partialConjunctionPolicyForMerge(
+      IndexType indexType,
+      RecordType recordType,
+      com.uber.ussi.comparator.Comparator comparator,
+      boolean scoresFromConjunction) {
+    if (scoresFromConjunction) {
+      return MergeSearch.PartialConjunctionPolicy.fromConfiguredComparator(
+          (ConjunctionScored) comparator);
+    }
+    if (indexType.conjunctionDeterminesSimilarity(recordType)
+        && comparator instanceof ConjunctionScored) {
+      return MergeSearch.PartialConjunctionPolicy.fromConfiguredComparator(
+          (ConjunctionScored) comparator);
+    }
+    return MergeSearch.PartialConjunctionPolicy.none();
   }
 
   /** Returns the keying strategy of a structure whose index type keys its lists by signatures. */
@@ -426,7 +460,8 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
           this::canScoreRow,
           scoresFromConjunction,
           this::getVerificationRow,
-          sharedMinSimilarity);
+          sharedMinSimilarity,
+          partialConjunctionPolicy);
     }
     return FilteredSearch.search(
         comparator,
@@ -722,7 +757,7 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
           entries = new ArrayList<>();
           entriesByKey.put(key, entries);
         }
-        float value = scoresFromConjunction ? getValueAtKey(termsAndValues, key) : 0.0f;
+        float value = storesMergePostingValues ? getValueAtKey(termsAndValues, key) : 0.0f;
         entries.add(new RowNumAndUniValue(row.key, uniValue, value));
       }
     }
@@ -741,10 +776,10 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
       List<RowNumAndUniValue> entries = entry.value;
       Collections.sort(entries);
       long[] rowNums = new long[entries.size()];
-      float[] values = scoresFromConjunction ? new float[entries.size()] : EMPTY_VALUES;
+      float[] values = storesMergePostingValues ? new float[entries.size()] : EMPTY_VALUES;
       for (int index = 0; index < rowNums.length; ++index) {
         rowNums[index] = entries.get(index).getRowNum();
-        if (scoresFromConjunction) {
+        if (storesMergePostingValues) {
           values[index] = entries.get(index).getValue();
         }
       }

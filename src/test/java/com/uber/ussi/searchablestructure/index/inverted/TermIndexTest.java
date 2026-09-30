@@ -1285,6 +1285,36 @@ class TermIndexTest {
       }
     }
 
+    /** {@code spars_merge} must reach and score the same rows as {@code spars}. */
+    @Test
+    void mergeResultsMatchFilteredScanForSequenceComparators() {
+      Random random = new Random(4_821L);
+      for (String comparatorType : COMPARATOR_TYPES) {
+        LongObjectHashMap<LongTermsAndValues> rows = randomRows(random, 50);
+        TermIndex filteredScanIndex = new TermIndex(config(comparatorType), rows, longObjectMap());
+        TermIndex mergeIndex = new TermIndex(mergeConfig(comparatorType), rows, longObjectMap());
+
+        for (int queryIndex = 0; queryIndex < 40; ++queryIndex) {
+          LongTermsAndValues query = randomSequence(random);
+          int k = 1 + random.nextInt(8);
+          float minSimilarity = MIN_SIMILARITIES[random.nextInt(MIN_SIMILARITIES.length)];
+
+          assertEquivalent(
+              comparatorType + " merge nearest queryIndex=" + queryIndex + " k=" + k,
+              filteredScanIndex.getNearestNeighborRowNums(k, query, null),
+              mergeIndex.getNearestNeighborRowNums(k, query, null));
+          assertEquivalent(
+              comparatorType
+                  + " merge minimum similarity queryIndex="
+                  + queryIndex
+                  + " minSimilarity="
+                  + minSimilarity,
+              filteredScanIndex.getSimilarRowNums(minSimilarity, query, null),
+              mergeIndex.getSimilarRowNums(minSimilarity, query, null));
+        }
+      }
+    }
+
     @Test
     void aQueryFindsARowItSharesOnlyRepeatedTermsWith() {
       LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
@@ -1517,6 +1547,14 @@ class TermIndexTest {
 
     private static NamespaceConfig config(String comparatorType) {
       return config(comparatorType, Map.of(), "inverted_term");
+    }
+
+    private static NamespaceConfig mergeConfig(String comparatorType) {
+      Map<String, String> indexParams =
+          Map.of(
+              ConfigKeys.CANDIDATE_GENERATOR,
+              NamespaceConfig.CandidateGeneratorType.SPARS_MERGE.getParamValue());
+      return config(comparatorType, indexParams, "inverted_term");
     }
 
     private static NamespaceConfig config(

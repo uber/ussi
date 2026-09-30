@@ -9,8 +9,8 @@ import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
  *
  * <p>Edit distance depends on order, so shared terms only bound it: two sequences within edit
  * distance {@code d} have term multisets within L1 distance {@code l1BoundFactor * d}. The
- * multiset index generates candidates under that bound and the comparator verifies each survivor
- * against the ordered sequences.
+ * multiset index generates candidates under that bound and the comparator verifies each surviving
+ * candidate against the ordered sequences.
  *
  * <p>Discarding a popular term from the multisets alone costs recall, because the bound stops
  * holding for the sequences that still carry it. See {@code popular_term_discard_scope}.

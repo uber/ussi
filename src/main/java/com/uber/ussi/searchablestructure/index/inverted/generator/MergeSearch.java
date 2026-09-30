@@ -13,6 +13,7 @@ import com.uber.ussi.utils.BoundedSizeMaxHeap;
 import java.util.Arrays;
 import java.util.List;
 import java.util.PriorityQueue;
+import java.util.function.BiFunction;
 import java.util.function.LongFunction;
 import javax.annotation.Nullable;
 
@@ -27,6 +28,60 @@ import javax.annotation.Nullable;
  */
 public final class MergeSearch {
   private MergeSearch() {}
+
+  /**
+   * Bounds partial conjunctions during {@code spars_merge}. When {@link #none()} is used, merge
+   * only aligns rows on shared keys and scores each candidate through the comparator, as {@code
+   * spars} does.
+   */
+  public static final class PartialConjunctionPolicy {
+    private static final PartialConjunctionPolicy NONE =
+        new PartialConjunctionPolicy(null, null, false);
+
+    @Nullable private final ConjunctionScored conjunctionScored;
+    @Nullable private final BiFunction<Double, Double, Double> minSimilarityForConjunction;
+    private final boolean pruneRowsByPartialConjunction;
+
+    private PartialConjunctionPolicy(
+        @Nullable ConjunctionScored conjunctionScored,
+        @Nullable BiFunction<Double, Double, Double> minSimilarityForConjunction,
+        boolean pruneRowsByPartialConjunction) {
+      this.conjunctionScored = conjunctionScored;
+      this.minSimilarityForConjunction = minSimilarityForConjunction;
+      this.pruneRowsByPartialConjunction = pruneRowsByPartialConjunction;
+    }
+
+    /** Row-major merge without partial-conjunction bounds. */
+    public static PartialConjunctionPolicy none() {
+      return NONE;
+    }
+
+    /** Partial conjunction and mid-row pruning use the configured comparator. */
+    public static PartialConjunctionPolicy fromConfiguredComparator(
+        ConjunctionScored conjunctionScored) {
+      return new PartialConjunctionPolicy(conjunctionScored, null, true);
+    }
+
+    public boolean usesPartialConjunction() {
+      return pruneRowsByPartialConjunction && conjunctionScored != null;
+    }
+
+    double minSimilarityForPartialConjunction(
+        double queryUniValue, double minNormalizedSimilarity) {
+      if (minSimilarityForConjunction == null) {
+        return minNormalizedSimilarity;
+      }
+      return minSimilarityForConjunction.apply(queryUniValue, minNormalizedSimilarity);
+    }
+
+    ConjunctionScored conjunctionScoredForMerge(ConjunctionScored configuredComparator) {
+      return conjunctionScored != null ? conjunctionScored : configuredComparator;
+    }
+
+    boolean hasCustomMinSimilarityForConjunction() {
+      return minSimilarityForConjunction != null;
+    }
+  }
 
   /**
    * Generates and scores candidates for {@code query}. When {@code scoresFromConjunction} is set,
@@ -46,18 +101,38 @@ public final class MergeSearch {
       RowFilter rowFilter,
       boolean scoresFromConjunction,
       LongFunction<LongTermsAndValues> verificationRowLookup,
-      SharedMinSimilarity sharedMinSimilarity) {
+      SharedMinSimilarity sharedMinSimilarity,
+      PartialConjunctionPolicy partialConjunctionPolicy) {
     if (queryKeys.length == 0) {
       return List.of();
     }
-    // Only a SPARS_MERGE namespace reaches here, which the config validator admits only for a
-    // comparator a conjunction scores.
-    ConjunctionScored conjunctionScored = (ConjunctionScored) comparator;
-    double uniValue1 = context.stableSortedUniValue(indexedQuery);
+    PartialConjunctionPolicy policy =
+        partialConjunctionPolicy != null
+            ? partialConjunctionPolicy
+            : PartialConjunctionPolicy.none();
+    boolean scoreFromAccumulatedConjunction = scoresFromConjunction;
+    boolean pruneByPartialConjunction =
+        !scoreFromAccumulatedConjunction && policy.usesPartialConjunction();
+    ConjunctionScored conjunctionScored = null;
+    Comparator conjunctionComparator = comparator;
+    if (scoreFromAccumulatedConjunction || pruneByPartialConjunction) {
+      conjunctionScored =
+          policy.conjunctionScoredForMerge((ConjunctionScored) comparator);
+      conjunctionComparator = (Comparator) conjunctionScored;
+    }
     double[] unscannedKeysUniValue =
-        scoresFromConjunction ? computeUnscannedKeysUniValue(conjunctionScored, queryKeys) : null;
+        conjunctionScored != null
+            ? computeUnscannedKeysUniValue(conjunctionScored, queryKeys)
+            : null;
+    double uniValue1 = context.stableSortedUniValue(indexedQuery);
     BoundedSizeMaxHeap<RowNumAndSimilarity> rows = ResultHeaps.newTopResults(maxResults);
     double currentMinSimilarity = Math.max(minSimilarity, sharedMinSimilarity.get());
+    double currentPartialConjunctionMinSimilarity =
+        policy.minSimilarityForPartialConjunction(uniValue1, currentMinSimilarity);
+    double listEntryMinSimilarity =
+        conjunctionScored != null && !policy.hasCustomMinSimilarityForConjunction()
+            ? currentPartialConjunctionMinSimilarity
+            : 0.0;
     // Each list is entered at the minimum similarity already proved rather than the one the caller
     // asked for, so the rows a search walks past are the rows that could still reach the answer.
     Frontier frontier =
@@ -65,8 +140,15 @@ public final class MergeSearch {
             queryKeys,
             context,
             getFirstIndexInEachList(
-                conjunctionScored, queryKeys, context, uniValue1, currentMinSimilarity));
-    Conjunction conjunction = new Conjunction(comparator, conjunctionScored);
+                conjunctionScored,
+                queryKeys,
+                context,
+                uniValue1,
+                listEntryMinSimilarity));
+    Conjunction conjunction =
+        conjunctionScored != null
+            ? new Conjunction(conjunctionComparator, conjunctionScored)
+            : null;
     IntArrayList advancedKeyIndexes = new IntArrayList(queryKeys.length);
 
     while (!frontier.isEmpty()) {
@@ -76,6 +158,8 @@ public final class MergeSearch {
       float publishedMinSimilarity = sharedMinSimilarity.get();
       if (publishedMinSimilarity > currentMinSimilarity) {
         currentMinSimilarity = publishedMinSimilarity;
+        currentPartialConjunctionMinSimilarity =
+            policy.minSimilarityForPartialConjunction(uniValue1, currentMinSimilarity);
       }
       FrontierHead nextHead = frontier.peek();
       long rowNum = nextHead.rowNum;
@@ -86,7 +170,9 @@ public final class MergeSearch {
         break;
       }
 
-      conjunction.reset();
+      if (conjunction != null) {
+        conjunction.reset();
+      }
       advancedKeyIndexes.clear();
       boolean mayReachMinSimilarity =
           mergeRow(
@@ -97,7 +183,8 @@ public final class MergeSearch {
               unscannedKeysUniValue,
               uniValue1,
               uniValue2,
-              currentMinSimilarity);
+              currentPartialConjunctionMinSimilarity,
+              pruneByPartialConjunction);
       for (int index = 0; index < advancedKeyIndexes.size(); ++index) {
         frontier.pushHead(advancedKeyIndexes.get(index));
       }
@@ -106,7 +193,7 @@ public final class MergeSearch {
       }
 
       double similarity =
-          scoresFromConjunction
+          scoreFromAccumulatedConjunction
               ? conjunction.getSimilarity(uniValue1, uniValue2)
               : getVerifiedSimilarity(
                   comparator, query, verificationRowLookup.apply(rowNum), currentMinSimilarity);
@@ -126,32 +213,35 @@ public final class MergeSearch {
   /**
    * Consumes every frontier head that sits on {@code rowNum}, adding each shared key to {@code
    * conjunction}. Returns false once no completion of the row can reach {@code minSimilarity},
-   * having still consumed the row's whole group. A null {@code unscannedKeysUniValue} means the
-   * caller scores through the comparator, so no conjunction is computed.
+   * having still consumed the row's whole group. A null {@code conjunction} or a null {@code
+   * unscannedKeysUniValue} means the caller scores through the comparator, so no conjunction is
+   * computed for pruning.
    */
   private static boolean mergeRow(
       Frontier frontier,
       long rowNum,
-      Conjunction conjunction,
+      @Nullable Conjunction conjunction,
       IntArrayList advancedKeyIndexes,
       @Nullable double[] unscannedKeysUniValue,
       double uniValue1,
       double uniValue2,
-      double minSimilarity) {
+      double minSimilarity,
+      boolean pruneByPartialConjunction) {
     boolean mayReachMinSimilarity = true;
     while (frontier.isOnRow(rowNum)) {
       FrontierHead head = frontier.pollAndAdvanceIndexInList();
       advancedKeyIndexes.add(head.keyIndex);
-      if (unscannedKeysUniValue == null || !mayReachMinSimilarity) {
+      if (conjunction == null || unscannedKeysUniValue == null || !mayReachMinSimilarity) {
         continue;
       }
       QueryKey queryKey = frontier.getQueryKey(head.keyIndex);
       conjunction.add(queryKey, queryKey.getValueAt(head.indexInList));
-      double unscanned =
-          frontier.isOnRow(rowNum) ? unscannedKeysUniValue[frontier.peek().keyIndex] : 0.0;
-      mayReachMinSimilarity =
-          conjunction.getMaxSimilarity(unscanned, uniValue1, uniValue2)
-              >= minSimilarity;
+      if (pruneByPartialConjunction) {
+        double unscanned =
+            frontier.isOnRow(rowNum) ? unscannedKeysUniValue[frontier.peek().keyIndex] : 0.0;
+        mayReachMinSimilarity =
+            conjunction.getMaxSimilarity(unscanned, uniValue1, uniValue2) >= minSimilarity;
+      }
       // Falls through to consume the rest of the row's group, keeping the list positions right.
     }
     return mayReachMinSimilarity;
@@ -192,14 +282,17 @@ public final class MergeSearch {
    * match, and because the lists are uni-sorted they all sit below one offset per key.
    */
   private static int[] getFirstIndexInEachList(
-      ConjunctionScored conjunctionScored,
+      @Nullable ConjunctionScored conjunctionScored,
       QueryKey[] queryKeys,
       Context context,
       double uniValue1,
       double minSimilarity) {
     int[] firstIndexInList = new int[queryKeys.length];
+    if (conjunctionScored == null || minSimilarity <= 0.0) {
+      return firstIndexInList;
+    }
     double minUniValue2 =
-        conjunctionScored.doesSuffixBoundConjunction() && minSimilarity > 0.0
+        conjunctionScored.doesSuffixBoundConjunction()
             ? uniValue1 * minSimilarity
             : 0.0;
     if (minUniValue2 <= 0.0) {

@@ -11,9 +11,6 @@ import com.carrotsearch.hppc.cursors.LongObjectCursor;
 import com.uber.ussi.MemoryFootprint;
 import com.uber.ussi.ProcessorAllowance;
 import com.uber.ussi.config.NamespaceConfig;
-import com.uber.ussi.comparator.ComparatorFactory;
-import com.uber.ussi.comparator.ConjunctionScored;
-import com.uber.ussi.comparator.KeyShareBounded;
 import com.uber.ussi.config.NamespaceConfig.CandidateGeneratorType;
 import com.uber.ussi.config.NamespaceConfig.PopularTermDiscardScope;
 import com.uber.ussi.entity.meta.LongMeta;
@@ -165,7 +162,7 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
             && popularTermDiscardScope == PopularTermDiscardScope.CANDIDATES_AND_VERIFICATION;
     this.partialConjunctionPolicy =
         candidateGeneratorType == CandidateGeneratorType.SPARS_MERGE
-            ? partialConjunctionPolicyForMerge(
+            ? MergeSearch.PartialConjunctionPolicy.forInvertedMerge(
                 indexType, recordType, comparator, scoresFromConjunction)
             : MergeSearch.PartialConjunctionPolicy.none();
     this.storesMergePostingValues =
@@ -206,35 +203,6 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
             this::getMatchingRowNumsIfUnderPreFilteringLimit,
             this::getPostFilteringMaxResults,
             this::matchesMetaFilter);
-  }
-
-  /**
-   * {@code spars_merge} accumulates partial conjunctions only when the configured comparator
-   * implements {@link ConjunctionScored}. Otherwise merge aligns rows on shared keys and scores each
-   * candidate through the comparator.
-   */
-  private static MergeSearch.PartialConjunctionPolicy partialConjunctionPolicyForMerge(
-      IndexType indexType,
-      RecordType recordType,
-      com.uber.ussi.comparator.Comparator comparator,
-      boolean scoresFromConjunction) {
-    if (scoresFromConjunction) {
-      return MergeSearch.PartialConjunctionPolicy.fromConfiguredComparator(
-          (ConjunctionScored) comparator);
-    }
-    if (indexType.conjunctionDeterminesSimilarity(recordType)
-        && comparator instanceof ConjunctionScored conjunctionScored) {
-      return MergeSearch.PartialConjunctionPolicy.fromConfiguredComparator(conjunctionScored);
-    }
-    if (indexType == IndexType.INVERTED_TERM
-        && recordType == RecordType.SEQUENCE
-        && comparator instanceof KeyShareBounded keyShareBound) {
-      return MergeSearch.PartialConjunctionPolicy.forSequenceIndexedMultisetMerge(
-          keyShareBound,
-          comparator.getComparatorNormalizer(),
-          ComparatorFactory.createIndexedMultisetMergeConjunctionScored());
-    }
-    return MergeSearch.PartialConjunctionPolicy.none();
   }
 
   /** Returns the keying strategy of a structure whose index type keys its lists by signatures. */

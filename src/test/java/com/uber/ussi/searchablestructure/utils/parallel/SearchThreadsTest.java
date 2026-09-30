@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -79,8 +80,9 @@ class SearchThreadsTest {
    * reporting the cancellation. Returning earlier would leave a work unit reading a structure that
    * the read lock its caller searches under is no longer protecting.
    *
-   * <p>The work units are held until the caller has been interrupted, so the wait is entered with
-   * every one of them outstanding rather than already finished.
+   * <p>Submitted work units spin until the caller has been interrupted, so {@link
+   * SearchThreads#runInParallel runInParallel()} enters {@code awaitWorkUnits} with every submitted
+   * work unit still outstanding rather than already finished.
    */
   @Test
   void waitsForEveryWorkUnitBeforeReportingACancellation() {
@@ -89,7 +91,8 @@ class SearchThreadsTest {
     // creates one before widening it.
     SearchThreads.runInParallel(2, workUnit -> {});
     SearchThreads.resize(4);
-    CountDownLatch bothStarted = new CountDownLatch(2);
+    CountDownLatch workersAtHoldPoint = new CountDownLatch(2);
+    AtomicBoolean holdWorkers = new AtomicBoolean(true);
     AtomicInteger finished = new AtomicInteger();
     try {
       assertThrows(
@@ -99,15 +102,20 @@ class SearchThreadsTest {
                   3,
                   workUnit -> {
                     if (workUnit == 0) {
-                      // The caller runs this one, and enters the wait already interrupted.
+                      // The caller runs this one only after both submitted work units are waiting,
+                      // so awaitWorkUnits still has outstanding futures when it is interrupted.
+                      try {
+                        workersAtHoldPoint.await();
+                      } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                      }
                       Thread.currentThread().interrupt();
+                      holdWorkers.set(false);
                       return;
                     }
-                    bothStarted.countDown();
-                    try {
-                      bothStarted.await();
-                    } catch (InterruptedException e) {
-                      Thread.currentThread().interrupt();
+                    workersAtHoldPoint.countDown();
+                    while (holdWorkers.get()) {
+                      Thread.onSpinWait();
                     }
                     finished.incrementAndGet();
                   }));

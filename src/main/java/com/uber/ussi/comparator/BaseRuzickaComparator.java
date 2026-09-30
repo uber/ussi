@@ -164,6 +164,17 @@ abstract class BaseRuzickaComparator extends Comparator
   }
 
   @Override
+  public double conjunctionUnionContribution(
+      Comparator comparator, float value1, float value2) {
+    double transformedValue1 = getUniTransformedValue(value1);
+    double transformedValue2 = comparator.getUniTransformedValue(value2);
+    if (Math.signum(value1) == Math.signum(value2)) {
+      return Math.max(transformedValue1, transformedValue2);
+    }
+    return transformedValue1 + transformedValue2;
+  }
+
+  @Override
   public double similarityFromConjunction(
       double conjunction,
       double partialUniValue1,
@@ -179,18 +190,22 @@ abstract class BaseRuzickaComparator extends Comparator
   }
 
   @Override
-  public double maxSimilarityFromPartialConjunction(
+  public final double maxSimilarityFromPartialConjunction(
       double conjunction,
+      double scannedUnion,
       double unscannedKeysUniValue,
       double partialUniValue1,
       double uniValue1,
       double partialUniValue2,
       double uniValue2) {
-    // The intersection can never exceed either row's Uni value, whatever the unscanned keys hold.
-    double maxConjunction =
-        Math.min(conjunction + unscannedKeysUniValue, Math.min(uniValue1, uniValue2));
-    return similarityFromConjunction(
-        maxConjunction, partialUniValue1, uniValue1, partialUniValue2, uniValue2);
+    return comparatorNormalizer.comparatorValueToNormalizedSimilarityValue(
+        computeMaxPossibleComparatorValue(
+            partialUniValue1,
+            uniValue1,
+            partialUniValue2,
+            uniValue2,
+            conjunction,
+            scannedUnion));
   }
 
   @Override

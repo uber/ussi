@@ -22,6 +22,11 @@ public abstract class Comparator implements Serializable {
   protected final ComparatorNormalizer comparatorNormalizer;
   private final double zeroSimilarityComparatorValue;
 
+  /** Returns the normalizer that maps between comparator values and normalized similarities. */
+  public final ComparatorNormalizer getComparatorNormalizer() {
+    return comparatorNormalizer;
+  }
+
   protected Comparator(ComparatorNormalizer comparatorNormalizer) {
     if (comparatorNormalizer == null) {
       throw new NullPointerException("The comparatorNormalizer is null.");

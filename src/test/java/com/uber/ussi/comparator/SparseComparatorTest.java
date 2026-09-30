@@ -313,6 +313,16 @@ class SparseComparatorTest {
     return sparse(comparator, terms, values);
   }
 
+  @Test
+  void ruzickaUnionContributionUsesMaxMassForSharedSignsAndSumOtherwise() {
+    Comparator comparator = comparator("ruzicka");
+    ConjunctionScored conjunctionScored = (ConjunctionScored) comparator;
+
+    assertEquals(5.0, conjunctionScored.conjunctionUnionContribution(comparator, 2f, 5f), EPSILON_9);
+    assertEquals(5.0, conjunctionScored.conjunctionUnionContribution(comparator, 5f, 2f), EPSILON_9);
+    assertEquals(5.0, conjunctionScored.conjunctionUnionContribution(comparator, 3f, -2f), EPSILON_9);
+  }
+
   private static double mapBasedSimilarity(
       Comparator comparator, LongTermsAndValues first, LongTermsAndValues second) {
     TreeMap<Long, Float> firstValues = asMap(first);

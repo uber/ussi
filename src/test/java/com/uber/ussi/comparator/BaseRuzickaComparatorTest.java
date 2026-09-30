@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.uber.ussi.comparatornormalizer.IdentityComparatorNormalizer;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -72,5 +73,39 @@ class BaseRuzickaComparatorTest {
         0.5,
         BaseRuzickaComparator.computeMaxPossibleComparatorValue(2.0, 2.0, 2.0, 2.0, 1.0, 2.0),
         1e-12);
+  }
+
+  @Test
+  void partialConjunctionBoundUsesScannedUnionMass() {
+    RuzickaComparator ruzicka = new RuzickaComparator(new IdentityComparatorNormalizer());
+    double partialUniValue1 = 3.0;
+    double uniValue1 = 6.0;
+    double partialUniValue2 = 2.0;
+    double uniValue2 = 5.0;
+    double scannedIntersection = 1.5;
+    double scannedUnion = 4.0;
+    double expectedComparatorValue =
+        BaseRuzickaComparator.computeMaxPossibleComparatorValue(
+            partialUniValue1,
+            uniValue1,
+            partialUniValue2,
+            uniValue2,
+            scannedIntersection,
+            scannedUnion);
+    double expected =
+        ruzicka
+            .getComparatorNormalizer()
+            .comparatorValueToNormalizedSimilarityValue(expectedComparatorValue);
+    double bound =
+        ruzicka.maxSimilarityFromPartialConjunction(
+            scannedIntersection,
+            scannedUnion,
+            0.0,
+            partialUniValue1,
+            uniValue1,
+            partialUniValue2,
+            uniValue2);
+
+    assertEquals(expected, bound, 1e-12);
   }
 }

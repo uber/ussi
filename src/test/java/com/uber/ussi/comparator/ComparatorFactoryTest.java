@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.uber.ussi.comparator.sequencedistance.SequenceDistance;
+import com.uber.ussi.comparator.KeyShareBounded;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
@@ -91,6 +92,15 @@ class ComparatorFactoryTest {
         () ->
             ComparatorFactory.createSignatureGenerator(
                 config("l2", Map.of(ConfigKeys.SIGNATURE_GENERATOR, "minhash"))));
+  }
+
+  @Test
+  void createIndexedMultisetMergeConjunctionScoredIsConjunctionScoredAndKeyShareBounded() {
+    ConjunctionScored conjunctionScored =
+        ComparatorFactory.createIndexedMultisetMergeConjunctionScored();
+
+    assertTrue(conjunctionScored instanceof KeyShareBounded);
+    assertTrue(conjunctionScored.doesSuffixBoundConjunction());
   }
 
   private static LongTermsAndValues sequence(long... terms) {

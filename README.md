@@ -427,8 +427,9 @@ row as soon as no completion of it can reach the current minimum similarity. It
 pays off when queries have many keys and the minimum similarity rejects most
 rows early. It is available for `l2`, `jaccard`, and `ruzicka`, which implement
 partial-conjunction bounds, and for `gld` and `ngld` on `inverted_term`, where
-`spars_merge` aligns rows on shared keys and scores each candidate through the
-configured comparator, as `spars` does.
+`spars_merge` bounds rows with partial Ruzicka conjunction over the indexed
+multiset and verifies each surviving candidate with the configured sequence
+comparator on the ordered terms.
 
 ## What USSI Does Not Do
 

@@ -937,7 +937,7 @@ the row's value at that key, so the accumulated conjunction is the row's exact
 similarity and no further comparison is needed. Signature keys carry no usable
 value, and a sequence's terms bound its similarity without determining it, so in
 both cases the merge generator scores each surviving candidate through the
-comparator, as `spars` does. `inverted_hybrid` applies the generator
+comparator. `inverted_hybrid` applies the generator
 independently to each of the two, so its term index scores from the conjunction
 while its signature index verifies.
 
@@ -948,11 +948,12 @@ the exact similarity. Jaccard, Ruzicka, and L2 implement the hooks, so
 `spars_merge` applies partial-conjunction bounds there. Inverted-list values are
 materialized only where those bounds read them.
 
-Sequence comparators implement prefix bounds for `spars` but not conjunction
-hooks, so `spars_merge` does not accumulate partial conjunctions over their
-indexed multisets. On `inverted_term`, `gld` and `ngld` may still use
-`spars_merge`: the generator aligns rows on shared keys and scores each surviving
-candidate through the comparator, as `spars` does. Signature-keyed structures
+Sequence comparators implement prefix bounds for `spars` but not `ConjunctionScored`
+hooks on ordered sequences. On `inverted_term`, `spars_merge`
+still bounds rows with partial Ruzicka conjunction over the indexed term
+multiset: the configured comparator supplies the minimum shared-key fraction,
+and verification scores each surviving candidate through the edit distance.
+Signature-keyed structures
 and the signature half of `inverted_hybrid` still reject `spars_merge` with
 sequence comparators, because that half requires a conjunction-scoring comparator.
 

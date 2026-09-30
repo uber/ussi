@@ -1,6 +1,8 @@
 /* AUTHOR: Shijie Lu (shijie@uber.com), Shalini Kedlaya (skedlaya@uber.com), Ahmed Metwally (ametwally@uber.com) */
 package com.uber.ussi.comparator;
 
+import com.uber.ussi.comparatornormalizer.ComparatorNormalizer;
+
 /**
  * A similarity that can say how much of a record's keys a qualifying candidate has to share with
  * it, rather than only how many of them it may miss.
@@ -37,4 +39,26 @@ public interface KeyShareBounded {
    * Comparator#maxPrefixSumFromSharedFraction} turn it into a prefix over either key space.
    */
   double getMinSharedKeyFraction(double recordUniValue, double comparatorValue);
+
+  /**
+   * Returns the minimum multiset similarity a partial conjunction must still be able to reach for
+   * a row to remain a candidate, given the query's indexed Uni value and the search's minimum
+   * normalized similarity.
+   */
+  default double minMultisetSimilarityForMergePartialConjunction(
+      ComparatorNormalizer comparatorNormalizer,
+      double queryUniValue,
+      double minNormalizedSimilarity) {
+    if (comparatorNormalizer == null) {
+      throw new NullPointerException("The comparatorNormalizer is null.");
+    }
+    if (minNormalizedSimilarity < 0.0 || minNormalizedSimilarity > 1.0) {
+      throw new IllegalArgumentException(
+          String.format(
+              "minNormalizedSimilarity must be in [0.0, 1.0], got %s.", minNormalizedSimilarity));
+    }
+    double comparatorValue =
+        comparatorNormalizer.normalizedSimilarityValueToComparatorValue(minNormalizedSimilarity);
+    return getMinSharedKeyFraction(queryUniValue, comparatorValue);
+  }
 }

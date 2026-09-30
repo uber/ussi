@@ -25,9 +25,9 @@ import java.util.Set;
  * generation verifies each surviving candidate against the ordered sequences.
  *
  * <p>{@code spars} generates candidates with prefix bounds from this comparator over those indexed
- * keys and scores ordered sequences. {@code spars_merge} on {@code inverted_term} uses the same
- * scoring path but row-major merge over the lists instead of key-major {@code spars}
- * candidate generation.
+ * keys and scores ordered sequences. {@code spars_merge} on {@code inverted_term} bounds rows with
+ * partial Ruzicka conjunction over the indexed multiset, then scores each surviving candidate
+ * through this comparator on the ordered sequences.
  */
 abstract class BaseSequenceComparator extends Comparator implements KeyShareBounded {
 

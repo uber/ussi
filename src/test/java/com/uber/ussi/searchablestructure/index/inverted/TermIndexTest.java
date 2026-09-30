@@ -764,7 +764,7 @@ class TermIndexTest {
     }
   }
 
-  /** The merge generator must reach and score the same rows as {@code spars}. */
+  /** {@code spars_merge} must reach and score the same rows as {@code spars}. */
   @Test
   void randomizedMergeResultsMatchSparsForEverySparseComparator() {
     for (String comparatorType : List.of("jaccard", "ruzicka", "l2")) {
@@ -1313,6 +1313,46 @@ class TermIndexTest {
               mergeIndex.getSimilarRowNums(minSimilarity, query, null));
         }
       }
+    }
+
+    /**
+     * Partial multiset conjunction during {@code spars_merge} reads posting values, so lists
+     * materialize them. {@code spars} stores row numbers alone on each list.
+     */
+    @Test
+    void mergeMaterializesPostingValuesForPartialMultisetConjunction() {
+      LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
+      rows.put(7, sequence(1, 1, 2, 1));
+      TermIndex sparsIndex = new TermIndex(config("ngld"), rows, longObjectMap());
+      TermIndex mergeIndex = new TermIndex(mergeConfig("ngld"), rows, longObjectMap());
+
+      assertEquals(0, sparsIndex.getValuesForKeyForTests(ONLY_SHARD, 1).length);
+      assertArrayEquals(new float[] {3.0f}, mergeIndex.getValuesForKeyForTests(ONLY_SHARD, 1));
+      assertArrayEquals(new float[] {1.0f}, mergeIndex.getValuesForKeyForTests(ONLY_SHARD, 2));
+    }
+
+    @Test
+    void memoryFootprintCountsTheValuesASequenceMergeGeneratorKeeps() {
+      LongObjectHashMap<LongTermsAndValues> rows = longObjectMap();
+      for (long rowNum = 1; rowNum <= 20; ++rowNum) {
+        rows.put(rowNum, sequence(1, 2, 3, 4));
+      }
+
+      long sparsBytes =
+          new TermIndex(config("ngld"), rows, longObjectMap())
+              .getMemoryFootprint()
+              .getOnHeapBytes();
+      long mergeBytes =
+          new TermIndex(mergeConfig("ngld"), rows, longObjectMap())
+              .getMemoryFootprint()
+              .getOnHeapBytes();
+
+      assertTrue(
+          mergeBytes > sparsBytes,
+          "sequence spars_merge should store posting values: merge "
+              + mergeBytes
+              + " against spars "
+              + sparsBytes);
     }
 
     @Test

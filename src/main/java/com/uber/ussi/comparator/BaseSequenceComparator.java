@@ -21,8 +21,12 @@ import java.util.Set;
  * signature-keyed structure draws its signatures from that same multiset, which is why these
  * comparators generate signatures at all despite measuring order.
  *
- * <p>Merging cannot generate candidates here: the shared terms bound an order-sensitive
- * distance without determining it, so these searches generate candidates and then verify them.
+ * <p>Shared indexed keys bound an order-sensitive distance without determining it, so candidate
+ * generation verifies each surviving candidate against the ordered sequences.
+ *
+ * <p>{@code spars} generates candidates with prefix bounds from this comparator over those indexed
+ * keys and scores ordered sequences. {@code spars_merge} on {@code inverted_term} uses the same
+ * scoring path but row-major merge over the lists instead of a key-major filtered scan.
  */
 abstract class BaseSequenceComparator extends Comparator implements KeyShareBounded {
 

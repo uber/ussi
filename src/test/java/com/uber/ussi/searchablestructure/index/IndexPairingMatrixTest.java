@@ -114,11 +114,12 @@ class IndexPairingMatrixTest {
   private static final float SIMILARITY_EPSILON = 1.0e-6f;
 
   /**
-   * Jaccard and Ruzicka on all six cells, l2 on the two term cells, and gld and ngld on the three
-   * {@code spars} cells. Asserted so that a rule change cannot quietly empty the search matrix,
-   * which would leave these tests passing over nothing.
+   * Jaccard and Ruzicka on all six cells, l2 on the two term cells, gld and ngld on the three
+   * {@code spars} cells, and gld and ngld with {@code spars_merge} on {@code inverted_term}.
+   * Asserted so that a rule change cannot quietly empty the search matrix, which would leave these
+   * tests passing over nothing.
    */
-  private static final int NUM_VALID_CELLS = 20;
+  private static final int NUM_VALID_CELLS = 22;
 
   private record Cell(
       ComparatorCase comparator,
@@ -163,7 +164,8 @@ class IndexPairingMatrixTest {
       return Expectation.NO_SIGNATURES;
     }
     if (candidateGeneratorType == CandidateGeneratorType.SPARS_MERGE
-        && comparator.readsSequences()) {
+        && comparator.readsSequences()
+        && indexType != IndexType.INVERTED_TERM) {
       return Expectation.NO_MERGE;
     }
     return Expectation.VALID;

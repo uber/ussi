@@ -425,8 +425,10 @@ comparator.
 `spars_merge` advances all of the query's keys together, letting it abandon a
 row as soon as no completion of it can reach the current minimum similarity. It
 pays off when queries have many keys and the minimum similarity rejects most
-rows early. It is available for `l2`, `jaccard`, and `ruzicka`, and not for the
-sequence comparators.
+rows early. It is available for `l2`, `jaccard`, and `ruzicka`, which implement
+partial-conjunction bounds, and for `gld` and `ngld` on `inverted_term`, where
+`spars_merge` aligns rows on shared keys and scores each candidate through the
+configured comparator, as `spars` does.
 
 ## What USSI Does Not Do
 

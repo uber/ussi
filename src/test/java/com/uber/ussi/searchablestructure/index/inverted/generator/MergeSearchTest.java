@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.uber.ussi.comparator.Comparator;
 import com.uber.ussi.comparator.ComparatorFactory;
+import com.uber.ussi.comparator.ConjunctionScored;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
@@ -41,7 +42,8 @@ class MergeSearchTest {
             rowNum -> {
               throw new AssertionError("verification lookup should not run");
             },
-            new SharedMinSimilarity(0.0f));
+            new SharedMinSimilarity(0.0f),
+            partialConjunctionPolicy(/* scoresFromConjunction */ true));
 
     assertEquals(List.of(1L), rowNums(results));
     assertTrue(results.get(0).getSimilarity() > 0.99f);
@@ -68,7 +70,8 @@ class MergeSearchTest {
             (rowNum, metadataFilter) -> true,
             /* scoresFromConjunction */ false,
             rows::get,
-            new SharedMinSimilarity(0.0f));
+            new SharedMinSimilarity(0.0f),
+            partialConjunctionPolicy(/* scoresFromConjunction */ false));
 
     assertEquals(List.of(1L), rowNums(results));
   }
@@ -94,7 +97,8 @@ class MergeSearchTest {
             (rowNum, metadataFilter) -> true,
             /* scoresFromConjunction */ false,
             rowNum -> null,
-            new SharedMinSimilarity(0.0f));
+            new SharedMinSimilarity(0.0f),
+            partialConjunctionPolicy(/* scoresFromConjunction */ false));
 
     assertEquals(List.of(), rowNums(results));
   }
@@ -121,9 +125,19 @@ class MergeSearchTest {
             (rowNum, metadataFilter) -> true,
             /* scoresFromConjunction */ true,
             rowNum -> jaccard(new long[] {10}, 1),
-            new SharedMinSimilarity(0.0f));
+            new SharedMinSimilarity(0.0f),
+            partialConjunctionPolicy(/* scoresFromConjunction */ true));
 
     assertEquals(List.of(1L, 2L, 3L, 4L), rowNums(results).stream().sorted().toList());
+  }
+
+  private static MergeSearch.PartialConjunctionPolicy partialConjunctionPolicy(
+      boolean scoresFromConjunction) {
+    if (scoresFromConjunction) {
+      return MergeSearch.PartialConjunctionPolicy.none();
+    }
+    return MergeSearch.PartialConjunctionPolicy.fromConfiguredComparator(
+        (ConjunctionScored) COMPARATOR);
   }
 
   private static List<Long> rowNums(List<RowNumAndSimilarity> results) {

@@ -782,7 +782,10 @@ Each row travels through a search in two forms. The inverted lists are keyed by
 the distinct terms of the row's multiset and carry how many times each occurs,
 which is what length and prefix filtering prune on. The comparator then verifies
 each surviving candidate against the ordered sequences, running the banded
-dynamic program under the budget the current `minSimilarity` allows.
+dynamic program under the budget the current `minSimilarity` allows. Both
+`spars` and `spars_merge` follow that scoring path on `inverted_term`. They
+differ only in how the lists are traversed: key-major filtered scan versus
+row-major merge.
 
 Each row and each query must have non-empty terms and an empty values array. A
 query and a row need not be the same length as each other. Search only considers
@@ -932,16 +935,25 @@ When the keys are the terms of a sparse record, the inverted lists also carry
 the row's value at that key, so the accumulated conjunction is the row's exact
 similarity and no further comparison is needed. Signature keys carry no usable
 value, and a sequence's terms bound its similarity without determining it, so in
-both cases the merge generator scores each retained candidate with the
-comparator, exactly as the filtered scan does. `inverted_hybrid` applies the
-generator independently to each of the two, so its term index scores from the
-conjunction while its signature index verifies.
+both cases the merge generator scores each surviving candidate through the
+comparator, as `spars` does. `inverted_hybrid` applies the generator
+independently to each of the two, so its term index scores from the conjunction
+while its signature index verifies.
 
-A comparator opts into the merge generator by implementing its conjunction
-hooks. Jaccard, Ruzicka, and L2 all do, so `spars_merge` is available for every
-order-agnostic comparator; the inverted-list values it needs are only
-materialized where they are read. The sequence comparators do not, because a
-dynamic program over ordered sequences cannot be accumulated from shared keys.
+Mid-row pruning from partial conjunctions requires a comparator that implements
+the conjunction hooks and sparse term keys whose lists carry a value at each
+key. On `inverted_term` with sparse records, the accumulated conjunction can be
+the exact similarity. Jaccard, Ruzicka, and L2 implement the hooks, so
+`spars_merge` applies partial-conjunction bounds there. Inverted-list values are
+materialized only where those bounds read them.
+
+Sequence comparators implement prefix bounds for `spars` but not conjunction
+hooks, so `spars_merge` does not accumulate partial conjunctions over their
+indexed multisets. On `inverted_term`, `gld` and `ngld` may still use
+`spars_merge`: the generator aligns rows on shared keys and scores each surviving
+candidate through the comparator, as `spars` does. Signature-keyed structures
+and the signature half of `inverted_hybrid` still reject `spars_merge` with
+sequence comparators, because that half requires a conjunction-scoring comparator.
 
 ## Discarding Popular Terms
 

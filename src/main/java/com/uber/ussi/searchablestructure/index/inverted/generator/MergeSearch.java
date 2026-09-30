@@ -3,7 +3,9 @@ package com.uber.ussi.searchablestructure.index.inverted.generator;
 
 import com.carrotsearch.hppc.IntArrayList;
 import com.uber.ussi.comparator.Comparator;
+import com.uber.ussi.comparatornormalizer.ComparatorNormalizer;
 import com.uber.ussi.comparator.ConjunctionScored;
+import com.uber.ussi.comparator.KeyShareBounded;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
@@ -31,8 +33,8 @@ public final class MergeSearch {
 
   /**
    * Bounds partial conjunctions during {@code spars_merge}. When {@link #none()} is used, merge
-   * only aligns rows on shared keys and scores each candidate through the comparator, as {@code
-   * spars} does.
+   * aligns rows on shared keys and scores each candidate through the comparator without
+   * partial-conjunction pruning.
    */
   public static final class PartialConjunctionPolicy {
     private static final PartialConjunctionPolicy NONE =
@@ -62,6 +64,23 @@ public final class MergeSearch {
       return new PartialConjunctionPolicy(conjunctionScored, null, true);
     }
 
+    /**
+     * Bounds merge rows with partial Ruzicka conjunction over indexed term counts. The configured
+     * sequence comparator supplies the minimum multiset similarity; verification still scores
+     * ordered sequences.
+     */
+    public static PartialConjunctionPolicy forSequenceIndexedMultisetMerge(
+        KeyShareBounded keyShareBound,
+        ComparatorNormalizer comparatorNormalizer,
+        ConjunctionScored indexedMultisetConjunctionScored) {
+      return new PartialConjunctionPolicy(
+          indexedMultisetConjunctionScored,
+          (queryUniValue, minNormalizedSimilarity) ->
+              keyShareBound.minMultisetSimilarityForMergePartialConjunction(
+                  comparatorNormalizer, queryUniValue, minNormalizedSimilarity),
+          true);
+    }
+
     public boolean usesPartialConjunction() {
       return pruneRowsByPartialConjunction && conjunctionScored != null;
     }
@@ -74,8 +93,16 @@ public final class MergeSearch {
       return minSimilarityForConjunction.apply(queryUniValue, minNormalizedSimilarity);
     }
 
-    ConjunctionScored conjunctionScoredForMerge(ConjunctionScored configuredComparator) {
-      return conjunctionScored != null ? conjunctionScored : configuredComparator;
+    ConjunctionScored conjunctionScoredForMerge(
+        @Nullable ConjunctionScored configuredComparator) {
+      if (conjunctionScored != null) {
+        return conjunctionScored;
+      }
+      if (configuredComparator == null) {
+        throw new IllegalStateException(
+            "Partial conjunction requires a ConjunctionScored comparator or an explicit policy.");
+      }
+      return configuredComparator;
     }
 
     boolean hasCustomMinSimilarityForConjunction() {
@@ -113,11 +140,14 @@ public final class MergeSearch {
     boolean scoreFromAccumulatedConjunction = scoresFromConjunction;
     boolean pruneByPartialConjunction =
         !scoreFromAccumulatedConjunction && policy.usesPartialConjunction();
+    ConjunctionScored configuredConjunctionScored =
+        comparator instanceof ConjunctionScored conjunctionScoredComparator
+            ? conjunctionScoredComparator
+            : null;
     ConjunctionScored conjunctionScored = null;
     Comparator conjunctionComparator = comparator;
     if (scoreFromAccumulatedConjunction || pruneByPartialConjunction) {
-      conjunctionScored =
-          policy.conjunctionScoredForMerge((ConjunctionScored) comparator);
+      conjunctionScored = policy.conjunctionScoredForMerge(configuredConjunctionScored);
       conjunctionComparator = (Comparator) conjunctionScored;
     }
     double[] unscannedKeysUniValue =
@@ -423,6 +453,7 @@ public final class MergeSearch {
     private final Comparator comparator;
     private final ConjunctionScored conjunctionScored;
     private double conjunction;
+    private double scannedUnion;
     private double partialUniValue1;
     private double partialUniValue2;
 
@@ -433,14 +464,20 @@ public final class MergeSearch {
 
     private void reset() {
       conjunction = 0.0;
+      scannedUnion = 0.0;
       partialUniValue1 = 0.0;
       partialUniValue2 = 0.0;
     }
 
     private void add(QueryKey queryKey, float value2) {
-      conjunction += conjunctionScored.conjunctionContribution(queryKey.value1, value2);
-      partialUniValue1 += queryKey.uniTransformedValue;
-      partialUniValue2 += comparator.getUniTransformedValue(value2);
+      float value1 = queryKey.value1;
+      double transformedValue1 = queryKey.uniTransformedValue;
+      double transformedValue2 = comparator.getUniTransformedValue(value2);
+      conjunction += conjunctionScored.conjunctionContribution(value1, value2);
+      scannedUnion +=
+          conjunctionScored.conjunctionUnionContribution(comparator, value1, value2);
+      partialUniValue1 += transformedValue1;
+      partialUniValue2 += transformedValue2;
     }
 
     private double getSimilarity(double uniValue1, double uniValue2) {
@@ -454,6 +491,7 @@ public final class MergeSearch {
         double unscannedKeysUniValue, double uniValue1, double uniValue2) {
       return conjunctionScored.maxSimilarityFromPartialConjunction(
           conjunction,
+          scannedUnion,
           unscannedKeysUniValue,
           partialUniValue1,
           uniValue1,

@@ -242,4 +242,39 @@ class ComparatorTest {
             ComparatorFactory.createComparator(
                 "cosine", Map.of(), new ReciprocalComparatorNormalizer()));
   }
+
+  @Test
+  void minMultisetSimilarityForMergePartialConjunctionMapsMinimumSimilarityToSharedKeyFraction() {
+    for (String comparatorType : List.of("jaccard", "ruzicka", "gld", "ngld")) {
+      Comparator configuredComparator = comparator(comparatorType);
+      KeyShareBounded keyShareBound = (KeyShareBounded) configuredComparator;
+      double queryUniValue = 10.0;
+      double minNormalizedSimilarity = 0.5;
+      double bound =
+          keyShareBound.minMultisetSimilarityForMergePartialConjunction(
+              configuredComparator.getComparatorNormalizer(),
+              queryUniValue,
+              minNormalizedSimilarity);
+      assertTrue(bound >= 0.0 && bound <= 1.0, comparatorType);
+      assertEquals(
+          keyShareBound.getMinSharedKeyFraction(
+              queryUniValue,
+              configuredComparator
+                  .getComparatorNormalizer()
+                  .normalizedSimilarityValueToComparatorValue(minNormalizedSimilarity)),
+          bound,
+          EPSILON_9,
+          comparatorType);
+    }
+    assertFalse(l2Comparator() instanceof KeyShareBounded);
+    KeyShareBounded keyShareBound = (KeyShareBounded) comparator("ngld");
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            keyShareBound.minMultisetSimilarityForMergePartialConjunction(
+                comparator("ngld").getComparatorNormalizer(), 1.0, 1.5));
+    assertThrows(
+        NullPointerException.class,
+        () -> keyShareBound.minMultisetSimilarityForMergePartialConjunction(null, 1.0, 0.5));
+  }
 }

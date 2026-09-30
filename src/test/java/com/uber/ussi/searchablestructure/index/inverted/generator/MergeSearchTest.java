@@ -3,14 +3,20 @@ package com.uber.ussi.searchablestructure.index.inverted.generator;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import static com.uber.ussi.utils.MathUtils.EPSILON_9;
+
 import com.uber.ussi.comparator.Comparator;
 import com.uber.ussi.comparator.ComparatorFactory;
 import com.uber.ussi.comparator.ConjunctionScored;
+import com.uber.ussi.comparator.KeyShareBounded;
+import com.uber.ussi.comparatornormalizer.ComplementComparatorNormalizer;
+import com.uber.ussi.comparatornormalizer.IdentityComparatorNormalizer;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
 import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.utils.parallel.SharedMinSimilarity;
+import com.uber.ussi.utils.ConfigKeys;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -129,6 +135,81 @@ class MergeSearchTest {
             partialConjunctionPolicy(/* scoresFromConjunction */ true));
 
     assertEquals(List.of(1L, 2L, 3L, 4L), rowNums(results).stream().sorted().toList());
+  }
+
+  @Test
+  void sequenceMergePolicyMapsMinimumSimilarityToSharedKeyFraction() {
+    Comparator ngld = ngldComparator();
+    KeyShareBounded keyShareBound = (KeyShareBounded) ngld;
+    MergeSearch.PartialConjunctionPolicy policy =
+        MergeSearch.PartialConjunctionPolicy.forSequenceIndexedMultisetMerge(
+            keyShareBound,
+            ngld.getComparatorNormalizer(),
+            ComparatorFactory.createIndexedMultisetMergeConjunctionScored());
+
+    assertTrue(policy.hasCustomMinSimilarityForConjunction());
+    assertTrue(policy.usesPartialConjunction());
+    double queryUniValue = 10.0;
+    double minNormalizedSimilarity = 0.5;
+    assertEquals(
+        keyShareBound.minMultisetSimilarityForMergePartialConjunction(
+            ngld.getComparatorNormalizer(), queryUniValue, minNormalizedSimilarity),
+        policy.minSimilarityForPartialConjunction(queryUniValue, minNormalizedSimilarity),
+        EPSILON_9);
+  }
+
+  /**
+   * A sequence comparator is not {@link ConjunctionScored}, yet merge still bounds rows with an
+   * indexed multiset conjunction and verifies through the configured measure.
+   */
+  @Test
+  void searchVerifiesSequenceCandidatesWithIndexedMultisetPartialConjunction() {
+    Comparator ngld = ngldComparator();
+    LongTermsAndValues orderedQuery = sequence(1, 2, 3);
+    LongTermsAndValues indexedQuery =
+        LongTermsAndValuesTestFactory.create(
+            new long[] {1, 2, 3}, new float[] {1f, 1f, 1f}, 3.0);
+    Map<Long, LongTermsAndValues> rows = Map.of(1L, orderedQuery);
+    MergeSearch.QueryKey[] queryKeys = {
+      new MergeSearch.QueryKey(new InvertedList(new long[] {1}, new float[] {1f}), 1f, 1.0),
+      new MergeSearch.QueryKey(new InvertedList(new long[] {1}, new float[] {1f}), 1f, 1.0),
+      new MergeSearch.QueryKey(new InvertedList(new long[] {1}, new float[] {1f}), 1f, 1.0)
+    };
+    MergeSearch.PartialConjunctionPolicy policy =
+        MergeSearch.PartialConjunctionPolicy.forSequenceIndexedMultisetMerge(
+            (KeyShareBounded) ngld,
+            ngld.getComparatorNormalizer(),
+            ComparatorFactory.createIndexedMultisetMergeConjunctionScored());
+
+    List<RowNumAndSimilarity> results =
+        MergeSearch.search(
+            ngld,
+            orderedQuery,
+            indexedQuery,
+            null,
+            0.0f,
+            5,
+            queryKeys,
+            mergeContext(Map.of(1L, 3.0)),
+            (rowNum, metadataFilter) -> true,
+            /* scoresFromConjunction */ false,
+            rows::get,
+            new SharedMinSimilarity(0.0f),
+            policy);
+
+    assertEquals(List.of(1L), rowNums(results));
+    assertTrue(results.get(0).getSimilarity() > 0.99f);
+  }
+
+  private static LongTermsAndValues sequence(long... terms) {
+    return LongTermsAndValuesTestFactory.create(terms, new float[0], terms.length);
+  }
+
+  private static Comparator ngldComparator() {
+    return ComparatorFactory.createComparator(
+        "ngld",
+        Map.of(ConfigKeys.SEQUENCE_DISTANCE_TYPE, "levenshtein"),
+        new ComplementComparatorNormalizer());
   }
 
   private static MergeSearch.PartialConjunctionPolicy partialConjunctionPolicy(

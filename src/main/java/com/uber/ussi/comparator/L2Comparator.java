@@ -171,6 +171,7 @@ public class L2Comparator extends Comparator
   @Override
   public double maxSimilarityFromPartialConjunction(
       double conjunction,
+      double scannedUnion,
       double unscannedKeysUniValue,
       double partialUniValue1,
       double uniValue1,

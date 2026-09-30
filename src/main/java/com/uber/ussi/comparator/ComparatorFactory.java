@@ -9,6 +9,7 @@ import com.uber.ussi.comparator.signaturegenerator.SignatureGeneratorFactory;
 import com.uber.ussi.comparator.signaturegenerator.SignatureGeneratorFactory.SignatureGeneratorType;
 import com.uber.ussi.comparatornormalizer.ComparatorNormalizer;
 import com.uber.ussi.comparatornormalizer.ComparatorNormalizerFactory;
+import com.uber.ussi.comparatornormalizer.IdentityComparatorNormalizer;
 import com.uber.ussi.config.ConfigVocabulary;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.config.NamespaceConfigParams;
@@ -20,6 +21,15 @@ import javax.annotation.Nullable;
 public class ComparatorFactory {
 
   private ComparatorFactory() {}
+
+  /**
+   * Returns a {@link ConjunctionScored} measure over indexed term counts, for partial-conjunction
+   * bounds during sequence {@code spars_merge}. Verification still uses the configured sequence
+   * comparator on ordered sequences.
+   */
+  public static ConjunctionScored createIndexedMultisetMergeConjunctionScored() {
+    return new RuzickaComparator(new IdentityComparatorNormalizer());
+  }
 
   public static Comparator createComparator(
       String comparatorType,

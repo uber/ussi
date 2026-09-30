@@ -20,6 +20,15 @@ public interface ConjunctionScored {
   /** Returns what one key the query and an indexed row share adds to the conjunction. */
   double conjunctionContribution(float value1, float value2);
 
+  /**
+   * Returns what one shared key adds to the scanned union mass during partial conjunction merge.
+   * Measures that do not use a multiset union return 0.0.
+   */
+  default double conjunctionUnionContribution(
+      Comparator comparator, float value1, float value2) {
+    return 0.0;
+  }
+
   /** Returns the normalized similarity implied by a complete conjunction. */
   double similarityFromConjunction(
       double conjunction,
@@ -29,11 +38,13 @@ public interface ConjunctionScored {
       double uniValue2);
 
   /**
-   * Returns the highest normalized similarity still reachable from a partial conjunction, where
-   * {@code unscannedKeysUniValue} bounds what the query's not-yet-merged keys can add.
+   * Returns the highest normalized similarity still reachable from a partial conjunction. For
+   * multiset measures, {@code scannedUnion} is the union mass accumulated over shared keys so
+   * far. For other measures it is unused.
    */
   double maxSimilarityFromPartialConjunction(
       double conjunction,
+      double scannedUnion,
       double unscannedKeysUniValue,
       double partialUniValue1,
       double uniValue1,

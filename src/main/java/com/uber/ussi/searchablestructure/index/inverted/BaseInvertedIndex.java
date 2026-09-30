@@ -11,7 +11,9 @@ import com.carrotsearch.hppc.cursors.LongObjectCursor;
 import com.uber.ussi.MemoryFootprint;
 import com.uber.ussi.ProcessorAllowance;
 import com.uber.ussi.config.NamespaceConfig;
+import com.uber.ussi.comparator.ComparatorFactory;
 import com.uber.ussi.comparator.ConjunctionScored;
+import com.uber.ussi.comparator.KeyShareBounded;
 import com.uber.ussi.config.NamespaceConfig.CandidateGeneratorType;
 import com.uber.ussi.config.NamespaceConfig.PopularTermDiscardScope;
 import com.uber.ussi.entity.meta.LongMeta;
@@ -169,7 +171,8 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
     this.storesMergePostingValues =
         scoresFromConjunction
             || (partialConjunctionPolicy.usesPartialConjunction()
-                && indexType.conjunctionDeterminesSimilarity(recordType));
+                && (indexType.conjunctionDeterminesSimilarity(recordType)
+                    || recordType == RecordType.SEQUENCE));
     this.maxFractionIdsPerTerm = parseMaxFractionIdsPerTerm(namespaceConfig);
     validateRows();
     this.discardedTerms =
@@ -208,7 +211,7 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
   /**
    * {@code spars_merge} accumulates partial conjunctions only when the configured comparator
    * implements {@link ConjunctionScored}. Otherwise merge aligns rows on shared keys and scores each
-   * candidate through the comparator, as {@code spars} does.
+   * candidate through the comparator.
    */
   private static MergeSearch.PartialConjunctionPolicy partialConjunctionPolicyForMerge(
       IndexType indexType,
@@ -220,9 +223,16 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
           (ConjunctionScored) comparator);
     }
     if (indexType.conjunctionDeterminesSimilarity(recordType)
-        && comparator instanceof ConjunctionScored) {
-      return MergeSearch.PartialConjunctionPolicy.fromConfiguredComparator(
-          (ConjunctionScored) comparator);
+        && comparator instanceof ConjunctionScored conjunctionScored) {
+      return MergeSearch.PartialConjunctionPolicy.fromConfiguredComparator(conjunctionScored);
+    }
+    if (indexType == IndexType.INVERTED_TERM
+        && recordType == RecordType.SEQUENCE
+        && comparator instanceof KeyShareBounded keyShareBound) {
+      return MergeSearch.PartialConjunctionPolicy.forSequenceIndexedMultisetMerge(
+          keyShareBound,
+          comparator.getComparatorNormalizer(),
+          ComparatorFactory.createIndexedMultisetMergeConjunctionScored());
     }
     return MergeSearch.PartialConjunctionPolicy.none();
   }
@@ -327,6 +337,11 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
   final long[] getRowNumsForKeyForTests(int shard, long key) {
     InvertedList invertedList = keyToInvertedListByShard.get(shard).get(key);
     return invertedList == null ? EMPTY_ROW_NUMS : invertedList.getRowNums().clone();
+  }
+
+  final float[] getValuesForKeyForTests(int shard, long key) {
+    InvertedList invertedList = keyToInvertedListByShard.get(shard).get(key);
+    return invertedList == null ? EMPTY_VALUES : invertedList.getValues().clone();
   }
 
   /**

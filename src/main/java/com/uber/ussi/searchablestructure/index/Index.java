@@ -15,6 +15,7 @@ import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.SearchableStructure;
 import com.uber.ussi.searchablestructure.utils.metadata.MetadataFilteringStrategy;
+import com.uber.ussi.searchablestructure.utils.search.SearchRequests;
 import java.util.List;
 import java.util.Objects;
 
@@ -78,11 +79,23 @@ public abstract class Index implements SearchableStructure, AutoCloseable {
   public void close() {}
 
   @Override
-  public abstract List<RowNumAndSimilarity> getNearestNeighborRowNums(
-      int k, LongTermsAndValues record, MetaFilter metadataFilter, float minSimilarity);
+  public final List<RowNumAndSimilarity> getNearestNeighborRowNums(
+      int k, LongTermsAndValues record, MetaFilter metadataFilter, float minSimilarity) {
+    int numResults = SearchRequests.nearestNeighborResultLimit(namespaceConfig, k);
+    return searchNearestNeighbors(numResults, record, metadataFilter, minSimilarity);
+  }
 
   @Override
-  public abstract List<RowNumAndSimilarity> getSimilarRowNums(
+  public final List<RowNumAndSimilarity> getSimilarRowNums(
+      float minSimilarity, LongTermsAndValues record, MetaFilter metadataFilter) {
+    SearchRequests.requireMinSimilarityInUnitInterval(minSimilarity);
+    return searchSimilarRowNums(minSimilarity, record, metadataFilter);
+  }
+
+  protected abstract List<RowNumAndSimilarity> searchNearestNeighbors(
+      int numResults, LongTermsAndValues record, MetaFilter metadataFilter, float minSimilarity);
+
+  protected abstract List<RowNumAndSimilarity> searchSimilarRowNums(
       float minSimilarity, LongTermsAndValues record, MetaFilter metadataFilter);
 
   protected final boolean hasMetadataFilter(MetaFilter metadataFilter) {

@@ -12,6 +12,7 @@ import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.SearchableStructure;
 import com.uber.ussi.searchablestructure.utils.metadata.MetadataFilteringModule;
+import com.uber.ussi.searchablestructure.utils.search.SearchRequests;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -106,20 +107,26 @@ public abstract class Cache implements SearchableStructure {
   @Override
   public final List<RowNumAndSimilarity> getNearestNeighborRowNums(
       int k, LongTermsAndValues record, MetaFilter metadataFilter, float minSimilarity) {
-    return getNearestNeighborRowNumsLocked(k, record, metadataFilter, minSimilarity);
+    int numResults = SearchRequests.nearestNeighborResultLimit(namespaceConfig, k);
+    return getNearestNeighborRowNumsLocked(numResults, record, metadataFilter, minSimilarity);
   }
 
   @Override
   public final List<RowNumAndSimilarity> getSimilarRowNums(
       float minSimilarity, LongTermsAndValues record, MetaFilter metadataFilter) {
-    return getSimilarRowNumsLocked(minSimilarity, record, metadataFilter);
+    SearchRequests.requireMinSimilarityInUnitInterval(minSimilarity);
+    int maxResults = SearchRequests.similarSearchResultLimit(namespaceConfig);
+    return getSimilarRowNumsLocked(minSimilarity, record, metadataFilter, maxResults);
   }
 
   protected abstract List<RowNumAndSimilarity> getNearestNeighborRowNumsLocked(
-      int k, LongTermsAndValues record, MetaFilter metadataFilter, float minSimilarity);
+      int numResults, LongTermsAndValues record, MetaFilter metadataFilter, float minSimilarity);
 
   protected abstract List<RowNumAndSimilarity> getSimilarRowNumsLocked(
-      float minSimilarity, LongTermsAndValues record, MetaFilter metadataFilter);
+      float minSimilarity,
+      LongTermsAndValues record,
+      MetaFilter metadataFilter,
+      int maxResults);
 
   protected final boolean doesMatchMetaFilter(long rowNum, MetaFilter metadataFilter) {
     return metadataFilteringModule.doesMatch(rowNum, metadataFilter);

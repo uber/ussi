@@ -12,6 +12,7 @@ import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.index.Index;
 import com.uber.ussi.searchablestructure.utils.inverted.PopularTermDiscardPolicy;
+import com.uber.ussi.searchablestructure.utils.search.SearchRequests;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
 import java.util.List;
 
@@ -54,12 +55,8 @@ public final class HybridIndex extends Index {
   }
 
   @Override
-  public List<RowNumAndSimilarity> getNearestNeighborRowNums(
-      int k, LongTermsAndValues record, MetaFilter metadataFilter, float minSimilarity) {
-    if (k <= 0) {
-      throw new IllegalArgumentException("k must be greater than 0.");
-    }
-    int maxResults = Math.min(k, namespaceConfig.getMaxNumSimilarities());
+  protected List<RowNumAndSimilarity> searchNearestNeighbors(
+      int maxResults, LongTermsAndValues record, MetaFilter metadataFilter, float minSimilarity) {
     boolean queryUsesExactIndex =
         record.termsLength() <= InvertedHybridConfiguration.TERM_KEYING_CUTOFF;
     Index firstIndex = queryUsesExactIndex ? termIndex : signatureIndex;
@@ -93,11 +90,9 @@ public final class HybridIndex extends Index {
   }
 
   @Override
-  public List<RowNumAndSimilarity> getSimilarRowNums(
+  protected List<RowNumAndSimilarity> searchSimilarRowNums(
       float minSimilarity, LongTermsAndValues record, MetaFilter metadataFilter) {
-    if (minSimilarity < 0.0f || minSimilarity > 1.0f) {
-      throw new IllegalArgumentException("minSimilarity must be in the range [0.0, 1.0].");
-    }
+    int maxResults = SearchRequests.similarSearchResultLimit(namespaceConfig);
     List<RowNumAndSimilarity> exactResults =
         maySearchIndex(/* exactIndex */ true, record, minSimilarity)
             ? termIndex.getSimilarRowNums(minSimilarity, record, metadataFilter)
@@ -106,7 +101,7 @@ public final class HybridIndex extends Index {
         maySearchIndex(/* exactIndex */ false, record, minSimilarity)
             ? signatureIndex.getSimilarRowNums(minSimilarity, record, metadataFilter)
             : List.of();
-    return mergeResults(exactResults, signatureResults, namespaceConfig.getMaxNumSimilarities());
+    return mergeResults(exactResults, signatureResults, maxResults);
   }
 
   @Override

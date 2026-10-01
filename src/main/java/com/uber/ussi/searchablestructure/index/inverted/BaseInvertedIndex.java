@@ -10,6 +10,8 @@ import com.carrotsearch.hppc.cursors.LongIntCursor;
 import com.carrotsearch.hppc.cursors.LongObjectCursor;
 import com.uber.ussi.MemoryFootprint;
 import com.uber.ussi.ProcessorAllowance;
+import com.uber.ussi.comparator.ComparatorFactory;
+import com.uber.ussi.comparator.ComparatorType;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.config.NamespaceConfig.CandidateGeneratorType;
 import com.uber.ussi.config.NamespaceConfig.PopularTermDiscardScope;
@@ -160,10 +162,14 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
         candidateGeneratorType == CandidateGeneratorType.SPARS_MERGE
             && indexType.conjunctionDeterminesSimilarity(recordType)
             && popularTermDiscardScope == PopularTermDiscardScope.CANDIDATES_AND_VERIFICATION;
+    ComparatorType comparatorType =
+        Objects.requireNonNull(
+            ComparatorFactory.getComparatorType(namespaceConfig),
+            "namespaceConfig comparatorType is null.");
     this.partialConjunctionPolicy =
         candidateGeneratorType == CandidateGeneratorType.SPARS_MERGE
-            ? MergeSearch.PartialConjunctionPolicy.forInvertedMerge(
-                indexType, recordType, comparator, scoresFromConjunction)
+            ? SparsMergePartialConjunctionPolicies.create(
+                indexType, recordType, comparatorType, comparator, scoresFromConjunction)
             : MergeSearch.PartialConjunctionPolicy.none();
     this.storesMergePostingValues =
         scoresFromConjunction

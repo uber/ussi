@@ -12,24 +12,59 @@ import java.util.Set;
  */
 public enum ComparatorType implements ConfigVocabulary {
   /** Generalized Levenshtein distance between two sequences. */
-  GLD(Generators.CONSISTENT_WEIGHTED_SAMPLING, /* comparesSequences */ true),
+  GLD(
+      Generators.CONSISTENT_WEIGHTED_SAMPLING,
+      /* comparesSequences */ true,
+      /* boundsKeyShare */ true,
+      /* similarityFromConfiguredConjunction */ false,
+      /* similarityFromDotProduct */ false),
 
-  JACCARD(Set.of(SignatureGeneratorType.MINHASH), /* comparesSequences */ false),
+  JACCARD(
+      Set.of(SignatureGeneratorType.MINHASH),
+      /* comparesSequences */ false,
+      /* boundsKeyShare */ true,
+      /* similarityFromConfiguredConjunction */ true,
+      /* similarityFromDotProduct */ false),
 
-  L2(Set.of(), /* comparesSequences */ false),
+  L2(
+      Set.of(),
+      /* comparesSequences */ false,
+      /* boundsKeyShare */ false,
+      /* similarityFromConfiguredConjunction */ true,
+      /* similarityFromDotProduct */ true),
 
   /** Normalized generalized Levenshtein distance between two sequences. */
-  NGLD(Generators.CONSISTENT_WEIGHTED_SAMPLING, /* comparesSequences */ true),
+  NGLD(
+      Generators.CONSISTENT_WEIGHTED_SAMPLING,
+      /* comparesSequences */ true,
+      /* boundsKeyShare */ true,
+      /* similarityFromConfiguredConjunction */ false,
+      /* similarityFromDotProduct */ false),
 
-  RUZICKA(Generators.CONSISTENT_WEIGHTED_SAMPLING, /* comparesSequences */ false);
+  RUZICKA(
+      Generators.CONSISTENT_WEIGHTED_SAMPLING,
+      /* comparesSequences */ false,
+      /* boundsKeyShare */ true,
+      /* similarityFromConfiguredConjunction */ true,
+      /* similarityFromDotProduct */ false);
 
   private final Set<SignatureGeneratorType> supportedSignatureGeneratorTypes;
   private final boolean comparesSequences;
+  private final boolean boundsKeyShare;
+  private final boolean similarityFromConfiguredConjunction;
+  private final boolean similarityFromDotProduct;
 
   ComparatorType(
-      Set<SignatureGeneratorType> supportedSignatureGeneratorTypes, boolean comparesSequences) {
+      Set<SignatureGeneratorType> supportedSignatureGeneratorTypes,
+      boolean comparesSequences,
+      boolean boundsKeyShare,
+      boolean similarityFromConfiguredConjunction,
+      boolean similarityFromDotProduct) {
     this.supportedSignatureGeneratorTypes = supportedSignatureGeneratorTypes;
     this.comparesSequences = comparesSequences;
+    this.boundsKeyShare = boundsKeyShare;
+    this.similarityFromConfiguredConjunction = similarityFromConfiguredConjunction;
+    this.similarityFromDotProduct = similarityFromDotProduct;
   }
 
   public Set<SignatureGeneratorType> getSupportedSignatureGeneratorTypes() {
@@ -43,6 +78,24 @@ public enum ComparatorType implements ConfigVocabulary {
    */
   public boolean comparesSequences() {
     return comparesSequences;
+  }
+
+  /** Returns whether this measure can bound how much of a record's keys a candidate must share. */
+  public boolean boundsKeyShare() {
+    return boundsKeyShare;
+  }
+
+  /**
+   * Returns whether merge may treat the configured comparator's conjunction as the row's
+   * similarity on structures where conjunction determines similarity.
+   */
+  public boolean similarityFromConfiguredConjunction() {
+    return similarityFromConfiguredConjunction;
+  }
+
+  /** Returns whether this measure's similarity is determined by a dot product and two Uni values. */
+  public boolean similarityFromDotProduct() {
+    return similarityFromDotProduct;
   }
 
   /**

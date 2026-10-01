@@ -9,8 +9,10 @@ import com.carrotsearch.hppc.cursors.IntCursor;
 import com.carrotsearch.hppc.cursors.LongCursor;
 import com.carrotsearch.hppc.cursors.LongObjectCursor;
 import com.uber.ussi.MemoryFootprint;
-import com.uber.ussi.comparator.ComparatorCapabilities;
+import com.uber.ussi.comparator.ComparatorFactory;
+import com.uber.ussi.comparator.ComparatorType;
 import com.uber.ussi.comparator.DotProductScored;
+import com.uber.ussi.config.ConfigVocabulary;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.meta.MetaFilter;
@@ -62,7 +64,13 @@ public final class MatrixIndex extends RowStoringIndex {
       LongObjectHashMap<LongMeta> rowNumToMetaMap,
       int maxChunkValues) {
     super(namespaceConfig, rowNumToTermsAndValuesMap, rowNumToMetaMap);
-    this.dotProductScored = ComparatorCapabilities.requireDotProductScored(comparator);
+    ComparatorType comparatorType =
+        ConfigVocabulary.fromParamValue(
+            ComparatorType.class, namespaceConfig.getComparatorType());
+    if (comparatorType == null) {
+      throw new IllegalArgumentException("The namespace comparatorType is not recognized.");
+    }
+    this.dotProductScored = ComparatorFactory.dotProductScored(comparator, comparatorType);
     this.maxChunkValues = maxChunkValues;
     MatrixData matrixData = buildMatrixData();
     this.dimension = matrixData.dimension;

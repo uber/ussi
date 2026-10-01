@@ -77,6 +77,57 @@ public class ComparatorFactory {
     }
   }
 
+  /** Returns the configured comparator type, or null when the param names none. */
+  @Nullable
+  public static ComparatorType getComparatorType(NamespaceConfig namespaceConfig) {
+    return ConfigVocabulary.fromParamValue(
+        ComparatorType.class, namespaceConfig.getComparatorType());
+  }
+
+  /**
+   * Returns the configured comparator as a {@link ConjunctionScored} measure. The {@code
+   * comparatorType} must state that the configured measure supports merge conjunction on itself.
+   */
+  public static ConjunctionScored conjunctionScored(
+      Comparator comparator, ComparatorType comparatorType) {
+    if (!comparatorType.similarityFromConfiguredConjunction()) {
+      throw new IllegalArgumentException(
+          String.format(
+              "Comparator type %s does not determine similarity from a merge conjunction.",
+              comparatorType.getParamValue()));
+    }
+    return (ConjunctionScored) comparator;
+  }
+
+  /**
+   * Returns the configured comparator as a {@link KeyShareBounded} measure. The {@code
+   * comparatorType} must state that the measure bounds key share.
+   */
+  public static KeyShareBounded keyShareBounded(
+      Comparator comparator, ComparatorType comparatorType) {
+    if (!comparatorType.boundsKeyShare()) {
+      throw new IllegalArgumentException(
+          String.format(
+              "Comparator type %s does not bound key share.", comparatorType.getParamValue()));
+    }
+    return (KeyShareBounded) comparator;
+  }
+
+  /**
+   * Returns the configured comparator as a {@link DotProductScored} measure. The {@code
+   * comparatorType} must state that similarity comes from a dot product.
+   */
+  public static DotProductScored dotProductScored(
+      Comparator comparator, ComparatorType comparatorType) {
+    if (!comparatorType.similarityFromDotProduct()) {
+      throw new IllegalArgumentException(
+          String.format(
+              "Comparator type %s does not derive similarity from a dot product.",
+              comparatorType.getParamValue()));
+    }
+    return (DotProductScored) comparator;
+  }
+
   /**
    * Returns the configured edit distance, defaulting to {@link SequenceDistanceType#LEVENSHTEIN}
    * when the param is absent.

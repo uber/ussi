@@ -37,7 +37,7 @@ public final class ScanIndex extends RowStoringIndex {
             MetadataFilteringStrategy.IN_FILTERING,
             this::getMatchingRowNumsIfUnderPreFilteringLimit,
             this::getPostFilteringMaxResults,
-            this::matchesMetaFilter);
+            this::doesMatchMetaFilter);
   }
 
   @Override
@@ -138,7 +138,7 @@ public final class ScanIndex extends RowStoringIndex {
     if (isDeleted(termsAndValues)) {
       return;
     }
-    if (metadataFilter != null && !matchesMetaFilter(rowNum, metadataFilter)) {
+    if (metadataFilter != null && !doesMatchMetaFilter(rowNum, metadataFilter)) {
       return;
     }
     float tightened =

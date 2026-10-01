@@ -69,7 +69,7 @@ public final class FilteredSearch {
         currentMinSimilarity = publishedMinSimilarity;
         candidates.setMinSimilarity(currentMinSimilarity);
       }
-      if (!rowFilter.canScore(rowNum, metadataFilter)) {
+      if (!rowFilter.doesPassRowFilter(rowNum, metadataFilter)) {
         continue;
       }
       LongTermsAndValues termsAndValues2 = verificationRowLookup.apply(rowNum);

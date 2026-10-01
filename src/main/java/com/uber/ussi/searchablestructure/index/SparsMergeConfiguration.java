@@ -38,9 +38,9 @@ public final class SparsMergeConfiguration {
       IndexType indexType,
       RecordType recordType,
       ComparatorType comparatorType,
-      boolean doesMergeScoreFromAccumulatedConjunction) {
+      boolean mergeScoresFromAccumulatedConjunction) {
     Objects.requireNonNull(recordType, "recordType is null.");
-    if (doesMergeScoreFromAccumulatedConjunction) {
+    if (mergeScoresFromAccumulatedConjunction) {
       return true;
     }
     return indexType.doesConjunctionDetermineSimilarity(recordType)

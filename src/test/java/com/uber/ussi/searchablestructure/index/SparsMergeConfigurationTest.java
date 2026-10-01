@@ -31,19 +31,19 @@ class SparsMergeConfigurationTest {
             IndexType.INVERTED_TERM,
             RecordType.SPARSE,
             ComparatorType.JACCARD,
-            /* doesMergeScoreFromAccumulatedConjunction */ true));
+            /* mergeScoresFromAccumulatedConjunction */ true));
     assertTrue(
         SparsMergeConfiguration.doesPartialConjunctionUseConfiguredComparator(
             IndexType.INVERTED_TERM,
             RecordType.SPARSE,
             ComparatorType.JACCARD,
-            /* doesMergeScoreFromAccumulatedConjunction */ false));
+            /* mergeScoresFromAccumulatedConjunction */ false));
     assertFalse(
         SparsMergeConfiguration.doesPartialConjunctionUseConfiguredComparator(
             IndexType.INVERTED_TERM,
             RecordType.SEQUENCE,
             ComparatorType.NGLD,
-            /* doesMergeScoreFromAccumulatedConjunction */ false));
+            /* mergeScoresFromAccumulatedConjunction */ false));
   }
 
   @Test

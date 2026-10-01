@@ -108,10 +108,10 @@ public final class MergeSearch {
   }
 
   /**
-   * Generates and scores candidates for {@code query}. When {@code scoresFromConjunction} is set,
-   * the accumulated conjunction is the row's exact score and {@code verificationRowLookup} is never
-   * consulted. Length filtering reads the query's uni value from {@code indexedQuery}, the form the
-   * indexed rows are in.
+   * Generates and scores candidates for {@code query}. When {@code mergeScoresFromAccumulatedConjunction}
+   * is set, the accumulated conjunction is the row's exact score and {@code verificationRowLookup} is
+   * never consulted. Length filtering reads the query's uni value from {@code indexedQuery}, the form
+   * the indexed rows are in.
    */
   public static List<RowNumAndSimilarity> search(
       Comparator comparator,
@@ -123,7 +123,7 @@ public final class MergeSearch {
       QueryKey[] queryKeys,
       Context context,
       RowFilter rowFilter,
-      boolean scoresFromConjunction,
+      boolean mergeScoresFromAccumulatedConjunction,
       LongFunction<LongTermsAndValues> verificationRowLookup,
       SharedMinSimilarity sharedMinSimilarity,
       PartialConjunctionPolicy partialConjunctionPolicy) {
@@ -134,7 +134,7 @@ public final class MergeSearch {
         partialConjunctionPolicy == null
             ? PartialConjunctionPolicy.none()
             : partialConjunctionPolicy;
-    boolean scoreFromAccumulatedConjunction = scoresFromConjunction;
+    boolean scoreFromAccumulatedConjunction = mergeScoresFromAccumulatedConjunction;
     boolean pruneByPartialConjunction =
         !scoreFromAccumulatedConjunction && policy.doesUsePartialConjunction();
     ConjunctionScored conjunctionScored = null;
@@ -198,7 +198,7 @@ public final class MergeSearch {
       }
       advancedKeyIndexes.clear();
       boolean mayReachMinSimilarity =
-          mergeRow(
+          doesRowMayReachMinSimilarity(
               frontier,
               rowNum,
               conjunction,
@@ -211,7 +211,7 @@ public final class MergeSearch {
       for (int index = 0; index < advancedKeyIndexes.size(); ++index) {
         frontier.pushHead(advancedKeyIndexes.get(index));
       }
-      if (!mayReachMinSimilarity || !rowFilter.canScore(rowNum, metadataFilter)) {
+      if (!mayReachMinSimilarity || !rowFilter.doesPassRowFilter(rowNum, metadataFilter)) {
         continue;
       }
 
@@ -240,7 +240,7 @@ public final class MergeSearch {
    * unscannedKeysUniValue} means the caller scores through the comparator, so no conjunction is
    * computed for pruning.
    */
-  private static boolean mergeRow(
+  private static boolean doesRowMayReachMinSimilarity(
       Frontier frontier,
       long rowNum,
       @Nullable Conjunction conjunction,

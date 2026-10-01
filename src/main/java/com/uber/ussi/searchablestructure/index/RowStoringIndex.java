@@ -159,7 +159,7 @@ public abstract class RowStoringIndex extends Index {
     return bytes;
   }
 
-  protected final boolean matchesMetaFilter(long rowNum, MetaFilter metadataFilter) {
+  protected final boolean doesMatchMetaFilter(long rowNum, MetaFilter metadataFilter) {
     return metadataFilteringModule.doesMatch(rowNum, metadataFilter);
   }
 

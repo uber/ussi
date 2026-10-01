@@ -48,7 +48,7 @@ public final class ScanCache extends Cache {
         maxResults,
         minSimilarity,
         (rowNum, termsAndValues, rows, sharedMinSimilarity) -> {
-          if (!matchesMetaFilter(rowNum, metadataFilter)) {
+          if (!doesMatchMetaFilter(rowNum, metadataFilter)) {
             return;
           }
           float tightened =

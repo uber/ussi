@@ -64,7 +64,7 @@ public class MetaFilter {
 
   public boolean doesMatch(@NotNull LongMeta meta) {
     for (LongHashSet longMetadataFilterSet : longMetadataFilter) {
-      if (!meta.intersects(longMetadataFilterSet)) {
+      if (!meta.doesIntersect(longMetadataFilterSet)) {
         return false;
       }
     }

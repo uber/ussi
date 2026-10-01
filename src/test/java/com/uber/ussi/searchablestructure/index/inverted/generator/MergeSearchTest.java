@@ -45,12 +45,12 @@ class MergeSearchTest {
             queryKeys,
             mergeContext(Map.of(1L, 2.0)),
             (rowNum, metadataFilter) -> true,
-            /* scoresFromConjunction */ true,
+            /* mergeScoresFromAccumulatedConjunction */ true,
             rowNum -> {
               throw new AssertionError("verification lookup should not run");
             },
             new SharedMinSimilarity(0.0f),
-            partialConjunctionPolicy(/* scoresFromConjunction */ true));
+            partialConjunctionPolicy(/* mergeScoresFromAccumulatedConjunction */ true));
 
     assertEquals(List.of(1L), rowNums(results));
     assertTrue(results.get(0).getSimilarity() > 0.99f);
@@ -75,10 +75,10 @@ class MergeSearchTest {
             queryKeys,
             mergeContext(),
             (rowNum, metadataFilter) -> true,
-            /* scoresFromConjunction */ false,
+            /* mergeScoresFromAccumulatedConjunction */ false,
             rows::get,
             new SharedMinSimilarity(0.0f),
-            partialConjunctionPolicy(/* scoresFromConjunction */ false));
+            partialConjunctionPolicy(/* mergeScoresFromAccumulatedConjunction */ false));
 
     assertEquals(List.of(1L), rowNums(results));
   }
@@ -102,10 +102,10 @@ class MergeSearchTest {
             queryKeys,
             mergeContext(),
             (rowNum, metadataFilter) -> true,
-            /* scoresFromConjunction */ false,
+            /* mergeScoresFromAccumulatedConjunction */ false,
             rowNum -> null,
             new SharedMinSimilarity(0.0f),
-            partialConjunctionPolicy(/* scoresFromConjunction */ false));
+            partialConjunctionPolicy(/* mergeScoresFromAccumulatedConjunction */ false));
 
     assertEquals(List.of(), rowNums(results));
   }
@@ -130,10 +130,10 @@ class MergeSearchTest {
             queryKeys,
             mergeContext(tiedUniValues),
             (rowNum, metadataFilter) -> true,
-            /* scoresFromConjunction */ true,
+            /* mergeScoresFromAccumulatedConjunction */ true,
             rowNum -> jaccard(new long[] {10}, 1),
             new SharedMinSimilarity(0.0f),
-            partialConjunctionPolicy(/* scoresFromConjunction */ true));
+            partialConjunctionPolicy(/* mergeScoresFromAccumulatedConjunction */ true));
 
     assertEquals(List.of(1L, 2L, 3L, 4L), rowNums(results).stream().sorted().toList());
   }
@@ -193,7 +193,7 @@ class MergeSearchTest {
             queryKeys,
             mergeContext(Map.of(1L, 3.0)),
             (rowNum, metadataFilter) -> true,
-            /* scoresFromConjunction */ false,
+            /* mergeScoresFromAccumulatedConjunction */ false,
             rows::get,
             new SharedMinSimilarity(0.0f),
             policy);
@@ -214,7 +214,7 @@ class MergeSearchTest {
   }
 
   private static MergeSearch.PartialConjunctionPolicy partialConjunctionPolicy(
-      boolean scoresFromConjunction) {
+      boolean mergeScoresFromAccumulatedConjunction) {
     ConjunctionScored conjunctionScored =
         ComparatorFactory.conjunctionScored(COMPARATOR, ComparatorType.JACCARD);
     return MergeSearch.PartialConjunctionPolicy.fromConfiguredComparator(conjunctionScored);

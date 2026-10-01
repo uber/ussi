@@ -218,8 +218,8 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
       return;
     }
     if (recordType != null
-        && !indexType.conjunctionDeterminesSimilarity(recordType)
-        && comparatorType.getSupportedSignatureGeneratorTypes().isEmpty()) {
+        && SparsMergeConfiguration.mergeRequiresSignatureGeneratingComparator(
+            indexType, recordType, comparatorType)) {
       violations.add(
           String.format(
               "%s=%s is not supported with comparatorType %s for indexType %s.",

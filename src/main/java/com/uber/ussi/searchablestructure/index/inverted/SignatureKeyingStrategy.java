@@ -6,7 +6,6 @@ import com.uber.ussi.comparator.ComparatorFactory;
 import com.uber.ussi.comparator.ComparatorType;
 import com.uber.ussi.comparator.KeyShareBounded;
 import com.uber.ussi.comparator.signaturegenerator.SignatureGenerator;
-import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.error.IndexCreationError;
 import com.uber.ussi.utils.MathUtils;
@@ -38,16 +37,14 @@ final class SignatureKeyingStrategy {
   }
 
   /**
-   * Returns the strategy a signature-keyed structure indexes with, throwing {@link
-   * IndexCreationError} when the configured comparator cannot supply one.
+   * Returns a strategy for the given comparator type, comparator, and signature generator.
+   * Throws {@link IndexCreationError} when the type does not bound key share or the generator is
+   * absent.
    */
   static SignatureKeyingStrategy create(
-      NamespaceConfig namespaceConfig, ComparatorType comparatorType, Comparator comparator) {
-    Objects.requireNonNull(namespaceConfig, "namespaceConfig is null.");
+      ComparatorType comparatorType, Comparator comparator, SignatureGenerator signatureGenerator) {
     Objects.requireNonNull(comparatorType, "comparatorType is null.");
     Objects.requireNonNull(comparator, "comparator is null.");
-    SignatureGenerator signatureGenerator =
-        ComparatorFactory.createSignatureGenerator(namespaceConfig);
     if (!comparatorType.boundsKeyShare() || signatureGenerator == null) {
       throw new IndexCreationError(
           "A signature-keyed index requires a comparator with a configured signature generator.");

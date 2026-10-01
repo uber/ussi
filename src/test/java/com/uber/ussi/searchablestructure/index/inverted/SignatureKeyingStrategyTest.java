@@ -92,25 +92,24 @@ class SignatureKeyingStrategyTest {
    */
   @Test
   void aComparatorWithoutAConfiguredGeneratorCannotKeyBySignatures() {
-    NamespaceConfig config = config("jaccard", "identity", Map.of());
-
     assertThrows(
         IndexCreationError.class,
         () ->
             SignatureKeyingStrategy.create(
-                config, ComparatorType.JACCARD, comparator("jaccard", "identity")));
+                ComparatorType.JACCARD, comparator("jaccard", "identity"), null));
   }
 
   /** A measure that cannot say what its signatures would collide at cannot key by them either. */
   @Test
   void aComparatorThatBoundsNoSignaturesCannotKeyBySignatures() {
-    NamespaceConfig config = config("l2", "reciprocal", Map.of());
+    SignatureGenerator generator =
+        SignatureGeneratorFactory.createSignatureGenerator(SignatureGeneratorType.MINHASH);
 
     assertThrows(
         IndexCreationError.class,
         () ->
             SignatureKeyingStrategy.create(
-                config, ComparatorType.L2, comparator("l2", "reciprocal")));
+                ComparatorType.L2, comparator("l2", "reciprocal"), generator));
   }
 
   @Test
@@ -119,8 +118,9 @@ class SignatureKeyingStrategyTest {
         config("jaccard", "identity", Map.of(ConfigKeys.SIGNATURE_GENERATOR, "minhash"));
     Comparator comparator = comparator("jaccard", "identity");
 
+    SignatureGenerator generator = ComparatorFactory.createSignatureGenerator(config);
     SignatureKeyingStrategy strategy =
-        SignatureKeyingStrategy.create(config, ComparatorType.JACCARD, comparator);
+        SignatureKeyingStrategy.create(ComparatorType.JACCARD, comparator, generator);
 
     assertEquals(
         16,
@@ -133,10 +133,7 @@ class SignatureKeyingStrategyTest {
       Comparator comparator, SignatureGeneratorType generatorType) {
     SignatureGenerator generator =
         SignatureGeneratorFactory.createSignatureGenerator(generatorType);
-    return new SignatureKeyingStrategy(
-        comparator,
-        ComparatorFactory.keyShareBounded(comparator, ComparatorType.JACCARD),
-        generator);
+    return SignatureKeyingStrategy.create(ComparatorType.JACCARD, comparator, generator);
   }
 
   private static Comparator comparator(String comparatorType, String normalizerType) {

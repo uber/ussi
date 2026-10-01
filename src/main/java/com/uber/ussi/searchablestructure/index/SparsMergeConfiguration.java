@@ -73,4 +73,20 @@ public final class SparsMergeConfiguration {
         && recordType == RecordType.SEQUENCE
         && comparatorType.boundsKeyShare();
   }
+
+  /**
+   * Returns whether {@code spars_merge} on this index shape may bound similarity without the merged
+   * conjunction being the row's score, while the configured {@link ComparatorType} supports no
+   * signature generator. Such a pairing cannot verify candidates on a signature-keyed structure.
+   */
+  public static boolean mergeRequiresSignatureGeneratingComparator(
+      IndexType indexType, RecordType recordType, ComparatorType comparatorType) {
+    Objects.requireNonNull(indexType, "indexType is null.");
+    Objects.requireNonNull(recordType, "recordType is null.");
+    Objects.requireNonNull(comparatorType, "comparatorType is null.");
+    if (indexType.conjunctionDeterminesSimilarity(recordType)) {
+      return false;
+    }
+    return comparatorType.getSupportedSignatureGeneratorTypes().isEmpty();
+  }
 }

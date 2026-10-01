@@ -96,7 +96,9 @@ class SignatureKeyingStrategyTest {
 
     assertThrows(
         IndexCreationError.class,
-        () -> SignatureKeyingStrategy.create(config, comparator("jaccard", "identity")));
+        () ->
+            SignatureKeyingStrategy.create(
+                config, ComparatorType.JACCARD, comparator("jaccard", "identity")));
   }
 
   /** A measure that cannot say what its signatures would collide at cannot key by them either. */
@@ -106,7 +108,9 @@ class SignatureKeyingStrategyTest {
 
     assertThrows(
         IndexCreationError.class,
-        () -> SignatureKeyingStrategy.create(config, comparator("l2", "reciprocal")));
+        () ->
+            SignatureKeyingStrategy.create(
+                config, ComparatorType.L2, comparator("l2", "reciprocal")));
   }
 
   @Test
@@ -115,7 +119,8 @@ class SignatureKeyingStrategyTest {
         config("jaccard", "identity", Map.of(ConfigKeys.SIGNATURE_GENERATOR, "minhash"));
     Comparator comparator = comparator("jaccard", "identity");
 
-    SignatureKeyingStrategy strategy = SignatureKeyingStrategy.create(config, comparator);
+    SignatureKeyingStrategy strategy =
+        SignatureKeyingStrategy.create(config, ComparatorType.JACCARD, comparator);
 
     assertEquals(
         16,

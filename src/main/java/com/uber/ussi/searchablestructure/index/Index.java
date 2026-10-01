@@ -6,6 +6,7 @@ import com.uber.ussi.MemoryFootprint;
 import com.uber.ussi.comparator.Comparator;
 import com.uber.ussi.comparator.ComparatorConfigValidator;
 import com.uber.ussi.comparator.ComparatorFactory;
+import com.uber.ussi.comparator.ComparatorType;
 import com.uber.ussi.config.ConfigVocabulary;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.LongMeta;
@@ -34,6 +35,7 @@ public abstract class Index implements SearchableStructure, AutoCloseable {
 
   protected final NamespaceConfig namespaceConfig;
   protected final Comparator comparator;
+  protected final ComparatorType comparatorType;
   protected final double maxPreFilteringRowsRatio;
   protected final MetadataFilteringStrategy metadataFilteringStrategy;
 
@@ -42,6 +44,7 @@ public abstract class Index implements SearchableStructure, AutoCloseable {
     this.namespaceConfig.validate(
         IndexConfigValidator.getInstance(), ComparatorConfigValidator.getInstance());
     this.comparator = ComparatorFactory.createComparator(namespaceConfig);
+    this.comparatorType = ComparatorFactory.requireComparatorType(namespaceConfig);
     this.maxPreFilteringRowsRatio = parseMaxPreFilteringRowsRatio(namespaceConfig);
     this.metadataFilteringStrategy = parseMetadataFilteringStrategy(namespaceConfig);
   }

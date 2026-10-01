@@ -12,14 +12,14 @@ import com.uber.ussi.utils.ConfigKeys;
 import java.util.Objects;
 
 /**
- * Popularity-based term discarding for inverted term-keyed indexes.
+ * Popularity-based term discard policy for inverted term-keyed indexes.
  *
- * <p>Hybrid and term indexes share these rules so a composite structure can compute discards over
+ * <p>Hybrid and term indexes share this policy so a composite structure can compute discards over
  * its term-keyed partition without depending on {@link BaseInvertedIndex}.
  */
-public final class PopularTermDiscarding {
+public final class PopularTermDiscardPolicy {
 
-  private PopularTermDiscarding() {}
+  private PopularTermDiscardPolicy() {}
 
   /** Returns the configured maximum fraction of rows a term may appear in before it is discarded. */
   public static double maxFractionIdsPerTerm(NamespaceConfig namespaceConfig) {

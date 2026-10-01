@@ -2,9 +2,9 @@
 package com.uber.ussi.searchablestructure.index;
 
 import com.uber.ussi.comparator.Comparator;
-import com.uber.ussi.comparator.ComparatorCapabilities;
 import com.uber.ussi.comparator.ComparatorFactory;
 import com.uber.ussi.comparator.ComparatorType;
+import com.uber.ussi.comparator.signaturegenerator.SignatureGenerator;
 import com.uber.ussi.config.ConfigViolations;
 import com.uber.ussi.config.ConfigVocabulary;
 import com.uber.ussi.config.NamespaceConfig;
@@ -92,8 +92,9 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
     if (!indexType.scoresByDotProducts()) {
       return;
     }
-    Comparator comparator = ComparatorFactory.tryCreateComparator(config);
-    if (comparator == null || ComparatorCapabilities.isDotProductScored(comparator)) {
+    ComparatorType comparatorType =
+        ConfigVocabulary.fromParamValue(ComparatorType.class, config.getComparatorType());
+    if (comparatorType == null || comparatorType.similarityFromDotProduct()) {
       return;
     }
     violations.add(
@@ -112,12 +113,10 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
     if (!indexType.keysBySignatures()) {
       return;
     }
-    Comparator comparator = ComparatorFactory.tryCreateComparator(config);
-    if (comparator == null || comparatorType == null) {
+    if (comparatorType == null || ComparatorFactory.tryCreateComparator(config) == null) {
       return;
     }
-    if (ComparatorCapabilities.keyShareBounded(comparator).isPresent()
-        && ComparatorFactory.createSignatureGenerator(config) != null) {
+    if (comparatorType.boundsKeyShare() && tryCreateSignatureGenerator(config) != null) {
       return;
     }
     // A comparator that generates no signatures needs a different structure, not another param.
@@ -209,10 +208,14 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
       // The rules below need a known comparator. ComparatorConfigValidator reports the name.
       return;
     }
-    Comparator comparator = ComparatorFactory.tryCreateComparator(config);
-    if (comparator != null
-        && ComparatorCapabilities.conjunctionScored(comparator).isEmpty()
-        && !(recordType == RecordType.SEQUENCE && indexType == IndexType.INVERTED_TERM)) {
+    boolean mergeUsesConfiguredConjunction =
+        comparatorType != null && comparatorType.similarityFromConfiguredConjunction();
+    boolean mergeUsesSequenceIndexedMultiset =
+        recordType == RecordType.SEQUENCE
+            && indexType == IndexType.INVERTED_TERM
+            && comparatorType != null
+            && comparatorType.boundsKeyShare();
+    if (!mergeUsesConfiguredConjunction && !mergeUsesSequenceIndexedMultiset) {
       violations.add(
           String.format(
               "%s=%s is not supported with comparatorType %s.",
@@ -237,5 +240,14 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
         .map(RecordType::getDisplayName)
         .sorted()
         .collect(Collectors.joining(", "));
+  }
+
+  @Nullable
+  private static SignatureGenerator tryCreateSignatureGenerator(NamespaceConfig config) {
+    try {
+      return ComparatorFactory.createSignatureGenerator(config);
+    } catch (RuntimeException e) {
+      return null;
+    }
   }
 }

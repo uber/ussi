@@ -7,6 +7,7 @@ import static com.uber.ussi.utils.MathUtils.EPSILON_9;
 
 import com.uber.ussi.comparator.Comparator;
 import com.uber.ussi.comparator.ComparatorFactory;
+import com.uber.ussi.comparator.ComparatorType;
 import com.uber.ussi.comparator.ConjunctionScored;
 import com.uber.ussi.comparator.KeyShareBounded;
 import com.uber.ussi.comparatornormalizer.ComplementComparatorNormalizer;
@@ -214,11 +215,9 @@ class MergeSearchTest {
 
   private static MergeSearch.PartialConjunctionPolicy partialConjunctionPolicy(
       boolean scoresFromConjunction) {
-    if (scoresFromConjunction) {
-      return MergeSearch.PartialConjunctionPolicy.none();
-    }
-    return MergeSearch.PartialConjunctionPolicy.fromConfiguredComparator(
-        (ConjunctionScored) COMPARATOR);
+    ConjunctionScored conjunctionScored =
+        ComparatorFactory.conjunctionScored(COMPARATOR, ComparatorType.JACCARD);
+    return MergeSearch.PartialConjunctionPolicy.fromConfiguredComparator(conjunctionScored);
   }
 
   private static List<Long> rowNums(List<RowNumAndSimilarity> results) {

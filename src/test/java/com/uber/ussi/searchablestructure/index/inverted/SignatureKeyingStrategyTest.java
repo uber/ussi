@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.uber.ussi.comparator.Comparator;
 import com.uber.ussi.comparator.ComparatorFactory;
+import com.uber.ussi.comparator.ComparatorType;
 import com.uber.ussi.comparator.signaturegenerator.SignatureGenerator;
 import com.uber.ussi.comparator.signaturegenerator.SignatureGeneratorFactory;
 import com.uber.ussi.comparator.signaturegenerator.SignatureGeneratorFactory.SignatureGeneratorType;
@@ -127,7 +128,10 @@ class SignatureKeyingStrategyTest {
       Comparator comparator, SignatureGeneratorType generatorType) {
     SignatureGenerator generator =
         SignatureGeneratorFactory.createSignatureGenerator(generatorType);
-    return new SignatureKeyingStrategy(comparator, generator);
+    return new SignatureKeyingStrategy(
+        comparator,
+        ComparatorFactory.keyShareBounded(comparator, ComparatorType.JACCARD),
+        generator);
   }
 
   private static Comparator comparator(String comparatorType, String normalizerType) {

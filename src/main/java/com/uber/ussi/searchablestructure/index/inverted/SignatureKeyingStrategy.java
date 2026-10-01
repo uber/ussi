@@ -2,8 +2,9 @@
 package com.uber.ussi.searchablestructure.index.inverted;
 
 import com.uber.ussi.comparator.Comparator;
-import com.uber.ussi.comparator.ComparatorCapabilities;
 import com.uber.ussi.comparator.ComparatorFactory;
+import com.uber.ussi.comparator.ComparatorType;
+import com.uber.ussi.config.ConfigVocabulary;
 import com.uber.ussi.comparator.KeyShareBounded;
 import com.uber.ussi.comparator.signaturegenerator.SignatureGenerator;
 import com.uber.ussi.config.NamespaceConfig;
@@ -30,14 +31,10 @@ final class SignatureKeyingStrategy {
   private final KeyShareBounded keyShareBound;
   private final SignatureGenerator signatureGenerator;
 
-  SignatureKeyingStrategy(Comparator comparator, SignatureGenerator signatureGenerator) {
+  SignatureKeyingStrategy(
+      Comparator comparator, KeyShareBounded keyShareBound, SignatureGenerator signatureGenerator) {
     this.comparator = comparator;
-    this.keyShareBound =
-        ComparatorCapabilities.keyShareBounded(comparator)
-            .orElseThrow(
-                () ->
-                    new IllegalArgumentException(
-                        "A signature-keyed index requires KeyShareBounded."));
+    this.keyShareBound = keyShareBound;
     this.signatureGenerator = signatureGenerator;
   }
 
@@ -50,11 +47,15 @@ final class SignatureKeyingStrategy {
     Objects.requireNonNull(comparator, "comparator is null.");
     SignatureGenerator signatureGenerator =
         ComparatorFactory.createSignatureGenerator(namespaceConfig);
-    if (ComparatorCapabilities.keyShareBounded(comparator).isEmpty() || signatureGenerator == null) {
+    ComparatorType comparatorType =
+        ConfigVocabulary.fromParamValue(
+            ComparatorType.class, namespaceConfig.getComparatorType());
+    if (comparatorType == null || !comparatorType.boundsKeyShare() || signatureGenerator == null) {
       throw new IndexCreationError(
           "A signature-keyed index requires a comparator with a configured signature generator.");
     }
-    return new SignatureKeyingStrategy(comparator, signatureGenerator);
+    KeyShareBounded keyShareBound = ComparatorFactory.keyShareBounded(comparator, comparatorType);
+    return new SignatureKeyingStrategy(comparator, keyShareBound, signatureGenerator);
   }
 
   /** A signature stands for one draw, so every signature contributes the same Uni value. */

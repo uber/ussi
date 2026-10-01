@@ -154,7 +154,7 @@ class ComparatorTest {
 
   @Test
   void l2BoundsNoShareOfItsKeys() {
-    assertTrue(!(l2Comparator() instanceof KeyShareBounded));
+    assertFalse(l2Comparator() instanceof KeyShareBounded);
   }
 
   /**

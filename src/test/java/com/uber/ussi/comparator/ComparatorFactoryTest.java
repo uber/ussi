@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.uber.ussi.comparator.sequencedistance.SequenceDistance;
 import com.uber.ussi.comparator.KeyShareBounded;
+import com.uber.ussi.comparatornormalizer.IdentityComparatorNormalizer;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
@@ -92,6 +93,19 @@ class ComparatorFactoryTest {
         () ->
             ComparatorFactory.createSignatureGenerator(
                 config("l2", Map.of(ConfigKeys.SIGNATURE_GENERATOR, "minhash"))));
+  }
+
+  @Test
+  void typedViewsRequireMatchingComparatorType() {
+    Comparator jaccard =
+        ComparatorFactory.createComparator("jaccard", Map.of(), new IdentityComparatorNormalizer());
+    assertTrue(ComparatorFactory.conjunctionScored(jaccard, ComparatorType.JACCARD).doesSuffixBoundConjunction());
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> ComparatorFactory.conjunctionScored(jaccard, ComparatorType.NGLD));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> ComparatorFactory.dotProductScored(jaccard, ComparatorType.JACCARD));
   }
 
   @Test

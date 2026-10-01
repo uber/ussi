@@ -3,15 +3,11 @@ package com.uber.ussi.searchablestructure.index.inverted.generator;
 
 import com.carrotsearch.hppc.IntArrayList;
 import com.uber.ussi.comparator.Comparator;
-import com.uber.ussi.comparator.ComparatorCapabilities;
-import com.uber.ussi.comparator.ComparatorFactory;
 import com.uber.ussi.comparator.ConjunctionScored;
 import com.uber.ussi.comparator.KeyShareBounded;
 import com.uber.ussi.comparatornormalizer.ComparatorNormalizer;
 import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
-import com.uber.ussi.entity.termsandvalues.RecordType;
-import com.uber.ussi.searchablestructure.index.IndexType;
 import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.result.ResultHeaps;
 import com.uber.ussi.searchablestructure.utils.parallel.SharedMinSimilarity;
@@ -97,54 +93,17 @@ public final class MergeSearch {
       return minSimilarityForConjunction.apply(queryUniValue, minNormalizedSimilarity);
     }
 
-    ConjunctionScored conjunctionScoredForMerge(
-        @Nullable ConjunctionScored configuredComparator) {
-      if (conjunctionScored != null) {
-        return conjunctionScored;
-      }
-      if (configuredComparator == null) {
+    ConjunctionScored requireConjunctionScoredForMerge() {
+      if (conjunctionScored == null) {
         throw new IllegalStateException(
-            "Partial conjunction requires a ConjunctionScored comparator or an explicit policy.");
+            "Merge conjunction scoring requires a partial-conjunction policy with a"
+                + " ConjunctionScored measure.");
       }
-      return configuredComparator;
+      return conjunctionScored;
     }
 
     boolean hasCustomMinSimilarityForConjunction() {
       return minSimilarityForConjunction != null;
-    }
-
-    /**
-     * Returns the partial-conjunction policy for an inverted index built with {@code spars_merge}.
-     */
-    public static PartialConjunctionPolicy forInvertedMerge(
-        IndexType indexType,
-        RecordType recordType,
-        Comparator comparator,
-        boolean scoresFromConjunction) {
-      if (scoresFromConjunction) {
-        return fromConfiguredComparator(
-            ComparatorCapabilities.conjunctionScored(comparator)
-                .orElseThrow(
-                    () ->
-                        new IllegalStateException(
-                            "Conjunction scoring requires a ConjunctionScored comparator.")));
-      }
-      if (indexType.conjunctionDeterminesSimilarity(recordType)) {
-        var conjunctionScored = ComparatorCapabilities.conjunctionScored(comparator);
-        if (conjunctionScored.isPresent()) {
-          return fromConfiguredComparator(conjunctionScored.get());
-        }
-      }
-      if (indexType == IndexType.INVERTED_TERM && recordType == RecordType.SEQUENCE) {
-        var keyShareBound = ComparatorCapabilities.keyShareBounded(comparator);
-        if (keyShareBound.isPresent()) {
-          return forSequenceIndexedMultisetMerge(
-              keyShareBound.get(),
-              comparator.getComparatorNormalizer(),
-              ComparatorFactory.createIndexedMultisetMergeConjunctionScored());
-        }
-      }
-      return none();
     }
   }
 
@@ -178,12 +137,10 @@ public final class MergeSearch {
     boolean scoreFromAccumulatedConjunction = scoresFromConjunction;
     boolean pruneByPartialConjunction =
         !scoreFromAccumulatedConjunction && policy.usesPartialConjunction();
-    ConjunctionScored configuredConjunctionScored =
-        ComparatorCapabilities.conjunctionScored(comparator).orElse(null);
     ConjunctionScored conjunctionScored = null;
     Comparator conjunctionComparator = comparator;
     if (scoreFromAccumulatedConjunction || pruneByPartialConjunction) {
-      conjunctionScored = policy.conjunctionScoredForMerge(configuredConjunctionScored);
+      conjunctionScored = policy.requireConjunctionScoredForMerge();
       conjunctionComparator = (Comparator) conjunctionScored;
     }
     double[] unscannedKeysUniValue =

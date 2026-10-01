@@ -25,6 +25,28 @@ class SparsMergeConfigurationTest {
   }
 
   @Test
+  void partialConjunctionUsesConfiguredComparatorOnSparseMergePaths() {
+    assertTrue(
+        SparsMergeConfiguration.partialConjunctionUsesConfiguredComparator(
+            IndexType.INVERTED_TERM,
+            RecordType.SPARSE,
+            ComparatorType.JACCARD,
+            /* scoresFromAccumulatedConjunction */ true));
+    assertTrue(
+        SparsMergeConfiguration.partialConjunctionUsesConfiguredComparator(
+            IndexType.INVERTED_TERM,
+            RecordType.SPARSE,
+            ComparatorType.JACCARD,
+            /* scoresFromAccumulatedConjunction */ false));
+    assertFalse(
+        SparsMergeConfiguration.partialConjunctionUsesConfiguredComparator(
+            IndexType.INVERTED_TERM,
+            RecordType.SEQUENCE,
+            ComparatorType.NGLD,
+            /* scoresFromAccumulatedConjunction */ false));
+  }
+
+  @Test
   void scoresFromAccumulatedConjunctionOnlyOnSparseTermKeyedLists() {
     assertTrue(
         SparsMergeConfiguration.scoresFromAccumulatedConjunction(

@@ -55,13 +55,22 @@ final class SparsMergeInvertedIndexSetup {
     MergeSearch.PartialConjunctionPolicy partialConjunctionPolicy =
         partialConjunctionPolicyForMerge(
             indexType, recordType, comparatorType, comparator, scoresFromConjunction);
-    boolean storesMergePostingValues =
-        scoresFromConjunction
-            || (partialConjunctionPolicy.usesPartialConjunction()
-                && (indexType.conjunctionDeterminesSimilarity(recordType)
-                    || recordType == RecordType.SEQUENCE));
     return new SparsMergeInvertedIndexSetup(
-        scoresFromConjunction, partialConjunctionPolicy, storesMergePostingValues);
+        scoresFromConjunction,
+        partialConjunctionPolicy,
+        storesMergePostingValues(
+            scoresFromConjunction, partialConjunctionPolicy, indexType, recordType));
+  }
+
+  private static boolean storesMergePostingValues(
+      boolean scoresFromConjunction,
+      MergeSearch.PartialConjunctionPolicy partialConjunctionPolicy,
+      IndexType indexType,
+      RecordType recordType) {
+    return scoresFromConjunction
+        || (partialConjunctionPolicy.usesPartialConjunction()
+            && (indexType.conjunctionDeterminesSimilarity(recordType)
+                || recordType == RecordType.SEQUENCE));
   }
 
   boolean scoresFromConjunction() {
@@ -82,12 +91,8 @@ final class SparsMergeInvertedIndexSetup {
       ComparatorType comparatorType,
       Comparator comparator,
       boolean scoresFromConjunction) {
-    if (scoresFromConjunction) {
-      return MergeSearch.PartialConjunctionPolicy.fromConfiguredComparator(
-          ComparatorFactory.conjunctionScored(comparator, comparatorType));
-    }
-    if (indexType.conjunctionDeterminesSimilarity(recordType)
-        && comparatorType.similarityFromConfiguredConjunction()) {
+    if (SparsMergeConfiguration.partialConjunctionUsesConfiguredComparator(
+        indexType, recordType, comparatorType, scoresFromConjunction)) {
       return MergeSearch.PartialConjunctionPolicy.fromConfiguredComparator(
           ComparatorFactory.conjunctionScored(comparator, comparatorType));
     }

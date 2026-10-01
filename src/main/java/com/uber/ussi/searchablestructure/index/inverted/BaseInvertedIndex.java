@@ -3,10 +3,8 @@ package com.uber.ussi.searchablestructure.index.inverted;
 
 import com.carrotsearch.hppc.LongDoubleHashMap;
 import com.carrotsearch.hppc.LongHashSet;
-import com.carrotsearch.hppc.LongIntHashMap;
 import com.carrotsearch.hppc.LongObjectHashMap;
 import com.carrotsearch.hppc.cursors.LongCursor;
-import com.carrotsearch.hppc.cursors.LongIntCursor;
 import com.carrotsearch.hppc.cursors.LongObjectCursor;
 import com.uber.ussi.MemoryFootprint;
 import com.uber.ussi.ProcessorAllowance;
@@ -37,7 +35,6 @@ import com.uber.ussi.searchablestructure.utils.metadata.MetadataFilteringStrateg
 import com.uber.ussi.searchablestructure.utils.parallel.ParallelShardSearch;
 import com.uber.ussi.searchablestructure.utils.parallel.SharedMinSimilarity;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
-import com.uber.ussi.utils.ConfigKeys;
 import com.uber.ussi.utils.MathUtils;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -172,11 +169,12 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
     this.mergeScoresFromAccumulatedConjunction = sparsMerge.mergeScoresFromAccumulatedConjunction();
     this.partialConjunctionPolicy = sparsMerge.partialConjunctionPolicy();
     this.doesStoreMergePostingValues = sparsMerge.doesStoreMergePostingValues();
-    this.maxFractionIdsPerTerm = parseMaxFractionIdsPerTerm(namespaceConfig);
+    this.maxFractionIdsPerTerm = PopularTermDiscarding.maxFractionIdsPerTerm(namespaceConfig);
     validateRows();
     this.discardedTerms =
         structureDiscardedTerms == null
-            ? discardedTermsOf(rowNumToTermsAndValuesMap, maxFractionIdsPerTerm)
+            ? PopularTermDiscarding.discardedTermsOf(
+                rowNumToTermsAndValuesMap, maxFractionIdsPerTerm)
             : structureDiscardedTerms;
     LongObjectHashMap<LongTermsAndValues> discardedTermFreeRows = buildDiscardedTermFreeRows();
     this.verificationRowNumToTermsAndValuesMap =
@@ -301,7 +299,7 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
   }
 
   final boolean discardsPopularTerms() {
-    return maxFractionIdsPerTerm < 1.0;
+    return PopularTermDiscarding.doesDiscardPopularTerms(maxFractionIdsPerTerm);
   }
 
   final long[] getRowNumsForKeyForTests(int shard, long key) {
@@ -623,51 +621,6 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
     return keyData;
   }
 
-  /** The terms a structure holding {@code rowNumToTermsAndValuesMap} discards as popular. */
-  static LongHashSet discardedTermsOf(
-      NamespaceConfig namespaceConfig,
-      LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap) {
-    return discardedTermsOf(
-        rowNumToTermsAndValuesMap, parseMaxFractionIdsPerTerm(namespaceConfig));
-  }
-
-  /**
-   * Identifies the high-popularity terms to discard. The structure sees the complete dataset, so
-   * observed popularity is true popularity: a term is discarded when it occurs in more than
-   * floor(numRows * maxFractionIdsPerTerm) rows.
-   *
-   * <p>Counted over the terms of each row, never over the keys the rows are indexed under, so a
-   * frequent key is never discarded for being frequent. Where the keys are signatures they are
-   * generated afterwards, from the rows these terms have been removed from.
-   */
-  private static LongHashSet discardedTermsOf(
-      LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
-      double maxFractionIdsPerTerm) {
-    LongIntHashMap numRowsByTerm = new LongIntHashMap();
-    // A row counts once per distinct term, so a term repeated within one row stays one row.
-    LongHashSet termsInRow = new LongHashSet();
-    for (LongObjectCursor<LongTermsAndValues> entry : rowNumToTermsAndValuesMap) {
-      termsInRow.clear();
-      for (int i = 0; i < entry.value.termsLength(); ++i) {
-        long term = entry.value.getTerm(i);
-        if (!termsInRow.add(term)) {
-          continue;
-        }
-        int numRows = numRowsByTerm.containsKey(term) ? numRowsByTerm.get(term) + 1 : 1;
-        numRowsByTerm.put(term, numRows);
-      }
-    }
-    int maxNumRowsPerTerm =
-        (int) Math.floor(rowNumToTermsAndValuesMap.size() * maxFractionIdsPerTerm);
-    LongHashSet popularTerms = new LongHashSet();
-    for (LongIntCursor entry : numRowsByTerm) {
-      if (entry.value > maxNumRowsPerTerm) {
-        popularTerms.add(entry.key);
-      }
-    }
-    return popularTerms;
-  }
-
   /** Returns the rows with the high-popularity terms dropped, which is what gets indexed. */
   private LongObjectHashMap<LongTermsAndValues> buildDiscardedTermFreeRows() {
     if (discardedTerms.isEmpty()) {
@@ -811,11 +764,6 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
             message == null ? String.format("row %s is invalid.", entry.key) : message);
       }
     }
-  }
-
-  private static double parseMaxFractionIdsPerTerm(NamespaceConfig namespaceConfig) {
-    return namespaceConfig.readDoubleIndexParam(
-        ConfigKeys.MAX_FRACTION_IDS_PER_TERM, ConfigKeys.DEFAULT_MAX_FRACTION_IDS_PER_TERM);
   }
 
   /**

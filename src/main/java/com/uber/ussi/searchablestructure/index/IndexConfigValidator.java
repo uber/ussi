@@ -208,14 +208,8 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
       // The rules below need a known comparator. ComparatorConfigValidator reports the name.
       return;
     }
-    boolean mergeUsesConfiguredConjunction =
-        comparatorType != null && comparatorType.similarityFromConfiguredConjunction();
-    boolean mergeUsesSequenceIndexedMultiset =
-        recordType == RecordType.SEQUENCE
-            && indexType == IndexType.INVERTED_TERM
-            && comparatorType != null
-            && comparatorType.boundsKeyShare();
-    if (!mergeUsesConfiguredConjunction && !mergeUsesSequenceIndexedMultiset) {
+    if (!SparsMergeConfiguration.supportsMergeCandidateGeneration(
+        indexType, recordType, comparatorType)) {
       violations.add(
           String.format(
               "%s=%s is not supported with comparatorType %s.",

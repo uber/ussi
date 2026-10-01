@@ -1,0 +1,60 @@
+/* AUTHOR: Ahmed Metwally (ametwally@uber.com) */
+package com.uber.ussi.searchablestructure.index;
+
+import com.uber.ussi.comparator.ComparatorType;
+import com.uber.ussi.config.NamespaceConfig.PopularTermDiscardScope;
+import com.uber.ussi.entity.termsandvalues.RecordType;
+import java.util.Objects;
+import javax.annotation.Nullable;
+
+/**
+ * Rules for {@code spars_merge} shared by config validation and inverted-index construction.
+ *
+ * <p>Validation and index wiring read the same predicates so a namespace cannot pass validation
+ * yet build a different merge mode.
+ */
+public final class SparsMergeConfiguration {
+
+  private SparsMergeConfiguration() {}
+
+  /**
+   * Returns whether {@code spars_merge} may run with the configured comparator on this index shape.
+   */
+  public static boolean supportsMergeCandidateGeneration(
+      IndexType indexType, @Nullable RecordType recordType, ComparatorType comparatorType) {
+    Objects.requireNonNull(indexType, "indexType is null.");
+    Objects.requireNonNull(comparatorType, "comparatorType is null.");
+    if (comparatorType.similarityFromConfiguredConjunction()) {
+      return true;
+    }
+    return usesSequenceIndexedMultisetPartialConjunction(indexType, recordType, comparatorType);
+  }
+
+  /**
+   * Returns whether merge treats the accumulated conjunction as each row's exact similarity rather
+   * than a bound before verification.
+   */
+  public static boolean scoresFromAccumulatedConjunction(
+      IndexType indexType,
+      RecordType recordType,
+      PopularTermDiscardScope popularTermDiscardScope) {
+    Objects.requireNonNull(indexType, "indexType is null.");
+    Objects.requireNonNull(recordType, "recordType is null.");
+    Objects.requireNonNull(popularTermDiscardScope, "popularTermDiscardScope is null.");
+    return indexType.conjunctionDeterminesSimilarity(recordType)
+        && popularTermDiscardScope == PopularTermDiscardScope.CANDIDATES_AND_VERIFICATION;
+  }
+
+  /**
+   * Returns whether merge bounds rows with partial Ruzicka conjunction over indexed term counts
+   * while verification still scores ordered sequences.
+   */
+  public static boolean usesSequenceIndexedMultisetPartialConjunction(
+      IndexType indexType, @Nullable RecordType recordType, ComparatorType comparatorType) {
+    Objects.requireNonNull(indexType, "indexType is null.");
+    Objects.requireNonNull(comparatorType, "comparatorType is null.");
+    return indexType == IndexType.INVERTED_TERM
+        && recordType == RecordType.SEQUENCE
+        && comparatorType.boundsKeyShare();
+  }
+}

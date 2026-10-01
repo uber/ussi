@@ -85,6 +85,21 @@ public class ComparatorFactory {
   }
 
   /**
+   * Returns the configured comparator type after {@link NamespaceConfig} validation, which rejects
+   * an unknown name.
+   */
+  public static ComparatorType requireComparatorType(NamespaceConfig namespaceConfig) {
+    ComparatorType comparatorType = getComparatorType(namespaceConfig);
+    if (comparatorType == null) {
+      throw new IllegalStateException(
+          String.format(
+              "The namespace comparatorType %s is not recognized after validation.",
+              namespaceConfig.getComparatorType()));
+    }
+    return comparatorType;
+  }
+
+  /**
    * Returns the configured comparator as a {@link ConjunctionScored} measure. The {@code
    * comparatorType} must state that the configured measure supports merge conjunction on itself.
    */

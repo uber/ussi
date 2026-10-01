@@ -10,8 +10,6 @@ import com.carrotsearch.hppc.cursors.LongIntCursor;
 import com.carrotsearch.hppc.cursors.LongObjectCursor;
 import com.uber.ussi.MemoryFootprint;
 import com.uber.ussi.ProcessorAllowance;
-import com.uber.ussi.comparator.ComparatorFactory;
-import com.uber.ussi.comparator.ComparatorType;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.config.NamespaceConfig.CandidateGeneratorType;
 import com.uber.ussi.config.NamespaceConfig.PopularTermDiscardScope;
@@ -150,32 +148,24 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
     // populated one.
     this.signatureKeyingStrategy =
         indexType.keysBySignatures()
-            ? SignatureKeyingStrategy.create(namespaceConfig, comparator)
+            ? SignatureKeyingStrategy.create(namespaceConfig, comparatorType, comparator)
             : null;
     RecordType recordType = resolveRecordType(indexType);
     this.recordIndexingStrategy =
         RecordIndexingStrategyFactory.createRecordIndexingStrategy(recordType);
     this.candidateGeneratorType = namespaceConfig.getCandidateGeneratorType();
     this.popularTermDiscardScope = namespaceConfig.getIndexPopularTermDiscardScope();
-    // A conjunction excludes discarded terms, so CANDIDATES_ONLY verifies via the comparator.
-    this.scoresFromConjunction =
-        candidateGeneratorType == CandidateGeneratorType.SPARS_MERGE
-            && indexType.conjunctionDeterminesSimilarity(recordType)
-            && popularTermDiscardScope == PopularTermDiscardScope.CANDIDATES_AND_VERIFICATION;
-    ComparatorType comparatorType =
-        Objects.requireNonNull(
-            ComparatorFactory.getComparatorType(namespaceConfig),
-            "namespaceConfig comparatorType is null.");
-    this.partialConjunctionPolicy =
-        candidateGeneratorType == CandidateGeneratorType.SPARS_MERGE
-            ? SparsMergePartialConjunctionPolicies.create(
-                indexType, recordType, comparatorType, comparator, scoresFromConjunction)
-            : MergeSearch.PartialConjunctionPolicy.none();
-    this.storesMergePostingValues =
-        scoresFromConjunction
-            || (partialConjunctionPolicy.usesPartialConjunction()
-                && (indexType.conjunctionDeterminesSimilarity(recordType)
-                    || recordType == RecordType.SEQUENCE));
+    SparsMergeInvertedIndexSetup sparsMergeSetup =
+        SparsMergeInvertedIndexSetup.create(
+            candidateGeneratorType,
+            indexType,
+            recordType,
+            comparatorType,
+            comparator,
+            popularTermDiscardScope);
+    this.scoresFromConjunction = sparsMergeSetup.scoresFromConjunction();
+    this.partialConjunctionPolicy = sparsMergeSetup.partialConjunctionPolicy();
+    this.storesMergePostingValues = sparsMergeSetup.storesMergePostingValues();
     this.maxFractionIdsPerTerm = parseMaxFractionIdsPerTerm(namespaceConfig);
     validateRows();
     this.discardedTerms =

@@ -152,6 +152,7 @@ boolean update(long rowNum, TermsAndValues record, Map<String, String> metadata)
 SearchResults getNearestNeighborRowNums(int k, TermsAndValues record, MetaFilter metadataFilter)
 SearchResults getSimilarRowNums(float minSimilarity, TermsAndValues record, MetaFilter metadataFilter)
 int size()
+MemoryFootprint getMemoryFootprint()
 void close()
 ```
 
@@ -172,6 +173,13 @@ lower `rowNum` breaking ties.
 - Similarities are comparator outputs put through the configured normalizer, so
   they are always in `[0.0, 1.0]`.
 - An empty metadata filter matches every non-deleted row.
+
+`getMemoryFootprint()` returns a `MemoryFootprint` with on-heap and native byte
+estimates for the graduated indexes in this namespace. It excludes the active
+cache and graduating caches, which are bounded by `maxCacheSize`. The call is
+linear in index size, so sample it periodically rather than on every request.
+See [INTEGRATION.md](INTEGRATION.md#memory-footprint) for what the estimate
+includes and what it omits.
 
 Call `close()` when you are done with a namespace. It releases any native memory
 held by the dense matrix index.

@@ -47,6 +47,19 @@ class SparsMergeConfigurationTest {
   }
 
   @Test
+  void mergeRequiresSignatureGeneratingComparatorWhenConjunctionDoesNotDetermineSimilarity() {
+    assertFalse(
+        SparsMergeConfiguration.mergeRequiresSignatureGeneratingComparator(
+            IndexType.INVERTED_TERM, RecordType.SPARSE, ComparatorType.JACCARD));
+    assertFalse(
+        SparsMergeConfiguration.mergeRequiresSignatureGeneratingComparator(
+            IndexType.INVERTED_TERM, RecordType.SEQUENCE, ComparatorType.NGLD));
+    assertTrue(
+        SparsMergeConfiguration.mergeRequiresSignatureGeneratingComparator(
+            IndexType.INVERTED_SIGNATURE, RecordType.SPARSE, ComparatorType.L2));
+  }
+
+  @Test
   void scoresFromAccumulatedConjunctionOnlyOnSparseTermKeyedLists() {
     assertTrue(
         SparsMergeConfiguration.scoresFromAccumulatedConjunction(

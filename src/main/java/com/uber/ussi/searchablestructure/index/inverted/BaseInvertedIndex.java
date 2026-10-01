@@ -14,6 +14,7 @@ import com.uber.ussi.comparator.Comparator;
 import com.uber.ussi.comparator.ComparatorFactory;
 import com.uber.ussi.comparator.ComparatorType;
 import com.uber.ussi.comparator.KeyShareBounded;
+import com.uber.ussi.comparator.signaturegenerator.SignatureGenerator;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.config.NamespaceConfig.CandidateGeneratorType;
 import com.uber.ussi.config.NamespaceConfig.PopularTermDiscardScope;
@@ -153,7 +154,7 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
     // populated one.
     this.signatureKeyingStrategy =
         indexType.keysBySignatures()
-            ? SignatureKeyingStrategy.create(namespaceConfig, comparatorType, comparator)
+            ? createSignatureKeyingStrategy(namespaceConfig, comparatorType, comparator)
             : null;
     RecordType recordType = resolveRecordType(indexType);
     this.recordIndexingStrategy =
@@ -833,6 +834,13 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
               recordTypes.isEmpty() ? "no" : "more than one"));
     }
     return recordTypes.iterator().next();
+  }
+
+  private static SignatureKeyingStrategy createSignatureKeyingStrategy(
+      NamespaceConfig namespaceConfig, ComparatorType comparatorType, Comparator comparator) {
+    SignatureGenerator signatureGenerator =
+        ComparatorFactory.createSignatureGenerator(namespaceConfig);
+    return SignatureKeyingStrategy.create(comparatorType, comparator, signatureGenerator);
   }
 
   private record SparsMergeFields(

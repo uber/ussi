@@ -22,8 +22,8 @@ import javax.annotation.Nullable;
  * Key-major candidate generation over uni-sorted inverted lists, implementing {@code spars}.
  *
  * <p>The query's keys are visited cheapest first, and each one's inverted list is narrowed to the
- * rows that length filtering admits. Every candidate is then scored through the comparator, so this
- * generator works for every inverted index type.
+ * rows that length filtering admits. Every candidate is then scored through the comparator. This
+ * generator works with every inverted index type and every comparator.
  *
  * <p>Public only for the sibling inverted index packages.
  */

@@ -13,7 +13,7 @@ import com.uber.ussi.utils.ConfigKeys;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
-class PopularTermDiscardingTest {
+class PopularTermDiscardPolicyTest {
 
   @Test
   void doesDiscardPopularTermsWhenMaxFractionIsBelowOne() {
@@ -30,8 +30,8 @@ class PopularTermDiscardingTest {
             .maxNumSearchableStructures(3)
             .maxNumSimilarities(100)
             .build();
-    assertTrue(PopularTermDiscarding.doesDiscardPopularTerms(config));
-    assertFalse(PopularTermDiscarding.doesDiscardPopularTerms(1.0));
+    assertTrue(PopularTermDiscardPolicy.doesDiscardPopularTerms(config));
+    assertFalse(PopularTermDiscardPolicy.doesDiscardPopularTerms(1.0));
   }
 
   @Test
@@ -42,7 +42,7 @@ class PopularTermDiscardingTest {
     rows.put(3L, terms(new long[] {10, 40}));
     rows.put(4L, terms(new long[] {50}));
 
-    LongHashSet discarded = PopularTermDiscarding.discardedTermsOf(rows, 0.5);
+    LongHashSet discarded = PopularTermDiscardPolicy.discardedTermsOf(rows, 0.5);
 
     assertEquals(1, discarded.size());
     assertTrue(discarded.contains(10L));

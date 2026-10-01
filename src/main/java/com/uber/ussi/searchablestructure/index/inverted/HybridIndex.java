@@ -26,7 +26,7 @@ public final class HybridIndex extends Index {
       LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
       LongObjectHashMap<LongMeta> rowNumToMetaMap) {
     super(namespaceConfig);
-    double maxFractionIdsPerTerm = PopularTermDiscarding.maxFractionIdsPerTerm(namespaceConfig);
+    double maxFractionIdsPerTerm = PopularTermDiscardPolicy.maxFractionIdsPerTerm(namespaceConfig);
     LongObjectHashMap<LongTermsAndValues> exactRows = new LongObjectHashMap<>();
     LongObjectHashMap<LongTermsAndValues> signatureRows = new LongObjectHashMap<>();
     for (LongObjectCursor<LongTermsAndValues> entry : rowNumToTermsAndValuesMap) {
@@ -41,14 +41,14 @@ public final class HybridIndex extends Index {
     // terms are, so discarding leaves a signature index's lists exactly as long and only moves the
     // signatures its rows are keyed by.
     LongHashSet discardedTerms =
-        PopularTermDiscarding.discardedTermsOf(exactRows, maxFractionIdsPerTerm);
+        PopularTermDiscardPolicy.discardedTermsOf(exactRows, maxFractionIdsPerTerm);
     // The signature index is built first so a comparator without a generator is rejected before
     // the term index is populated.
     this.signatureIndex =
         new SignatureIndex(namespaceConfig, signatureRows, rowNumToMetaMap, new LongHashSet());
     this.termIndex = new TermIndex(namespaceConfig, exactRows, rowNumToMetaMap, discardedTerms);
     this.termPopularityFilteringEnabled =
-        PopularTermDiscarding.doesDiscardPopularTerms(maxFractionIdsPerTerm);
+        PopularTermDiscardPolicy.doesDiscardPopularTerms(maxFractionIdsPerTerm);
   }
 
   @Override

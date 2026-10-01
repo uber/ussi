@@ -169,11 +169,11 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
     this.mergeScoresFromAccumulatedConjunction = sparsMerge.mergeScoresFromAccumulatedConjunction();
     this.partialConjunctionPolicy = sparsMerge.partialConjunctionPolicy();
     this.doesStoreMergePostingValues = sparsMerge.doesStoreMergePostingValues();
-    this.maxFractionIdsPerTerm = PopularTermDiscarding.maxFractionIdsPerTerm(namespaceConfig);
+    this.maxFractionIdsPerTerm = PopularTermDiscardPolicy.maxFractionIdsPerTerm(namespaceConfig);
     validateRows();
     this.discardedTerms =
         structureDiscardedTerms == null
-            ? PopularTermDiscarding.discardedTermsOf(
+            ? PopularTermDiscardPolicy.discardedTermsOf(
                 rowNumToTermsAndValuesMap, maxFractionIdsPerTerm)
             : structureDiscardedTerms;
     LongObjectHashMap<LongTermsAndValues> discardedTermFreeRows = buildDiscardedTermFreeRows();
@@ -299,7 +299,7 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
   }
 
   final boolean discardsPopularTerms() {
-    return PopularTermDiscarding.doesDiscardPopularTerms(maxFractionIdsPerTerm);
+    return PopularTermDiscardPolicy.doesDiscardPopularTerms(maxFractionIdsPerTerm);
   }
 
   final long[] getRowNumsForKeyForTests(int shard, long key) {

@@ -17,17 +17,6 @@ import java.util.List;
 /** Hybrid inverted index using exact keys for short rows and signatures for long rows. */
 public final class HybridIndex extends Index {
 
-  /**
-   * The largest term count a row can have and still be keyed by its own terms. Above it a row is
-   * keyed by signatures instead.
-   *
-   * <p>It is the signature count because that is where signatures stop being a saving: a row with
-   * fewer terms than that would be replaced by more signatures than it had terms, costing list
-   * entries and buying no pruning. The two quantities are derived separately and happen to
-   * coincide, so the cutoff names itself rather than reading as a signature count here.
-   */
-  private static final int TERM_KEYING_CUTOFF = SignatureIndex.NUM_SIGNATURES_PER_ROW;
-
   private final TermIndex termIndex;
   private final SignatureIndex signatureIndex;
   private final boolean termPopularityFilteringEnabled;
@@ -40,7 +29,7 @@ public final class HybridIndex extends Index {
     LongObjectHashMap<LongTermsAndValues> exactRows = new LongObjectHashMap<>();
     LongObjectHashMap<LongTermsAndValues> signatureRows = new LongObjectHashMap<>();
     for (LongObjectCursor<LongTermsAndValues> entry : rowNumToTermsAndValuesMap) {
-      if (entry.value.termsLength() <= TERM_KEYING_CUTOFF) {
+      if (entry.value.termsLength() <= InvertedHybridConfiguration.TERM_KEYING_CUTOFF) {
         exactRows.put(entry.key, entry.value);
       } else {
         signatureRows.put(entry.key, entry.value);
@@ -50,13 +39,15 @@ public final class HybridIndex extends Index {
     // term index can collect it: a signature list holds one entry per row whatever that row's
     // terms are, so discarding leaves a signature index's lists exactly as long and only moves the
     // signatures its rows are keyed by.
-    LongHashSet discardedTerms = BaseInvertedIndex.discardedTermsOf(namespaceConfig, exactRows);
+    LongHashSet discardedTerms =
+        PopularTermDiscarding.discardedTermsOf(namespaceConfig, exactRows);
     // The signature index is built first so a comparator without a generator is rejected before
     // the term index is populated.
     this.signatureIndex =
         new SignatureIndex(namespaceConfig, signatureRows, rowNumToMetaMap, new LongHashSet());
     this.termIndex = new TermIndex(namespaceConfig, exactRows, rowNumToMetaMap, discardedTerms);
-    this.termPopularityFilteringEnabled = termIndex.discardsPopularTerms();
+    this.termPopularityFilteringEnabled =
+        PopularTermDiscarding.doesDiscardPopularTerms(namespaceConfig);
   }
 
   @Override
@@ -66,7 +57,8 @@ public final class HybridIndex extends Index {
       throw new IllegalArgumentException("k must be greater than 0.");
     }
     int maxResults = Math.min(k, namespaceConfig.getMaxNumSimilarities());
-    boolean queryUsesExactIndex = record.termsLength() <= TERM_KEYING_CUTOFF;
+    boolean queryUsesExactIndex =
+        record.termsLength() <= InvertedHybridConfiguration.TERM_KEYING_CUTOFF;
     Index firstIndex = queryUsesExactIndex ? termIndex : signatureIndex;
     Index secondIndex = queryUsesExactIndex ? signatureIndex : termIndex;
     boolean secondIndexIsExact = !queryUsesExactIndex;
@@ -189,8 +181,9 @@ public final class HybridIndex extends Index {
     if (termPopularityFilteringEnabled) {
       return true;
     }
-    int minNumTerms = exactIndex ? 0 : TERM_KEYING_CUTOFF + 1;
-    int maxNumTerms = exactIndex ? TERM_KEYING_CUTOFF : Integer.MAX_VALUE;
+    int minNumTerms = exactIndex ? 0 : InvertedHybridConfiguration.TERM_KEYING_CUTOFF + 1;
+    int maxNumTerms =
+        exactIndex ? InvertedHybridConfiguration.TERM_KEYING_CUTOFF : Integer.MAX_VALUE;
     return comparator.mayPassNumTermsFiltering(query, minNumTerms, maxNumTerms, minSimilarity);
   }
 

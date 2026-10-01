@@ -23,11 +23,9 @@ import javax.annotation.Nullable;
  */
 public final class SignatureIndex extends BaseInvertedIndex {
 
-  /**
-   * How many signatures stand in for one row, which fixes the length of every signature list. Drawn
-   * from experiments trading recall against list length.
-   */
-  public static final int NUM_SIGNATURES_PER_ROW = 270;
+  /** How many signatures stand in for one row. See {@link InvertedHybridConfiguration}. */
+  public static final int NUM_SIGNATURES_PER_ROW =
+      InvertedHybridConfiguration.NUM_SIGNATURES_PER_ROW;
 
   public SignatureIndex(
       NamespaceConfig namespaceConfig,

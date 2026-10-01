@@ -20,6 +20,7 @@ import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.index.RowStoringIndex;
 import com.uber.ussi.searchablestructure.index.MetadataFilteredSearchExecutor;
 import com.uber.ussi.searchablestructure.utils.metadata.MetadataFilteringStrategy;
+import com.uber.ussi.searchablestructure.utils.search.SearchRequests;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
 import java.util.Collections;
 import java.util.List;
@@ -94,22 +95,19 @@ public final class MatrixIndex extends RowStoringIndex {
   }
 
   @Override
-  public List<RowNumAndSimilarity> getNearestNeighborRowNums(
-      int k, LongTermsAndValues record, MetaFilter metadataFilter, float minSimilarity) {
-    if (k <= 0) {
-      throw new IllegalArgumentException("k must be greater than 0.");
-    }
-    int numResults = Math.min(k, namespaceConfig.getMaxNumSimilarities());
+  protected List<RowNumAndSimilarity> searchNearestNeighbors(
+      int numResults, LongTermsAndValues record, MetaFilter metadataFilter, float minSimilarity) {
     return search(record, metadataFilter, minSimilarity, numResults);
   }
 
   @Override
-  public List<RowNumAndSimilarity> getSimilarRowNums(
+  protected List<RowNumAndSimilarity> searchSimilarRowNums(
       float minSimilarity, LongTermsAndValues record, MetaFilter metadataFilter) {
-    if (minSimilarity < 0.0f || minSimilarity > 1.0f) {
-      throw new IllegalArgumentException("minSimilarity must be in the range [0.0, 1.0].");
-    }
-    return search(record, metadataFilter, minSimilarity, namespaceConfig.getMaxNumSimilarities());
+    return search(
+        record,
+        metadataFilter,
+        minSimilarity,
+        SearchRequests.similarSearchResultLimit(namespaceConfig));
   }
 
   MetadataFilteringStrategy getResolvedMetadataFilteringStrategyForLastSearchForTests() {

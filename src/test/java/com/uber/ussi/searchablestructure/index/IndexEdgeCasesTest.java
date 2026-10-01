@@ -150,13 +150,13 @@ class IndexEdgeCasesTest {
     }
 
     @Override
-    public List<RowNumAndSimilarity> getNearestNeighborRowNums(
-        int k, LongTermsAndValues record, MetaFilter metadataFilter, float minSimilarity) {
+    protected List<RowNumAndSimilarity> searchNearestNeighbors(
+        int numResults, LongTermsAndValues record, MetaFilter metadataFilter, float minSimilarity) {
       return Collections.emptyList();
     }
 
     @Override
-    public List<RowNumAndSimilarity> getSimilarRowNums(
+    protected List<RowNumAndSimilarity> searchSimilarRowNums(
         float minSimilarity, LongTermsAndValues record, MetaFilter metadataFilter) {
       return Collections.emptyList();
     }

@@ -14,6 +14,8 @@ import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.result.ResultHeaps;
 import com.uber.ussi.searchablestructure.utils.inverted.KeyAndPrefixFilteringData;
 import com.uber.ussi.searchablestructure.utils.inverted.PopularTermDiscardPolicy;
+import com.uber.ussi.searchablestructure.utils.scan.ComparatorRowScan;
+import com.uber.ussi.searchablestructure.utils.search.SearchRequests;
 import com.uber.ussi.searchablestructure.utils.metadata.PreFilteringResult;
 import com.uber.ussi.searchablestructure.utils.parallel.ParallelRowScan;
 import com.uber.ussi.searchablestructure.utils.parallel.SharedMinSimilarity;
@@ -68,21 +70,17 @@ public final class InvertedTermCache extends Cache {
 
   @Override
   protected List<RowNumAndSimilarity> getNearestNeighborRowNumsLocked(
-      int k, LongTermsAndValues record, MetaFilter metadataFilter, float minSimilarity) {
-    if (k <= 0) {
-      throw new IllegalArgumentException("k must be greater than 0.");
-    }
-    int numResults = Math.min(k, namespaceConfig.getMaxNumSimilarities());
+      int numResults, LongTermsAndValues record, MetaFilter metadataFilter, float minSimilarity) {
     return search(record, metadataFilter, minSimilarity, numResults);
   }
 
   @Override
   protected List<RowNumAndSimilarity> getSimilarRowNumsLocked(
-      float minSimilarity, LongTermsAndValues record, MetaFilter metadataFilter) {
-    if (minSimilarity < 0.0f || minSimilarity > 1.0f) {
-      throw new IllegalArgumentException("minSimilarity must be in the range [0.0, 1.0].");
-    }
-    return search(record, metadataFilter, minSimilarity, namespaceConfig.getMaxNumSimilarities());
+      float minSimilarity,
+      LongTermsAndValues record,
+      MetaFilter metadataFilter,
+      int maxResults) {
+    return search(record, metadataFilter, minSimilarity, maxResults);
   }
 
   @Override
@@ -136,8 +134,10 @@ public final class InvertedTermCache extends Cache {
   private List<RowNumAndSimilarity> search(
       LongTermsAndValues record, MetaFilter metadataFilter, float minSimilarity, int maxResults) {
     lastSearchUsedPreFilteringBruteForce = false;
-    if (maxResults == 0 || rowNumToTermsAndValuesMap.isEmpty()) {
-      return Collections.emptyList();
+    List<RowNumAndSimilarity> empty =
+        SearchRequests.emptyResultsIfNothingToSearch(maxResults, rowNumToTermsAndValuesMap.size());
+    if (empty != null) {
+      return empty;
     }
     LongTermsAndValues discardedTermFreeQuery = record.newWithoutTerms(discardedTerms, comparator);
     if (discardedTermFreeQuery.termsLength() == 0) {
@@ -176,12 +176,14 @@ public final class InvertedTermCache extends Cache {
           if (verificationRow == null || !query.doesShareAnyTerm(verificationRow)) {
             return;
           }
-          float tightened =
-              ResultHeaps.tightenedMinSimilarity(rows, minSimilarity, sharedMinSimilarity);
-          float similarity = (float) comparator.getSimilarity(query, verificationRow, tightened);
-          if (similarity >= tightened) {
-            rows.add(new RowNumAndSimilarity(rowNum, similarity));
-          }
+          ComparatorRowScan.tryAddSimilarRow(
+              rows,
+              rowNum,
+              query,
+              verificationRow,
+              comparator,
+              minSimilarity,
+              sharedMinSimilarity);
         });
   }
 

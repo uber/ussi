@@ -33,6 +33,7 @@ import com.uber.ussi.searchablestructure.result.ResultHeaps;
 import com.uber.ussi.searchablestructure.utils.inverted.KeyAndPrefixFilteringData;
 import com.uber.ussi.searchablestructure.utils.inverted.KeyAndUniTransformedValue;
 import com.uber.ussi.searchablestructure.utils.inverted.PopularTermDiscardPolicy;
+import com.uber.ussi.searchablestructure.utils.search.SearchRequests;
 import com.uber.ussi.searchablestructure.utils.metadata.MetadataFilteringStrategy;
 import com.uber.ussi.searchablestructure.utils.parallel.ParallelShardSearch;
 import com.uber.ussi.searchablestructure.utils.parallel.SharedMinSimilarity;
@@ -264,22 +265,19 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
   }
 
   @Override
-  public final List<RowNumAndSimilarity> getNearestNeighborRowNums(
-      int k, LongTermsAndValues record, MetaFilter metadataFilter, float minSimilarity) {
-    if (k <= 0) {
-      throw new IllegalArgumentException("k must be greater than 0.");
-    }
-    int numResults = Math.min(k, namespaceConfig.getMaxNumSimilarities());
+  protected final List<RowNumAndSimilarity> searchNearestNeighbors(
+      int numResults, LongTermsAndValues record, MetaFilter metadataFilter, float minSimilarity) {
     return search(record, metadataFilter, minSimilarity, numResults);
   }
 
   @Override
-  public final List<RowNumAndSimilarity> getSimilarRowNums(
+  protected final List<RowNumAndSimilarity> searchSimilarRowNums(
       float minSimilarity, LongTermsAndValues record, MetaFilter metadataFilter) {
-    if (minSimilarity < 0.0f || minSimilarity > 1.0f) {
-      throw new IllegalArgumentException("minSimilarity must be in the range [0.0, 1.0].");
-    }
-    return search(record, metadataFilter, minSimilarity, namespaceConfig.getMaxNumSimilarities());
+    return search(
+        record,
+        metadataFilter,
+        minSimilarity,
+        SearchRequests.similarSearchResultLimit(namespaceConfig));
   }
 
   final MetadataFilteringStrategy

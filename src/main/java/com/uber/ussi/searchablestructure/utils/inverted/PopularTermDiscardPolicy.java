@@ -1,5 +1,5 @@
 /* AUTHOR: Ahmed Metwally (ametwally@uber.com) */
-package com.uber.ussi.searchablestructure.index.inverted;
+package com.uber.ussi.searchablestructure.utils.inverted;
 
 import com.carrotsearch.hppc.LongHashSet;
 import com.carrotsearch.hppc.LongIntHashMap;
@@ -12,25 +12,52 @@ import com.uber.ussi.utils.ConfigKeys;
 import java.util.Objects;
 
 /**
- * Popularity-based term discard policy for inverted term-keyed indexes.
+ * Popularity-based term discard policy for inverted term-keyed structures.
  *
- * <p>Hybrid and term indexes share this policy so a composite structure can compute discards over
- * its term-keyed partition without depending on {@link BaseInvertedIndex}.
+ * <p>Graduated indexes read thresholds from {@code index_params}; the writable inverted term cache
+ * reads the same keys from {@code cache_params}. Batch discard over a complete row map applies only
+ * to index construction.
  */
 public final class PopularTermDiscardPolicy {
 
   private PopularTermDiscardPolicy() {}
 
-  /** Returns the configured maximum fraction of rows a term may appear in before it is discarded. */
-  public static double maxFractionIdsPerTerm(NamespaceConfig namespaceConfig) {
+  /**
+   * Returns the configured maximum fraction of rows a term may appear in before it is discarded, from
+   * {@code index_params}.
+   */
+  public static double maxFractionIdsPerTermFromIndexConfig(NamespaceConfig namespaceConfig) {
     Objects.requireNonNull(namespaceConfig, "namespaceConfig is null.");
     return namespaceConfig.readDoubleIndexParam(
         ConfigKeys.MAX_FRACTION_IDS_PER_TERM, ConfigKeys.DEFAULT_MAX_FRACTION_IDS_PER_TERM);
   }
 
-  /** Returns whether any term may be discarded under the configured popularity threshold. */
-  public static boolean doesDiscardPopularTerms(NamespaceConfig namespaceConfig) {
-    return maxFractionIdsPerTerm(namespaceConfig) < 1.0;
+  /**
+   * Returns the configured maximum fraction of rows a term may appear in before it is discarded,
+   * from {@code cache_params}.
+   */
+  public static double maxFractionIdsPerTermFromCacheConfig(NamespaceConfig namespaceConfig) {
+    Objects.requireNonNull(namespaceConfig, "namespaceConfig is null.");
+    return namespaceConfig.readDoubleCacheParam(
+        ConfigKeys.MAX_FRACTION_IDS_PER_TERM, ConfigKeys.DEFAULT_MAX_FRACTION_IDS_PER_TERM);
+  }
+
+  /**
+   * Returns the one-sided confidence used to declare a term high-popularity in the inverted term
+   * cache, from {@code cache_params}. A confidence of 0.5 degenerates to comparing observed
+   * popularity against {@link #maxFractionIdsPerTermFromCacheConfig} directly.
+   */
+  public static double maxFractionIdsPerTermConfidenceFromCacheConfig(
+      NamespaceConfig namespaceConfig) {
+    Objects.requireNonNull(namespaceConfig, "namespaceConfig is null.");
+    return namespaceConfig.readDoubleCacheParam(
+        ConfigKeys.MAX_FRACTION_IDS_PER_TERM_CONFIDENCE,
+        ConfigKeys.DEFAULT_MAX_FRACTION_IDS_PER_TERM_CONFIDENCE);
+  }
+
+  /** Returns whether any term may be discarded under the index popularity threshold. */
+  public static boolean doesDiscardPopularTermsFromIndexConfig(NamespaceConfig namespaceConfig) {
+    return maxFractionIdsPerTermFromIndexConfig(namespaceConfig) < 1.0;
   }
 
   /** Returns whether any term may be discarded under {@code maxFractionIdsPerTerm}. */
@@ -39,14 +66,16 @@ public final class PopularTermDiscardPolicy {
   }
 
   /**
-   * Returns the terms a structure holding {@code rowNumToTermsAndValuesMap} discards as popular.
+   * Returns the terms a graduated index holding {@code rowNumToTermsAndValuesMap} discards as
+   * popular, using {@code index_params}.
    */
   public static LongHashSet discardedTermsOf(
       NamespaceConfig namespaceConfig,
       LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap) {
     Objects.requireNonNull(namespaceConfig, "namespaceConfig is null.");
     Objects.requireNonNull(rowNumToTermsAndValuesMap, "rowNumToTermsAndValuesMap is null.");
-    return discardedTermsOf(rowNumToTermsAndValuesMap, maxFractionIdsPerTerm(namespaceConfig));
+    return discardedTermsOf(
+        rowNumToTermsAndValuesMap, maxFractionIdsPerTermFromIndexConfig(namespaceConfig));
   }
 
   /**

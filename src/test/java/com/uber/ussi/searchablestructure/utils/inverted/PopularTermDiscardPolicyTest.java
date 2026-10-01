@@ -1,5 +1,5 @@
 /* AUTHOR: Ahmed Metwally (ametwally@uber.com) */
-package com.uber.ussi.searchablestructure.index.inverted;
+package com.uber.ussi.searchablestructure.utils.inverted;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -31,8 +31,28 @@ class PopularTermDiscardPolicyTest {
             .maxNumSearchableStructures(3)
             .maxNumSimilarities(100)
             .build();
-    assertTrue(PopularTermDiscardPolicy.doesDiscardPopularTerms(config));
+    assertTrue(PopularTermDiscardPolicy.doesDiscardPopularTermsFromIndexConfig(config));
     assertFalse(PopularTermDiscardPolicy.doesDiscardPopularTerms(1.0));
+  }
+
+  @Test
+  void maxFractionIdsPerTermReadsIndexAndCacheParamBagsSeparately() {
+    NamespaceConfig config =
+        NamespaceConfig.builder()
+            .minTermsAndValuesLength(0)
+            .maxTermsAndValuesLength(100)
+            .maxCacheSize(100)
+            .cacheType("inverted_term")
+            .indexType("inverted_term")
+            .indexParams(Map.of(ConfigKeys.MAX_FRACTION_IDS_PER_TERM, "0.3"))
+            .cacheParams(Map.of(ConfigKeys.MAX_FRACTION_IDS_PER_TERM, "0.7"))
+            .comparatorType("jaccard")
+            .comparatorNormalizerType("complement")
+            .maxNumSearchableStructures(3)
+            .maxNumSimilarities(100)
+            .build();
+    assertEquals(0.3, PopularTermDiscardPolicy.maxFractionIdsPerTermFromIndexConfig(config));
+    assertEquals(0.7, PopularTermDiscardPolicy.maxFractionIdsPerTermFromCacheConfig(config));
   }
 
   @Test

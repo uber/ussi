@@ -102,11 +102,11 @@ class IndexTypeTest {
         Set.of(RecordType.DENSE),
         IndexType.MATRIX.resolveRecordTypes(comparator("jaccard", "identity")));
 
-    assertTrue(IndexType.MATRIX.scoresByDotProducts());
-    assertFalse(IndexType.SCAN.scoresByDotProducts());
-    assertFalse(IndexType.INVERTED_TERM.scoresByDotProducts());
-    assertFalse(IndexType.INVERTED_SIGNATURE.scoresByDotProducts());
-    assertFalse(IndexType.INVERTED_HYBRID.scoresByDotProducts());
+    assertTrue(IndexType.MATRIX.doesScoreByDotProducts());
+    assertFalse(IndexType.SCAN.doesScoreByDotProducts());
+    assertFalse(IndexType.INVERTED_TERM.doesScoreByDotProducts());
+    assertFalse(IndexType.INVERTED_SIGNATURE.doesScoreByDotProducts());
+    assertFalse(IndexType.INVERTED_HYBRID.doesScoreByDotProducts());
 
     assertTrue(comparator("l2", "reciprocal") instanceof DotProductScored);
     assertFalse(comparator("jaccard", "identity") instanceof DotProductScored);
@@ -114,19 +114,19 @@ class IndexTypeTest {
 
   @Test
   void onlyTheInvertedStructuresKeepTheListsTheGeneratorsWalk() {
-    assertTrue(IndexType.INVERTED_TERM.supportsCandidateGenerator());
-    assertTrue(IndexType.INVERTED_SIGNATURE.supportsCandidateGenerator());
-    assertTrue(IndexType.INVERTED_HYBRID.supportsCandidateGenerator());
-    assertFalse(IndexType.SCAN.supportsCandidateGenerator());
-    assertFalse(IndexType.MATRIX.supportsCandidateGenerator());
+    assertTrue(IndexType.INVERTED_TERM.doesSupportCandidateGenerator());
+    assertTrue(IndexType.INVERTED_SIGNATURE.doesSupportCandidateGenerator());
+    assertTrue(IndexType.INVERTED_HYBRID.doesSupportCandidateGenerator());
+    assertFalse(IndexType.SCAN.doesSupportCandidateGenerator());
+    assertFalse(IndexType.MATRIX.doesSupportCandidateGenerator());
   }
 
   @Test
   void onlyTheSignatureKeyedStructuresNeedAGenerator() {
-    assertTrue(IndexType.INVERTED_SIGNATURE.keysBySignatures());
-    assertTrue(IndexType.INVERTED_HYBRID.keysBySignatures());
-    assertFalse(IndexType.INVERTED_TERM.keysBySignatures());
-    assertFalse(IndexType.SCAN.keysBySignatures());
+    assertTrue(IndexType.INVERTED_SIGNATURE.doesKeyBySignatures());
+    assertTrue(IndexType.INVERTED_HYBRID.doesKeyBySignatures());
+    assertFalse(IndexType.INVERTED_TERM.doesKeyBySignatures());
+    assertFalse(IndexType.SCAN.doesKeyBySignatures());
   }
 
   /**
@@ -136,14 +136,14 @@ class IndexTypeTest {
   @Test
   void onlyTermKeyedListsOverSparseRecordsDetermineSimilarity() {
     assertTrue(
-        IndexType.INVERTED_TERM.conjunctionDeterminesSimilarity(
+        IndexType.INVERTED_TERM.doesConjunctionDetermineSimilarity(
             RecordType.SPARSE));
-    assertFalse(IndexType.INVERTED_TERM.conjunctionDeterminesSimilarity(RecordType.SEQUENCE));
+    assertFalse(IndexType.INVERTED_TERM.doesConjunctionDetermineSimilarity(RecordType.SEQUENCE));
     assertFalse(
-        IndexType.INVERTED_SIGNATURE.conjunctionDeterminesSimilarity(
+        IndexType.INVERTED_SIGNATURE.doesConjunctionDetermineSimilarity(
             RecordType.SPARSE));
     assertFalse(
-        IndexType.INVERTED_HYBRID.conjunctionDeterminesSimilarity(
+        IndexType.INVERTED_HYBRID.doesConjunctionDetermineSimilarity(
             RecordType.SPARSE));
   }
 
@@ -172,8 +172,8 @@ class IndexTypeTest {
 
     // Storing the type is only half of it: scan also imposes neither of the checks that would
     // reject a comparator the pairing otherwise allows.
-    assertFalse(IndexType.SCAN.scoresByDotProducts());
-    assertFalse(IndexType.SCAN.keysBySignatures());
+    assertFalse(IndexType.SCAN.doesScoreByDotProducts());
+    assertFalse(IndexType.SCAN.doesKeyBySignatures());
   }
 
   private static List<Comparator> everyComparator() {

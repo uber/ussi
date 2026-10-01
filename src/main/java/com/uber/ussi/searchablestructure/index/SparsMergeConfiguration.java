@@ -20,12 +20,13 @@ public final class SparsMergeConfiguration {
   /**
    * Returns whether {@code spars_merge} may run with the configured comparator on this index shape.
    */
-  public static boolean supportsMergeCandidateGeneration(
+  public static boolean doesMergeSupportCandidateGeneration(
       IndexType indexType, @Nullable RecordType recordType, ComparatorType comparatorType) {
     Objects.requireNonNull(indexType, "indexType is null.");
     Objects.requireNonNull(comparatorType, "comparatorType is null.");
     return comparatorType.similarityFromConfiguredConjunction()
-        || usesSequenceIndexedMultisetPartialConjunction(indexType, recordType, comparatorType);
+        || doesMergeUseSequenceIndexedMultisetPartialConjunction(
+            indexType, recordType, comparatorType);
   }
 
   /**
@@ -33,16 +34,16 @@ public final class SparsMergeConfiguration {
    * com.uber.ussi.comparator.ConjunctionScored} facet rather than the indexed-multiset Ruzicka
    * helper.
    */
-  public static boolean partialConjunctionUsesConfiguredComparator(
+  public static boolean doesPartialConjunctionUseConfiguredComparator(
       IndexType indexType,
       RecordType recordType,
       ComparatorType comparatorType,
-      boolean scoresFromAccumulatedConjunction) {
+      boolean doesMergeScoreFromAccumulatedConjunction) {
     Objects.requireNonNull(recordType, "recordType is null.");
-    if (scoresFromAccumulatedConjunction) {
+    if (doesMergeScoreFromAccumulatedConjunction) {
       return true;
     }
-    return indexType.conjunctionDeterminesSimilarity(recordType)
+    return indexType.doesConjunctionDetermineSimilarity(recordType)
         && comparatorType.similarityFromConfiguredConjunction();
   }
 
@@ -50,14 +51,14 @@ public final class SparsMergeConfiguration {
    * Returns whether merge treats the accumulated conjunction as each row's exact similarity rather
    * than a bound before verification.
    */
-  public static boolean scoresFromAccumulatedConjunction(
+  public static boolean doesMergeScoreFromAccumulatedConjunction(
       IndexType indexType,
       RecordType recordType,
       PopularTermDiscardScope popularTermDiscardScope) {
     Objects.requireNonNull(indexType, "indexType is null.");
     Objects.requireNonNull(recordType, "recordType is null.");
     Objects.requireNonNull(popularTermDiscardScope, "popularTermDiscardScope is null.");
-    return indexType.conjunctionDeterminesSimilarity(recordType)
+    return indexType.doesConjunctionDetermineSimilarity(recordType)
         && popularTermDiscardScope == PopularTermDiscardScope.CANDIDATES_AND_VERIFICATION;
   }
 
@@ -65,7 +66,7 @@ public final class SparsMergeConfiguration {
    * Returns whether merge bounds rows with partial Ruzicka conjunction over indexed term counts
    * while verification still scores ordered sequences.
    */
-  public static boolean usesSequenceIndexedMultisetPartialConjunction(
+  public static boolean doesMergeUseSequenceIndexedMultisetPartialConjunction(
       IndexType indexType, @Nullable RecordType recordType, ComparatorType comparatorType) {
     Objects.requireNonNull(indexType, "indexType is null.");
     Objects.requireNonNull(comparatorType, "comparatorType is null.");
@@ -79,12 +80,12 @@ public final class SparsMergeConfiguration {
    * conjunction being the row's score, while the configured {@link ComparatorType} supports no
    * signature generator. Such a pairing cannot verify candidates on a signature-keyed structure.
    */
-  public static boolean mergeRequiresSignatureGeneratingComparator(
+  public static boolean doesMergeRequireSignatureGeneratingComparator(
       IndexType indexType, RecordType recordType, ComparatorType comparatorType) {
     Objects.requireNonNull(indexType, "indexType is null.");
     Objects.requireNonNull(recordType, "recordType is null.");
     Objects.requireNonNull(comparatorType, "comparatorType is null.");
-    if (indexType.conjunctionDeterminesSimilarity(recordType)) {
+    if (indexType.doesConjunctionDetermineSimilarity(recordType)) {
       return false;
     }
     return comparatorType.getSupportedSignatureGeneratorTypes().isEmpty();

@@ -70,17 +70,17 @@ public enum IndexType implements ConfigVocabulary {
    * candidates to the comparator, so it has to be configured with a comparator whose similarity a
    * dot product determines. See {@link DotProductScored}.
    */
-  public boolean scoresByDotProducts() {
+  public boolean doesScoreByDotProducts() {
     return this == MATRIX;
   }
 
   /** Returns whether this structure keeps the uni-sorted inverted lists the generators walk. */
-  public boolean supportsCandidateGenerator() {
+  public boolean doesSupportCandidateGenerator() {
     return this == INVERTED_TERM || this == INVERTED_SIGNATURE || this == INVERTED_HYBRID;
   }
 
   /** Returns whether this structure's keys are signatures the comparator has to generate. */
-  public boolean keysBySignatures() {
+  public boolean doesKeyBySignatures() {
     return this == INVERTED_SIGNATURE || this == INVERTED_HYBRID;
   }
 
@@ -89,7 +89,7 @@ public enum IndexType implements ConfigVocabulary {
    * bound on it. It is only when the lists carry a record's own terms and values. A sequence's
    * terms are keyed without the order its similarity depends on, so they only bound it.
    */
-  public boolean conjunctionDeterminesSimilarity(RecordType recordType) {
+  public boolean doesConjunctionDetermineSimilarity(RecordType recordType) {
     return this == INVERTED_TERM && recordType == RecordType.SPARSE;
   }
 }

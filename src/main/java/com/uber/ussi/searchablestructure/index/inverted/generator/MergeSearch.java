@@ -81,7 +81,7 @@ public final class MergeSearch {
           true);
     }
 
-    public boolean usesPartialConjunction() {
+    public boolean doesUsePartialConjunction() {
       return pruneRowsByPartialConjunction && conjunctionScored != null;
     }
 
@@ -136,7 +136,7 @@ public final class MergeSearch {
             : partialConjunctionPolicy;
     boolean scoreFromAccumulatedConjunction = scoresFromConjunction;
     boolean pruneByPartialConjunction =
-        !scoreFromAccumulatedConjunction && policy.usesPartialConjunction();
+        !scoreFromAccumulatedConjunction && policy.doesUsePartialConjunction();
     ConjunctionScored conjunctionScored = null;
     Comparator conjunctionComparator = comparator;
     if (scoreFromAccumulatedConjunction || pruneByPartialConjunction) {

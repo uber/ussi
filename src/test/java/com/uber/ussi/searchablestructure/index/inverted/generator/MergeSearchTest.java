@@ -149,7 +149,7 @@ class MergeSearchTest {
             ComparatorFactory.createIndexedMultisetMergeConjunctionScored());
 
     assertTrue(policy.hasCustomMinSimilarityForConjunction());
-    assertTrue(policy.usesPartialConjunction());
+    assertTrue(policy.doesUsePartialConjunction());
     double queryUniValue = 10.0;
     double minNormalizedSimilarity = 0.5;
     assertEquals(

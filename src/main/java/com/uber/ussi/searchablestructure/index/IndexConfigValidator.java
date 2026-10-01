@@ -56,7 +56,7 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
     if (indexType == null) {
       return;
     }
-    if (indexType.supportsCandidateGenerator()) {
+    if (indexType.doesSupportCandidateGenerator()) {
       ConfigViolations.checkDoubleAboveMinInRange(
           violations,
           ConfigKeys.MAX_FRACTION_IDS_PER_TERM,
@@ -92,7 +92,7 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
       @Nullable ComparatorType comparatorType,
       NamespaceConfig config,
       List<String> violations) {
-    if (!indexType.scoresByDotProducts()) {
+    if (!indexType.doesScoreByDotProducts()) {
       return;
     }
     if (comparatorType == null || comparatorType.similarityFromDotProduct()) {
@@ -111,7 +111,7 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
       IndexType indexType,
       @Nullable ComparatorType comparatorType,
       List<String> violations) {
-    if (!indexType.keysBySignatures()) {
+    if (!indexType.doesKeyBySignatures()) {
       return;
     }
     if (comparatorType == null || ComparatorFactory.tryCreateComparator(config) == null) {
@@ -198,7 +198,7 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
       return;
     }
     String mergeParamValue = CandidateGeneratorType.SPARS_MERGE.getParamValue();
-    if (!indexType.supportsCandidateGenerator()) {
+    if (!indexType.doesSupportCandidateGenerator()) {
       violations.add(
           String.format(
               "%s=%s is supported only for the inverted index types, got %s.",
@@ -209,7 +209,7 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
       // The rules below need a known comparator. ComparatorConfigValidator reports the name.
       return;
     }
-    if (!SparsMergeConfiguration.supportsMergeCandidateGeneration(
+    if (!SparsMergeConfiguration.doesMergeSupportCandidateGeneration(
         indexType, recordType, comparatorType)) {
       violations.add(
           String.format(
@@ -218,7 +218,7 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
       return;
     }
     if (recordType != null
-        && SparsMergeConfiguration.mergeRequiresSignatureGeneratingComparator(
+        && SparsMergeConfiguration.doesMergeRequireSignatureGeneratingComparator(
             indexType, recordType, comparatorType)) {
       violations.add(
           String.format(

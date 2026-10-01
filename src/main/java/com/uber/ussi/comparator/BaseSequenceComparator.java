@@ -24,10 +24,11 @@ import java.util.Set;
  * <p>Shared indexed keys bound an order-sensitive distance without determining it, so candidate
  * generation verifies each surviving candidate against the ordered sequences.
  *
- * <p>{@code spars} generates candidates with prefix bounds from this comparator over those indexed
- * keys and scores ordered sequences. {@code spars_merge} on {@code inverted_term} bounds rows with
- * partial Ruzicka conjunction over the indexed multiset, then scores each surviving candidate
- * through this comparator on the ordered sequences.
+ * <p>{@code spars} and {@code spars_merge} are both available on every inverted index type with
+ * every comparator. {@code spars} generates candidates with prefix bounds from this comparator
+ * over the indexed keys and scores ordered sequences. {@code spars_merge} bounds rows with partial
+ * multiset conjunction over those indexed keys, then scores each surviving candidate through this
+ * comparator on the ordered sequences.
  */
 abstract class BaseSequenceComparator extends Comparator implements KeyShareBounded {
 

@@ -416,20 +416,16 @@ recall costs depends on how much similarity the discarded terms carried.
 
 The inverted index types can find candidates two ways, chosen with the
 `candidate_generator` index parameter. Both return identical results and honor
-every metadata filtering strategy; they differ only in how much work they do.
+every metadata filtering strategy. Both work with every inverted index type
+and every comparator; they differ only in how much work they do to get there.
 
-`spars`, the default, visits the query's keys cheapest first and scores every
-surviving candidate. It works with every inverted index type and every
-comparator.
+`spars`, the default, is key-major. It visits the query's keys cheapest first
+and scores every surviving candidate through the comparator.
 
-`spars_merge` advances all of the query's keys together, letting it abandon a
-row as soon as no completion of it can reach the current minimum similarity. It
-pays off when queries have many keys and the minimum similarity rejects most
-rows early. It is available for `l2`, `jaccard`, and `ruzicka`, which implement
-partial-conjunction bounds, and for `gld` and `ngld` on `inverted_term`, where
-`spars_merge` bounds rows with partial Ruzicka conjunction over the indexed
-multiset and verifies each surviving candidate with the configured sequence
-comparator on the ordered terms.
+`spars_merge` is row-major. It advances all of the query's keys together and
+abandons a row as soon as no completion of it can reach the current minimum
+similarity. It pays off when queries have many keys and the minimum similarity
+rejects most rows early.
 
 ## What USSI Does Not Do
 

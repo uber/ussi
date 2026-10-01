@@ -20,11 +20,14 @@ import java.util.function.LongFunction;
 import javax.annotation.Nullable;
 
 /**
- * Row-major merge candidate generation over uni-sorted inverted lists.
+ * Row-major merge candidate generation over uni-sorted inverted lists, implementing {@code
+ * spars_merge}.
  *
  * <p>One frontier spans the query's keys and advances them in step, so a candidate row's entries
  * all arrive together. The merge accumulates the row's conjunction as it goes and abandons the row
- * once no completion of it can reach minSimilarity.
+ * once no completion of it can reach minSimilarity. When partial conjunction does not determine
+ * similarity, each surviving candidate is scored through the comparator. This generator works with
+ * every inverted index type and every comparator.
  *
  * <p>Public only for the sibling inverted index packages.
  */

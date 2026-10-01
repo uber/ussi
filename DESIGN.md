@@ -783,7 +783,7 @@ the distinct terms of the row's multiset and carry how many times each occurs,
 which is what length and prefix filtering prune on. The comparator then verifies
 each surviving candidate against the ordered sequences, running the banded
 dynamic program under the budget the current `minSimilarity` allows. Both
-`spars` and `spars_merge` follow that scoring path on `inverted_term`. They
+`spars` and `spars_merge` follow that scoring path on the term index. They
 differ only in how the lists are traversed: key-major candidate generation
 (`spars`) versus row-major merge (`spars_merge`).
 
@@ -910,14 +910,15 @@ they inserted them under.
 The three inverted index types build the same uni-sorted inverted lists but can
 traverse them with either of two candidate generators, selected per namespace
 with the `candidate_generator` index parameter. Both return identical results
-and honor every metadata filtering strategy; they differ only in how much work
-they do to get there.
+and honor every metadata filtering strategy. Both work with every inverted index
+type and every comparator; they differ only in how much work they do to get
+there. Neither generator changes which comparators or index types a namespace
+may configure.
 
 `spars` is the default and is key-major. Its vertical scan visits the query's
 keys cheapest first, each horizontal scan narrows that key's inverted list to
 the rows length filtering admits, and every surviving candidate is scored with
-the comparator. Because it always scores through the comparator, it supports
-every inverted index type and every supported comparator.
+the comparator.
 
 `spars_merge` is row-major. One frontier spans all of the query's keys and
 advances them in step, so every inverted-list entry belonging to a candidate row
@@ -932,30 +933,20 @@ currently holds. It trades a priority queue over the query's keys for the
 ability to abandon a row before all of its shared keys arrive, which pays off
 when a query has many keys and the minimum similarity rejects most rows early.
 
-When the keys are the terms of a sparse record, the inverted lists also carry
-the row's value at that key, so the accumulated conjunction is the row's exact
-similarity and no further comparison is needed. Signature keys carry no usable
-value, and a sequence's terms bound its similarity without determining it, so in
-both cases the merge generator scores each surviving candidate through the
-comparator. `inverted_hybrid` applies the generator
-independently to each of the two, so its term index scores from the conjunction
-while its signature index verifies.
+When merge can treat the accumulated conjunction as the row's exact
+similarity, it may skip a further comparison. That happens on term-keyed sparse
+records under `candidates_and_verification`, where inverted lists carry the
+value at each key. Otherwise merge bounds rows with a partial conjunction
+appropriate to the comparator and key type, then verifies each surviving
+candidate through the comparator. Signature keys always verify through the
+comparator. Ordered sequences on the term index bound merge with partial
+multiset conjunction and verify with the configured sequence comparator.
+`inverted_hybrid` chooses the generator independently for its term index and
+its signature index, so each half follows the rules of its keying.
 
-Pruning by partial conjunction requires a comparator that implements
-the conjunction hooks and sparse term keys whose lists carry a value at each
-key. On `inverted_term` with sparse records, the accumulated conjunction can be
-the exact similarity. Jaccard, Ruzicka, and L2 implement the hooks, so
-`spars_merge` applies partial-conjunction bounds there. Inverted-list values are
-materialized only where those bounds read them.
-
-Sequence comparators implement prefix bounds for `spars` but not `ConjunctionScored`
-hooks on ordered sequences. On `inverted_term`, `spars_merge`
-still bounds rows with partial Ruzicka conjunction over the indexed term
-multiset: the configured comparator supplies the minimum shared-key fraction,
-and verification scores each surviving candidate through the edit distance.
-Signature-keyed structures
-and the signature half of `inverted_hybrid` still reject `spars_merge` with
-sequence comparators, because that half requires a conjunction-scoring comparator.
+Sequence comparators implement prefix bounds for `spars`. Inverted-list posting
+values are materialized only where `spars_merge` partial-conjunction bounds read
+them.
 
 ## Discarding Popular Terms
 

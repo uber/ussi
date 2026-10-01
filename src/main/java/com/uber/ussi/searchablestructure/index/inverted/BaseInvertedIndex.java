@@ -153,7 +153,7 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
     // keys below, and eagerly so that an empty structure is rejected on the same grounds as a
     // populated one.
     this.signatureKeyingStrategy =
-        indexType.keysBySignatures()
+        indexType.doesKeyBySignatures()
             ? createSignatureKeyingStrategy(namespaceConfig, comparatorType, comparator)
             : null;
     RecordType recordType = resolveRecordType(indexType);
@@ -868,7 +868,7 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
       return SPARS_MERGE_DISABLED;
     }
     boolean scoresFromConjunction =
-        SparsMergeConfiguration.scoresFromAccumulatedConjunction(
+        SparsMergeConfiguration.doesMergeScoreFromAccumulatedConjunction(
             indexType, recordType, popularTermDiscardScope);
     MergeSearch.PartialConjunctionPolicy partialConjunctionPolicy =
         partialConjunctionPolicyForMerge(
@@ -886,8 +886,8 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
       IndexType indexType,
       RecordType recordType) {
     return scoresFromConjunction
-        || (partialConjunctionPolicy.usesPartialConjunction()
-            && (indexType.conjunctionDeterminesSimilarity(recordType)
+        || (partialConjunctionPolicy.doesUsePartialConjunction()
+            && (indexType.doesConjunctionDetermineSimilarity(recordType)
                 || recordType == RecordType.SEQUENCE));
   }
 
@@ -897,12 +897,12 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
       ComparatorType comparatorType,
       Comparator comparator,
       boolean scoresFromConjunction) {
-    if (SparsMergeConfiguration.partialConjunctionUsesConfiguredComparator(
+    if (SparsMergeConfiguration.doesPartialConjunctionUseConfiguredComparator(
         indexType, recordType, comparatorType, scoresFromConjunction)) {
       return MergeSearch.PartialConjunctionPolicy.fromConfiguredComparator(
           ComparatorFactory.conjunctionScored(comparator, comparatorType));
     }
-    if (SparsMergeConfiguration.usesSequenceIndexedMultisetPartialConjunction(
+    if (SparsMergeConfiguration.doesMergeUseSequenceIndexedMultisetPartialConjunction(
         indexType, recordType, comparatorType)) {
       KeyShareBounded keyShareBound = ComparatorFactory.keyShareBounded(comparator, comparatorType);
       return MergeSearch.PartialConjunctionPolicy.forSequenceIndexedMultisetMerge(

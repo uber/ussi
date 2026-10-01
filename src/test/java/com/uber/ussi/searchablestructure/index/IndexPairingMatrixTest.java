@@ -160,7 +160,7 @@ class IndexPairingMatrixTest {
       ComparatorCase comparator,
       IndexType indexType,
       CandidateGeneratorType candidateGeneratorType) {
-    if (indexType.keysBySignatures() && !comparator.generatesSignatures()) {
+    if (indexType.doesKeyBySignatures() && !comparator.generatesSignatures()) {
       return Expectation.NO_SIGNATURES;
     }
     if (candidateGeneratorType == CandidateGeneratorType.SPARS_MERGE

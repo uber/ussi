@@ -14,65 +14,65 @@ class SparsMergeConfigurationTest {
   @Test
   void supportsMergeForConfiguredConjunctionAndSequenceMultisetPaths() {
     assertTrue(
-        SparsMergeConfiguration.supportsMergeCandidateGeneration(
+        SparsMergeConfiguration.doesMergeSupportCandidateGeneration(
             IndexType.INVERTED_TERM, RecordType.SPARSE, ComparatorType.JACCARD));
     assertTrue(
-        SparsMergeConfiguration.supportsMergeCandidateGeneration(
+        SparsMergeConfiguration.doesMergeSupportCandidateGeneration(
             IndexType.INVERTED_TERM, RecordType.SEQUENCE, ComparatorType.NGLD));
     assertFalse(
-        SparsMergeConfiguration.supportsMergeCandidateGeneration(
+        SparsMergeConfiguration.doesMergeSupportCandidateGeneration(
             IndexType.INVERTED_TERM, RecordType.SPARSE, ComparatorType.NGLD));
   }
 
   @Test
-  void partialConjunctionUsesConfiguredComparatorOnSparseMergePaths() {
+  void doesPartialConjunctionUseConfiguredComparatorOnSparseMergePaths() {
     assertTrue(
-        SparsMergeConfiguration.partialConjunctionUsesConfiguredComparator(
+        SparsMergeConfiguration.doesPartialConjunctionUseConfiguredComparator(
             IndexType.INVERTED_TERM,
             RecordType.SPARSE,
             ComparatorType.JACCARD,
-            /* scoresFromAccumulatedConjunction */ true));
+            /* doesMergeScoreFromAccumulatedConjunction */ true));
     assertTrue(
-        SparsMergeConfiguration.partialConjunctionUsesConfiguredComparator(
+        SparsMergeConfiguration.doesPartialConjunctionUseConfiguredComparator(
             IndexType.INVERTED_TERM,
             RecordType.SPARSE,
             ComparatorType.JACCARD,
-            /* scoresFromAccumulatedConjunction */ false));
+            /* doesMergeScoreFromAccumulatedConjunction */ false));
     assertFalse(
-        SparsMergeConfiguration.partialConjunctionUsesConfiguredComparator(
+        SparsMergeConfiguration.doesPartialConjunctionUseConfiguredComparator(
             IndexType.INVERTED_TERM,
             RecordType.SEQUENCE,
             ComparatorType.NGLD,
-            /* scoresFromAccumulatedConjunction */ false));
+            /* doesMergeScoreFromAccumulatedConjunction */ false));
   }
 
   @Test
-  void mergeRequiresSignatureGeneratingComparatorWhenConjunctionDoesNotDetermineSimilarity() {
+  void doesMergeRequireSignatureGeneratingComparatorWhenConjunctionDoesNotDetermineSimilarity() {
     assertFalse(
-        SparsMergeConfiguration.mergeRequiresSignatureGeneratingComparator(
+        SparsMergeConfiguration.doesMergeRequireSignatureGeneratingComparator(
             IndexType.INVERTED_TERM, RecordType.SPARSE, ComparatorType.JACCARD));
     assertFalse(
-        SparsMergeConfiguration.mergeRequiresSignatureGeneratingComparator(
+        SparsMergeConfiguration.doesMergeRequireSignatureGeneratingComparator(
             IndexType.INVERTED_TERM, RecordType.SEQUENCE, ComparatorType.NGLD));
     assertTrue(
-        SparsMergeConfiguration.mergeRequiresSignatureGeneratingComparator(
+        SparsMergeConfiguration.doesMergeRequireSignatureGeneratingComparator(
             IndexType.INVERTED_SIGNATURE, RecordType.SPARSE, ComparatorType.L2));
   }
 
   @Test
-  void scoresFromAccumulatedConjunctionOnlyOnSparseTermKeyedLists() {
+  void doesMergeScoreFromAccumulatedConjunctionOnlyOnSparseTermKeyedLists() {
     assertTrue(
-        SparsMergeConfiguration.scoresFromAccumulatedConjunction(
+        SparsMergeConfiguration.doesMergeScoreFromAccumulatedConjunction(
             IndexType.INVERTED_TERM,
             RecordType.SPARSE,
             PopularTermDiscardScope.CANDIDATES_AND_VERIFICATION));
     assertFalse(
-        SparsMergeConfiguration.scoresFromAccumulatedConjunction(
+        SparsMergeConfiguration.doesMergeScoreFromAccumulatedConjunction(
             IndexType.INVERTED_TERM,
             RecordType.SEQUENCE,
             PopularTermDiscardScope.CANDIDATES_AND_VERIFICATION));
     assertFalse(
-        SparsMergeConfiguration.scoresFromAccumulatedConjunction(
+        SparsMergeConfiguration.doesMergeScoreFromAccumulatedConjunction(
             IndexType.INVERTED_TERM,
             RecordType.SPARSE,
             PopularTermDiscardScope.CANDIDATES_ONLY));

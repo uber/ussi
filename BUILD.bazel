@@ -38,7 +38,7 @@ java_library(
 java_export(
     name = "src_main",
     srcs = glob(["src/main/java/**/*.java"]),
-    maven_coordinates = "com.uber.ussi:ussi:0.2.0",
+    maven_coordinates = "com.uber.ussi:ussi:0.1.0",
     plugins = [":lombok_processor"],
     visibility = ["//visibility:public"],
     runtime_deps = [

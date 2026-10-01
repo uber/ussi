@@ -284,7 +284,7 @@ native code.
 
 ## Maven consumption
 
-USSI is published as `com.uber.ussi:ussi:0.2.0`. Consumers build with Gradle
+USSI is published as `com.uber.ussi:ussi:0.1.0`. Consumers build with Gradle
 or Maven and declare the coordinate as a dependency.
 
 The generated POM lists the runtime dependencies, including the OpenBLAS and

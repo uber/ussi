@@ -98,9 +98,9 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
   private final RecordIndexingStrategy recordIndexingStrategy;
   private final CandidateGeneratorType candidateGeneratorType;
   private final PopularTermDiscardScope popularTermDiscardScope;
-  private final boolean scoresFromConjunction;
+  private final boolean mergeScoresFromAccumulatedConjunction;
   private final MergeSearch.PartialConjunctionPolicy partialConjunctionPolicy;
-  private final boolean storesMergePostingValues;
+  private final boolean doesStoreMergePostingValues;
   private final double maxFractionIdsPerTerm;
   private final LongHashSet discardedTerms;
   private final LongObjectHashMap<LongTermsAndValues> verificationRowNumToTermsAndValuesMap;
@@ -169,9 +169,9 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
             comparatorType,
             comparator,
             popularTermDiscardScope);
-    this.scoresFromConjunction = sparsMerge.scoresFromConjunction();
+    this.mergeScoresFromAccumulatedConjunction = sparsMerge.mergeScoresFromAccumulatedConjunction();
     this.partialConjunctionPolicy = sparsMerge.partialConjunctionPolicy();
-    this.storesMergePostingValues = sparsMerge.storesMergePostingValues();
+    this.doesStoreMergePostingValues = sparsMerge.doesStoreMergePostingValues();
     this.maxFractionIdsPerTerm = parseMaxFractionIdsPerTerm(namespaceConfig);
     validateRows();
     this.discardedTerms =
@@ -204,7 +204,7 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
             MetadataFilteringStrategy.IN_FILTERING,
             this::getMatchingRowNumsIfUnderPreFilteringLimit,
             this::getPostFilteringMaxResults,
-            this::matchesMetaFilter);
+            this::doesMatchMetaFilter);
   }
 
   /** Returns the keying strategy of a structure whose index type keys its lists by signatures. */
@@ -442,8 +442,8 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
           maxResults,
           collectMergeSearchQueryKeys(indexedQuery, shard),
           searchContext,
-          this::canScoreRow,
-          scoresFromConjunction,
+          this::doesPassRowFilter,
+          mergeScoresFromAccumulatedConjunction,
           this::getVerificationRow,
           sharedMinSimilarity,
           partialConjunctionPolicy);
@@ -457,7 +457,7 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
         maxResults,
         collectFilteredSearchQueryKeys(indexedQuery, shard),
         searchContext,
-        this::canScoreRow,
+        this::doesPassRowFilter,
         this::getVerificationRow,
         sharedMinSimilarity);
   }
@@ -515,7 +515,7 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
   }
 
   /**
-   * The shared-key test runs on the indexed forms: {@code sharesAnyTerm} walks two records in step,
+   * The shared-key test runs on the indexed forms: {@code doesShareAnyTerm} walks two records in step,
    * so it needs the sorted, distinct terms only that form guarantees.
    */
   private double scoreRowAndUpdateMinSimilarity(
@@ -530,8 +530,8 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
     if (termsAndValues == null
         || termsAndValues.termsLength() == 0
         || indexedRow == null
-        || !indexedQuery.sharesAnyTerm(indexedRow)
-        || !canScoreRow(indexedRow, rowNum, metadataFilter)) {
+        || !indexedQuery.doesShareAnyTerm(indexedRow)
+        || !doesPassRowFilter(indexedRow, rowNum, metadataFilter)) {
       return minSimilarity;
     }
     double similarity = comparator.getSimilarity(query, termsAndValues, minSimilarity);
@@ -546,15 +546,15 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
   }
 
   /** The same, for a caller that has not read the indexed row yet. */
-  private boolean canScoreRow(long rowNum, @Nullable MetaFilter metadataFilter) {
-    return canScoreRow(getIndexedRow(rowNum), rowNum, metadataFilter);
+  private boolean doesPassRowFilter(long rowNum, @Nullable MetaFilter metadataFilter) {
+    return doesPassRowFilter(getIndexedRow(rowNum), rowNum, metadataFilter);
   }
 
   /** Lets deleted rows stay in the physical inverted lists without reaching search results. */
-  private boolean canScoreRow(
+  private boolean doesPassRowFilter(
       LongTermsAndValues indexedRow, long rowNum, @Nullable MetaFilter metadataFilter) {
     return !isDeleted(indexedRow)
-        && (metadataFilter == null || matchesMetaFilter(rowNum, metadataFilter));
+        && (metadataFilter == null || doesMatchMetaFilter(rowNum, metadataFilter));
   }
 
   /**
@@ -742,7 +742,7 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
           entries = new ArrayList<>();
           entriesByKey.put(key, entries);
         }
-        float value = storesMergePostingValues ? getValueAtKey(termsAndValues, key) : 0.0f;
+        float value = doesStoreMergePostingValues ? getValueAtKey(termsAndValues, key) : 0.0f;
         entries.add(new RowNumAndUniValue(row.key, uniValue, value));
       }
     }
@@ -761,10 +761,10 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
       List<RowNumAndUniValue> entries = entry.value;
       Collections.sort(entries);
       long[] rowNums = new long[entries.size()];
-      float[] values = storesMergePostingValues ? new float[entries.size()] : EMPTY_VALUES;
+      float[] values = doesStoreMergePostingValues ? new float[entries.size()] : EMPTY_VALUES;
       for (int index = 0; index < rowNums.length; ++index) {
         rowNums[index] = entries.get(index).getRowNum();
-        if (storesMergePostingValues) {
+        if (doesStoreMergePostingValues) {
           values[index] = entries.get(index).getValue();
         }
       }
@@ -844,9 +844,9 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
   }
 
   private record SparsMergeFields(
-      boolean scoresFromConjunction,
+      boolean mergeScoresFromAccumulatedConjunction,
       MergeSearch.PartialConjunctionPolicy partialConjunctionPolicy,
-      boolean storesMergePostingValues) {}
+      boolean doesStoreMergePostingValues) {}
 
   private static final SparsMergeFields SPARS_MERGE_DISABLED =
       new SparsMergeFields(false, MergeSearch.PartialConjunctionPolicy.none(), false);
@@ -867,25 +867,32 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
     if (candidateGeneratorType != CandidateGeneratorType.SPARS_MERGE) {
       return SPARS_MERGE_DISABLED;
     }
-    boolean scoresFromConjunction =
+    boolean mergeScoresFromAccumulatedConjunction =
         SparsMergeConfiguration.doesMergeScoreFromAccumulatedConjunction(
             indexType, recordType, popularTermDiscardScope);
     MergeSearch.PartialConjunctionPolicy partialConjunctionPolicy =
         partialConjunctionPolicyForMerge(
-            indexType, recordType, comparatorType, comparator, scoresFromConjunction);
+            indexType,
+            recordType,
+            comparatorType,
+            comparator,
+            mergeScoresFromAccumulatedConjunction);
     return new SparsMergeFields(
-        scoresFromConjunction,
+        mergeScoresFromAccumulatedConjunction,
         partialConjunctionPolicy,
-        storesMergePostingValues(
-            scoresFromConjunction, partialConjunctionPolicy, indexType, recordType));
+        doesStoreMergePostingValues(
+            mergeScoresFromAccumulatedConjunction,
+            partialConjunctionPolicy,
+            indexType,
+            recordType));
   }
 
-  private static boolean storesMergePostingValues(
-      boolean scoresFromConjunction,
+  private static boolean doesStoreMergePostingValues(
+      boolean mergeScoresFromAccumulatedConjunction,
       MergeSearch.PartialConjunctionPolicy partialConjunctionPolicy,
       IndexType indexType,
       RecordType recordType) {
-    return scoresFromConjunction
+    return mergeScoresFromAccumulatedConjunction
         || (partialConjunctionPolicy.doesUsePartialConjunction()
             && (indexType.doesConjunctionDetermineSimilarity(recordType)
                 || recordType == RecordType.SEQUENCE));
@@ -896,9 +903,9 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
       RecordType recordType,
       ComparatorType comparatorType,
       Comparator comparator,
-      boolean scoresFromConjunction) {
+      boolean mergeScoresFromAccumulatedConjunction) {
     if (SparsMergeConfiguration.doesPartialConjunctionUseConfiguredComparator(
-        indexType, recordType, comparatorType, scoresFromConjunction)) {
+        indexType, recordType, comparatorType, mergeScoresFromAccumulatedConjunction)) {
       return MergeSearch.PartialConjunctionPolicy.fromConfiguredComparator(
           ComparatorFactory.conjunctionScored(comparator, comparatorType));
     }

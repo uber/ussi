@@ -11,5 +11,5 @@ import javax.annotation.Nullable;
  */
 @FunctionalInterface
 public interface RowFilter {
-  boolean canScore(long rowNum, @Nullable MetaFilter metadataFilter);
+  boolean doesPassRowFilter(long rowNum, @Nullable MetaFilter metadataFilter);
 }

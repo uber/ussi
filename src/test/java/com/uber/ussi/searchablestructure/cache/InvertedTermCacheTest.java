@@ -722,7 +722,7 @@ class InvertedTermCacheTest {
       LongTermsAndValues query,
       int maxResults) {
     return results.stream()
-        .filter(result -> query.sharesAnyTerm(rows.get(result.getRowNum())))
+        .filter(result -> query.doesShareAnyTerm(rows.get(result.getRowNum())))
         .sorted(RowNumAndSimilarity.NEAREST_FIRST)
         .limit(maxResults)
         .toList();

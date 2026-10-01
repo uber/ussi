@@ -91,7 +91,7 @@ public final class LongTermsAndValues {
    * Terms are sorted and distinct within a record, so this is a single linear merge. Dense records
    * carry no terms and so never share one.
    */
-  public boolean sharesAnyTerm(LongTermsAndValues other) {
+  public boolean doesShareAnyTerm(LongTermsAndValues other) {
     Objects.requireNonNull(other, "other is null.");
     int thisIndex = 0;
     int otherIndex = 0;

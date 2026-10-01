@@ -90,7 +90,7 @@ public final class MatrixIndex extends RowStoringIndex {
             MetadataFilteringStrategy.POST_FILTERING,
             this::getMatchingRowNumsIfUnderPreFilteringLimit,
             this::getPostFilteringMaxResults,
-            this::matchesMetaFilter);
+            this::doesMatchMetaFilter);
   }
 
   @Override
@@ -271,7 +271,7 @@ public final class MatrixIndex extends RowStoringIndex {
       @Nullable MetaFilter metadataFilter,
       float minSimilarity) {
     long rowNum = rowNums[matrixRowIndex];
-    if (metadataFilter != null && !matchesMetaFilter(rowNum, metadataFilter)) {
+    if (metadataFilter != null && !doesMatchMetaFilter(rowNum, metadataFilter)) {
       return minSimilarity;
     }
     float similarity = computeSimilarityForMatrixRow(queryValues, queryUniValue, matrixRowIndex);

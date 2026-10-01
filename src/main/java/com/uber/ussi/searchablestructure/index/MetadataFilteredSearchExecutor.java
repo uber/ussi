@@ -125,7 +125,7 @@ public final class MetadataFilteredSearchExecutor {
     BoundedSizeMaxHeap<RowNumAndSimilarity> rows =
         new BoundedSizeMaxHeap<>(maxResults, RowNumAndSimilarity.TOP_RESULTS_HEAP_ORDER);
     for (RowNumAndSimilarity row : unfilteredResult) {
-      if (metadataMatcher.matches(row.getRowNum(), metadataFilter)) {
+      if (metadataMatcher.doesMatch(row.getRowNum(), metadataFilter)) {
         rows.add(row);
       }
     }
@@ -149,7 +149,7 @@ public final class MetadataFilteredSearchExecutor {
 
   @FunctionalInterface
   public interface MetadataMatcher {
-    boolean matches(long rowNum, MetaFilter metadataFilter);
+    boolean doesMatch(long rowNum, MetaFilter metadataFilter);
   }
 
   @FunctionalInterface

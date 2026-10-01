@@ -170,7 +170,7 @@ public final class InvertedTermCache extends Cache {
         minSimilarity,
         (rowNum, rows, sharedMinSimilarity) -> {
           LongTermsAndValues verificationRow = getVerificationRow(rowNum);
-          if (verificationRow == null || !query.sharesAnyTerm(verificationRow)) {
+          if (verificationRow == null || !query.doesShareAnyTerm(verificationRow)) {
             return;
           }
           float tightened =
@@ -212,7 +212,7 @@ public final class InvertedTermCache extends Cache {
       int invertedListSize = invertedList == null ? 0 : invertedList.size();
       for (int i = 0; i < invertedListSize; ++i) {
         long rowNum = invertedList.get(i);
-        if (!scannedRowNums.add(rowNum) || !matchesMetaFilter(rowNum, metadataFilter)) {
+        if (!scannedRowNums.add(rowNum) || !doesMatchMetaFilter(rowNum, metadataFilter)) {
           continue;
         }
         LongTermsAndValues verificationRow = getVerificationRow(rowNum);

@@ -136,28 +136,28 @@ class LongTermsAndValuesTest {
   }
 
   @Test
-  void sharesAnyTermDetectsSortedTermIntersections() {
+  void doesShareAnyTermDetectsSortedTermIntersections() {
     LongTermsAndValues record =
         new LongTermsAndValues(new long[] {1, 4, 7}, new float[] {1, 1, 1}, 3.0);
 
-    assertTrue(record.sharesAnyTerm(new LongTermsAndValues(new long[] {4}, new float[] {1}, 1.0)));
+    assertTrue(record.doesShareAnyTerm(new LongTermsAndValues(new long[] {4}, new float[] {1}, 1.0)));
     assertTrue(
-        record.sharesAnyTerm(
+        record.doesShareAnyTerm(
             new LongTermsAndValues(new long[] {2, 3, 7}, new float[] {1, 1, 1}, 3.0)));
     assertFalse(
-        record.sharesAnyTerm(
+        record.doesShareAnyTerm(
             new LongTermsAndValues(new long[] {2, 5, 8}, new float[] {1, 1, 1}, 3.0)));
   }
 
   @Test
-  void sharesAnyTermIsFalseForRecordsWithoutTermsAndRejectsNull() {
+  void doesShareAnyTermIsFalseForRecordsWithoutTermsAndRejectsNull() {
     LongTermsAndValues sparse = new LongTermsAndValues(new long[] {1}, new float[] {1}, 1.0);
     LongTermsAndValues dense = new LongTermsAndValues(new long[0], new float[] {1}, 1.0);
 
-    assertFalse(sparse.sharesAnyTerm(dense));
-    assertFalse(dense.sharesAnyTerm(sparse));
-    assertFalse(dense.sharesAnyTerm(dense));
-    assertThrows(NullPointerException.class, () -> sparse.sharesAnyTerm(null));
+    assertFalse(sparse.doesShareAnyTerm(dense));
+    assertFalse(dense.doesShareAnyTerm(sparse));
+    assertFalse(dense.doesShareAnyTerm(dense));
+    assertThrows(NullPointerException.class, () -> sparse.doesShareAnyTerm(null));
   }
 
   @Test

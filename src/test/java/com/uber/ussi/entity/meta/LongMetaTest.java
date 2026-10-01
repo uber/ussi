@@ -38,7 +38,7 @@ class LongMetaTest {
     LongHashSet matching = new LongHashSet();
     matching.add(LongMeta.longHashCode(1L, 2L));
 
-    assertTrue(meta.intersects(matching));
+    assertTrue(meta.doesIntersect(matching));
   }
 
   @Test
@@ -47,7 +47,7 @@ class LongMetaTest {
     LongHashSet nonMatching = new LongHashSet();
     nonMatching.add(99L);
 
-    assertFalse(meta.intersects(nonMatching));
+    assertFalse(meta.doesIntersect(nonMatching));
   }
 
   @Test

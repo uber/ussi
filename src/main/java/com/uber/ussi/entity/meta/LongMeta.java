@@ -65,7 +65,7 @@ public class LongMeta {
     return longHashCode(longHashCode(k), longHashCode(v));
   }
 
-  public boolean intersects(LongHashSet metadataFilterSet) {
+  public boolean doesIntersect(LongHashSet metadataFilterSet) {
     for (LongCursor cursor : metadataFilterSet) {
       if (longMetadata.contains(cursor.value)) {
         return true;

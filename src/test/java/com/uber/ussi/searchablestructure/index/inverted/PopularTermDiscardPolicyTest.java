@@ -9,6 +9,7 @@ import com.carrotsearch.hppc.LongHashSet;
 import com.carrotsearch.hppc.LongObjectHashMap;
 import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
+import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
 import com.uber.ussi.utils.ConfigKeys;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -53,6 +54,6 @@ class PopularTermDiscardPolicyTest {
     for (int i = 0; i < values.length; ++i) {
       values[i] = 1f;
     }
-    return new LongTermsAndValues(termValues, values, termValues.length);
+    return LongTermsAndValuesTestFactory.create(termValues, values, termValues.length);
   }
 }

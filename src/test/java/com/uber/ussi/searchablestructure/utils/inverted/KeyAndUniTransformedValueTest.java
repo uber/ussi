@@ -1,4 +1,4 @@
-package com.uber.ussi.searchablestructure.index.inverted;
+package com.uber.ussi.searchablestructure.utils.inverted;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 

@@ -12,7 +12,8 @@ import com.uber.ussi.entity.meta.MetaFilter;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.result.ResultHeaps;
-import com.uber.ussi.searchablestructure.index.inverted.KeyAndPrefixFilteringData;
+import com.uber.ussi.searchablestructure.utils.inverted.KeyAndPrefixFilteringData;
+import com.uber.ussi.searchablestructure.utils.inverted.PopularTermDiscardPolicy;
 import com.uber.ussi.searchablestructure.utils.metadata.PreFilteringResult;
 import com.uber.ussi.searchablestructure.utils.parallel.ParallelRowScan;
 import com.uber.ussi.searchablestructure.utils.parallel.SharedMinSimilarity;
@@ -52,13 +53,15 @@ public final class InvertedTermCache extends Cache {
 
   public InvertedTermCache(NamespaceConfig namespaceConfig) {
     super(namespaceConfig);
-    this.maxFractionIdsPerTerm = parseMaxFractionIdsPerTerm(namespaceConfig);
+    this.maxFractionIdsPerTerm =
+        PopularTermDiscardPolicy.maxFractionIdsPerTermFromCacheConfig(namespaceConfig);
     this.popularTermDiscardScope = namespaceConfig.getCachePopularTermDiscardScope();
     this.fullReevaluationCacheSizeDecreaseFraction =
         parseFullReevaluationCacheSizeDecreaseFraction(namespaceConfig);
     this.popularityConfidenceTester =
         new MathUtils.ProportionConfidenceInterval1Sided(
-            parseMaxFractionIdsPerTermConfidence(namespaceConfig));
+            PopularTermDiscardPolicy.maxFractionIdsPerTermConfidenceFromCacheConfig(
+                namespaceConfig));
     this.termAndRowNumsIndex = new LongObjectHashMap<>(CACHE_INITIAL_CAPACITY);
     this.discardedTerms = new LongHashSet();
   }
@@ -357,12 +360,6 @@ public final class InvertedTermCache extends Cache {
   }
 
 
-  private static double parseMaxFractionIdsPerTerm(NamespaceConfig namespaceConfig) {
-    return namespaceConfig.readDoubleCacheParam(
-        ConfigKeys.MAX_FRACTION_IDS_PER_TERM,
-        ConfigKeys.DEFAULT_MAX_FRACTION_IDS_PER_TERM);
-  }
-
   private static double parseFullReevaluationCacheSizeDecreaseFraction(
       NamespaceConfig namespaceConfig) {
     return namespaceConfig.readDoubleCacheParam(
@@ -370,13 +367,4 @@ public final class InvertedTermCache extends Cache {
         ConfigKeys.DEFAULT_FULL_REEVALUATION_CACHE_SIZE_DECREASE_FRACTION);
   }
 
-  /**
-   * Parses the one-sided confidence used to declare a term high-popularity. A confidence of 0.5
-   * degenerates to comparing the observed popularity against maxFractionIdsPerTerm directly.
-   */
-  private static double parseMaxFractionIdsPerTermConfidence(NamespaceConfig namespaceConfig) {
-    return namespaceConfig.readDoubleCacheParam(
-        ConfigKeys.MAX_FRACTION_IDS_PER_TERM_CONFIDENCE,
-        ConfigKeys.DEFAULT_MAX_FRACTION_IDS_PER_TERM_CONFIDENCE);
-  }
 }

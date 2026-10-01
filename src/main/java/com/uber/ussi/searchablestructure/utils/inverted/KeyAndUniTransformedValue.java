@@ -1,5 +1,5 @@
 /* AUTHOR: Shijie Lu (shijie@uber.com), Shalini Kedlaya (skedlaya@uber.com), Ahmed Metwally (ametwally@uber.com) */
-package com.uber.ussi.searchablestructure.index.inverted;
+package com.uber.ussi.searchablestructure.utils.inverted;
 
 /** A key and its contribution to the comparator-specific unilateral value. */
 public final class KeyAndUniTransformedValue {
@@ -11,11 +11,11 @@ public final class KeyAndUniTransformedValue {
     this.uniTransformedValue = uniTransformedValue;
   }
 
-  long getKey() {
+  public long getKey() {
     return key;
   }
 
-  double getUniTransformedValue() {
+  public double getUniTransformedValue() {
     return uniTransformedValue;
   }
 }

@@ -30,7 +30,9 @@ import com.uber.ussi.searchablestructure.index.inverted.generator.FilteredSearch
 import com.uber.ussi.searchablestructure.index.inverted.generator.InvertedList;
 import com.uber.ussi.searchablestructure.index.inverted.generator.MergeSearch;
 import com.uber.ussi.searchablestructure.result.ResultHeaps;
-import com.uber.ussi.searchablestructure.index.inverted.KeyAndPrefixFilteringData;
+import com.uber.ussi.searchablestructure.utils.inverted.KeyAndPrefixFilteringData;
+import com.uber.ussi.searchablestructure.utils.inverted.KeyAndUniTransformedValue;
+import com.uber.ussi.searchablestructure.utils.inverted.PopularTermDiscardPolicy;
 import com.uber.ussi.searchablestructure.utils.metadata.MetadataFilteringStrategy;
 import com.uber.ussi.searchablestructure.utils.parallel.ParallelShardSearch;
 import com.uber.ussi.searchablestructure.utils.parallel.SharedMinSimilarity;
@@ -169,7 +171,8 @@ abstract class BaseInvertedIndex extends RowStoringIndex {
     this.mergeScoresFromAccumulatedConjunction = sparsMerge.mergeScoresFromAccumulatedConjunction();
     this.partialConjunctionPolicy = sparsMerge.partialConjunctionPolicy();
     this.doesStoreMergePostingValues = sparsMerge.doesStoreMergePostingValues();
-    this.maxFractionIdsPerTerm = PopularTermDiscardPolicy.maxFractionIdsPerTerm(namespaceConfig);
+    this.maxFractionIdsPerTerm =
+        PopularTermDiscardPolicy.maxFractionIdsPerTermFromIndexConfig(namespaceConfig);
     validateRows();
     this.discardedTerms =
         structureDiscardedTerms == null

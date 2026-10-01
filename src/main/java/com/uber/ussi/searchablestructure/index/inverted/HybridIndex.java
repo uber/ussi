@@ -11,6 +11,7 @@ import com.uber.ussi.MemoryFootprint;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
 import com.uber.ussi.searchablestructure.index.Index;
+import com.uber.ussi.searchablestructure.utils.inverted.PopularTermDiscardPolicy;
 import com.uber.ussi.utils.BoundedSizeMaxHeap;
 import java.util.List;
 
@@ -26,7 +27,8 @@ public final class HybridIndex extends Index {
       LongObjectHashMap<LongTermsAndValues> rowNumToTermsAndValuesMap,
       LongObjectHashMap<LongMeta> rowNumToMetaMap) {
     super(namespaceConfig);
-    double maxFractionIdsPerTerm = PopularTermDiscardPolicy.maxFractionIdsPerTerm(namespaceConfig);
+    double maxFractionIdsPerTerm =
+        PopularTermDiscardPolicy.maxFractionIdsPerTermFromIndexConfig(namespaceConfig);
     LongObjectHashMap<LongTermsAndValues> exactRows = new LongObjectHashMap<>();
     LongObjectHashMap<LongTermsAndValues> signatureRows = new LongObjectHashMap<>();
     for (LongObjectCursor<LongTermsAndValues> entry : rowNumToTermsAndValuesMap) {

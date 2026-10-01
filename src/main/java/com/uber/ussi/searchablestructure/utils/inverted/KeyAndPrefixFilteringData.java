@@ -1,5 +1,5 @@
 /* AUTHOR: Shijie Lu (shijie@uber.com), Shalini Kedlaya (skedlaya@uber.com), Ahmed Metwally (ametwally@uber.com) */
-package com.uber.ussi.searchablestructure.index.inverted;
+package com.uber.ussi.searchablestructure.utils.inverted;
 
 /**
  * Query key data ordered for low-cost prefix candidate generation. Shared by the inverted indexes

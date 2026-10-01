@@ -23,6 +23,7 @@ import com.uber.ussi.searchablestructure.index.Index;
 import com.uber.ussi.searchablestructure.index.IndexType;
 import com.uber.ussi.searchablestructure.index.scan.ScanIndex;
 import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
+import com.uber.ussi.searchablestructure.utils.inverted.KeyAndUniTransformedValue;
 import com.uber.ussi.searchablestructure.utils.metadata.MetadataFilteringStrategy;
 import com.uber.ussi.utils.ConfigKeys;
 import java.lang.reflect.Field;

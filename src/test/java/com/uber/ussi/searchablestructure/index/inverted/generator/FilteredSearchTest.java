@@ -11,7 +11,7 @@ import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValuesTestFactory;
 import com.uber.ussi.searchablestructure.result.RowNumAndSimilarity;
-import com.uber.ussi.searchablestructure.index.inverted.KeyAndPrefixFilteringData;
+import com.uber.ussi.searchablestructure.utils.inverted.KeyAndPrefixFilteringData;
 import com.uber.ussi.searchablestructure.utils.parallel.SharedMinSimilarity;
 import java.util.ArrayList;
 import java.util.List;

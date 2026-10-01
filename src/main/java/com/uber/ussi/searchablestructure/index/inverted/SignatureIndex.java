@@ -7,6 +7,7 @@ import com.uber.ussi.config.NamespaceConfig;
 import com.uber.ussi.entity.meta.LongMeta;
 import com.uber.ussi.entity.termsandvalues.LongTermsAndValues;
 import com.uber.ussi.searchablestructure.index.IndexType;
+import com.uber.ussi.searchablestructure.utils.inverted.KeyAndUniTransformedValue;
 import java.util.Arrays;
 import javax.annotation.Nullable;
 

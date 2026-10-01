@@ -105,13 +105,12 @@ public class ComparatorFactory {
    */
   public static ConjunctionScored conjunctionScored(
       Comparator comparator, ComparatorType comparatorType) {
-    if (!comparatorType.similarityFromConfiguredConjunction()) {
-      throw new IllegalArgumentException(
-          String.format(
-              "Comparator type %s does not determine similarity from a merge conjunction.",
-              comparatorType.getParamValue()));
-    }
-    return (ConjunctionScored) comparator;
+    return castFacet(
+        comparator,
+        comparatorType,
+        comparatorType.similarityFromConfiguredConjunction(),
+        "does not determine similarity from a merge conjunction.",
+        ConjunctionScored.class);
   }
 
   /**
@@ -120,12 +119,12 @@ public class ComparatorFactory {
    */
   public static KeyShareBounded keyShareBounded(
       Comparator comparator, ComparatorType comparatorType) {
-    if (!comparatorType.boundsKeyShare()) {
-      throw new IllegalArgumentException(
-          String.format(
-              "Comparator type %s does not bound key share.", comparatorType.getParamValue()));
-    }
-    return (KeyShareBounded) comparator;
+    return castFacet(
+        comparator,
+        comparatorType,
+        comparatorType.boundsKeyShare(),
+        "does not bound key share.",
+        KeyShareBounded.class);
   }
 
   /**
@@ -134,13 +133,26 @@ public class ComparatorFactory {
    */
   public static DotProductScored dotProductScored(
       Comparator comparator, ComparatorType comparatorType) {
-    if (!comparatorType.similarityFromDotProduct()) {
+    return castFacet(
+        comparator,
+        comparatorType,
+        comparatorType.similarityFromDotProduct(),
+        "does not derive similarity from a dot product.",
+        DotProductScored.class);
+  }
+
+  private static <Facet> Facet castFacet(
+      Comparator comparator,
+      ComparatorType comparatorType,
+      boolean allowed,
+      String violationDescription,
+      Class<Facet> facetType) {
+    if (!allowed) {
       throw new IllegalArgumentException(
           String.format(
-              "Comparator type %s does not derive similarity from a dot product.",
-              comparatorType.getParamValue()));
+              "Comparator type %s %s", comparatorType.getParamValue(), violationDescription));
     }
-    return (DotProductScored) comparator;
+    return facetType.cast(comparator);
   }
 
   /**
@@ -170,8 +182,7 @@ public class ComparatorFactory {
   @Nullable
   public static SignatureGenerator createSignatureGenerator(NamespaceConfig namespaceConfig)
       throws ComparatorCreationError {
-    ComparatorType comparatorType =
-        ConfigVocabulary.fromParamValue(ComparatorType.class, namespaceConfig.getComparatorType());
+    ComparatorType comparatorType = getComparatorType(namespaceConfig);
     if (comparatorType == null) {
       throw new ComparatorCreationError(
           ConfigVocabulary.unsupported(

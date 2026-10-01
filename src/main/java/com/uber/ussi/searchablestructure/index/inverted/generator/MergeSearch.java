@@ -131,9 +131,9 @@ public final class MergeSearch {
       return List.of();
     }
     PartialConjunctionPolicy policy =
-        partialConjunctionPolicy != null
-            ? partialConjunctionPolicy
-            : PartialConjunctionPolicy.none();
+        partialConjunctionPolicy == null
+            ? PartialConjunctionPolicy.none()
+            : partialConjunctionPolicy;
     boolean scoreFromAccumulatedConjunction = scoresFromConjunction;
     boolean pruneByPartialConjunction =
         !scoreFromAccumulatedConjunction && policy.usesPartialConjunction();

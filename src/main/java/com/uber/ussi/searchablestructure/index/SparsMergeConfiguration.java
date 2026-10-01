@@ -24,10 +24,26 @@ public final class SparsMergeConfiguration {
       IndexType indexType, @Nullable RecordType recordType, ComparatorType comparatorType) {
     Objects.requireNonNull(indexType, "indexType is null.");
     Objects.requireNonNull(comparatorType, "comparatorType is null.");
-    if (comparatorType.similarityFromConfiguredConjunction()) {
+    return comparatorType.similarityFromConfiguredConjunction()
+        || usesSequenceIndexedMultisetPartialConjunction(indexType, recordType, comparatorType);
+  }
+
+  /**
+   * Returns whether partial merge conjunction uses the configured comparator's {@link
+   * com.uber.ussi.comparator.ConjunctionScored} facet rather than the indexed-multiset Ruzicka
+   * helper.
+   */
+  public static boolean partialConjunctionUsesConfiguredComparator(
+      IndexType indexType,
+      RecordType recordType,
+      ComparatorType comparatorType,
+      boolean scoresFromAccumulatedConjunction) {
+    Objects.requireNonNull(recordType, "recordType is null.");
+    if (scoresFromAccumulatedConjunction) {
       return true;
     }
-    return usesSequenceIndexedMultisetPartialConjunction(indexType, recordType, comparatorType);
+    return indexType.conjunctionDeterminesSimilarity(recordType)
+        && comparatorType.similarityFromConfiguredConjunction();
   }
 
   /**

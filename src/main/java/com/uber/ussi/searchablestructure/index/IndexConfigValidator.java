@@ -66,7 +66,7 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
     }
     ComparatorType comparatorType =
         ConfigVocabulary.fromParamValue(ComparatorType.class, config.getComparatorType());
-    collectDotProductScoringViolations(config, indexType, violations);
+    collectDotProductScoringViolations(indexType, comparatorType, config, violations);
     RecordType recordType = resolveRecordType(config, indexType, violations);
     collectSignatureSupportViolations(config, indexType, comparatorType, violations);
     collectCandidateGeneratorTypeViolations(
@@ -88,12 +88,13 @@ public final class IndexConfigValidator implements NamespaceConfigValidator {
    * whatever record types it and the configured comparator happen to share.
    */
   private static void collectDotProductScoringViolations(
-      NamespaceConfig config, IndexType indexType, List<String> violations) {
+      IndexType indexType,
+      @Nullable ComparatorType comparatorType,
+      NamespaceConfig config,
+      List<String> violations) {
     if (!indexType.scoresByDotProducts()) {
       return;
     }
-    ComparatorType comparatorType =
-        ConfigVocabulary.fromParamValue(ComparatorType.class, config.getComparatorType());
     if (comparatorType == null || comparatorType.similarityFromDotProduct()) {
       return;
     }

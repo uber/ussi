@@ -74,3 +74,23 @@ jobs:
           name: test-log-${{ matrix.os }}
           path: bazel-testlogs/test_main/test.log
           if-no-files-found: ignore
+
+  gradle-test:
+    name: gradle test on ubuntu-latest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v4.7.0
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v4.4.0
+        with:
+          cache-disabled: true
+
+      - name: Test with Gradle
+        run: ./gradlew test --no-daemon

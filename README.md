@@ -19,14 +19,31 @@ USSI Does Not Do](#what-ussi-does-not-do). For how it works inside, see
 
 ## Quick Start
 
-Build the library and run its tests:
+Build the library and run its tests with Bazel:
 
 ```bash
 bazel build //:src_main
 bazel test //:test_main
 ```
 
-The same tests run on Linux and macOS for every pull request.
+The same Bazel tests run on Linux and macOS for every pull request.
+
+Gradle is also supported for local builds and is used to publish releases to Maven
+Central. See [RELEASING.md](RELEASING.md).
+
+```bash
+./gradlew test
+```
+
+Maven dependency (after release):
+
+```xml
+<dependency>
+  <groupId>com.uber.ussi</groupId>
+  <artifactId>ussi</artifactId>
+  <version>0.1.0</version>
+</dependency>
+```
 
 Create a namespace, insert rows, and search:
 

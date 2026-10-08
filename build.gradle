@@ -10,8 +10,14 @@ java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
     }
-    withJavadocJar()
-    withSourcesJar()
+}
+
+// vanniktech maven-publish registers plainJavadocJar; declaring explicit ordering avoids a Gradle 9
+// validation failure on generateMetadataFileForMavenPublication.
+tasks.configureEach {
+    if (name == 'generateMetadataFileForMavenPublication') {
+        dependsOn(tasks.matching { it.name == 'plainJavadocJar' })
+    }
 }
 
 sourceSets {

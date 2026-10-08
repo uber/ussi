@@ -1,0 +1,67 @@
+plugins {
+    id 'java-library'
+    id 'com.vanniktech.maven.publish' version '0.37.0'
+}
+
+group = GROUP
+version = VERSION_NAME
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+    withJavadocJar()
+    withSourcesJar()
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs = ['src/main/java']
+        }
+    }
+    test {
+        java {
+            srcDirs = ['src/test/java']
+        }
+    }
+}
+
+dependencies {
+    compileOnly 'org.projectlombok:lombok:1.18.42'
+    annotationProcessor 'org.projectlombok:lombok:1.18.42'
+
+    compileOnly 'org.bytedeco:cuda:12.6-9.5-1.5.11'
+
+    api 'com.carrotsearch:hppc:0.7.1'
+    api 'com.google.code.findbugs:jsr305:3.0.2'
+    api 'com.google.guava:guava:32.1.3-jre'
+    api 'jakarta.validation:jakarta.validation-api:2.0.2'
+    api 'org.apache.commons:commons-math3:3.6.1'
+    api 'org.bytedeco:javacpp:1.5.14'
+    api 'org.bytedeco:openblas:0.3.34-1.5.14'
+
+    runtimeOnly 'org.bytedeco:javacpp:1.5.14:linux-arm64'
+    runtimeOnly 'org.bytedeco:javacpp:1.5.14:linux-x86_64'
+    runtimeOnly 'org.bytedeco:javacpp:1.5.14:macosx-arm64'
+    runtimeOnly 'org.bytedeco:javacpp:1.5.14:macosx-x86_64'
+    runtimeOnly 'org.bytedeco:openblas:0.3.34-1.5.14:linux-arm64'
+    runtimeOnly 'org.bytedeco:openblas:0.3.34-1.5.14:linux-x86_64'
+    runtimeOnly 'org.bytedeco:openblas:0.3.34-1.5.14:macosx-arm64'
+    runtimeOnly 'org.bytedeco:openblas:0.3.34-1.5.14:macosx-x86_64'
+
+    testCompileOnly 'org.projectlombok:lombok:1.18.42'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.42'
+    testImplementation 'org.bytedeco:cuda:12.6-9.5-1.5.11'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:6.0.1'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:6.0.1'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:6.0.1'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs.add('-parameters')
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+}

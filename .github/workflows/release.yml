@@ -1,0 +1,82 @@
+name: Release to Maven Central
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write # Create the GitHub Release.
+
+concurrency:
+  group: maven-central-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'uber/ussi'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Verify release tag and version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo 'Expected a release tag such as v0.1.0.' >&2
+            exit 1
+          fi
+          version="$(sed -n 's/^VERSION_NAME=//p' gradle.properties)"
+          if [[ "$version" != "${RELEASE_TAG#v}" || "$version" =~ -[Ss][Nn][Aa][Pp][Ss][Hh][Oo][Tt]$ ]]; then
+            echo 'Release tag must match a non-SNAPSHOT VERSION_NAME.' >&2
+            exit 1
+          fi
+          coordinates="$(sed -n 's/.*maven_coordinates = "com.uber.ussi:ussi:\([^"]*\)".*/\1/p' BUILD.bazel)"
+          if [[ "$coordinates" != "$version" ]]; then
+            echo 'BUILD.bazel maven_coordinates must match VERSION_NAME.' >&2
+            exit 1
+          fi
+          printf 'RELEASE_VERSION=%s\n' "$version" >> "$GITHUB_ENV"
+
+      - name: Extract release notes
+        run: |
+          awk -v ver="$RELEASE_VERSION" '
+            /^# / { if (found) exit; if ($0 == "# " ver) { found=1; next } }
+            found
+          ' CHANGELOG.md > release_notes.md
+          if ! grep -q '[^[:space:]]' release_notes.md; then
+            echo "Add a # $RELEASE_VERSION section with release notes to CHANGELOG.md" >&2
+            exit 1
+          fi
+
+      - name: Set up JDK
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle and validate wrapper
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-disabled: true
+
+      - name: Publish
+        env:
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USER_TOKEN_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_USER_TOKEN_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyId: ${{ secrets.PGP_PRIVATE_KEY_ID }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.PGP_SIGNING_KEY_PRIVATE_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.PGP_SIGNING_KEY_PASSWORD }}
+        run: ./gradlew publishToMavenCentral --no-daemon
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "$RELEASE_VERSION" --notes-file release_notes.md
